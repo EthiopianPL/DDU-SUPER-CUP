@@ -104,7 +104,7 @@ const am = {
   'Updating...': 'በማዘመን ላይ...',
   'Completing sign in...': 'መግቢያን በማጠናቀቅ ላይ...',
   'Please wait': 'እባክዎ ይጠብቁ',
-  'Ethiopian Premier League': 'የኢትዮጵያ ፕሪሚየር ሊግ',
+  'Ethiopian Premier League': 'የኢትዮጵያ ፕሪሚየር በማጠናቀቅ',
   'Season 2025/26 • 20 Teams • 380 Matches': 'የ2025/26 ወቅት • 20 ቡድኖች • 380 ጨዋታዎች',
   'Live Now': 'አሁን ቀጥታ',
   'View All': 'ሁሉንም ይመልከቱ',
