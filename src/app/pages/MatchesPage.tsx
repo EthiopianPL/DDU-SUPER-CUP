@@ -42,9 +42,6 @@ export function MatchesPage() {
       <div className="space-y-3">
         {visible.map((fixture) => (
           <div key={fixture.id}>
-            <p className="mb-2 text-[11px] font-semibold tracking-[0.14em] text-white/40">
-              GROUP {fixture.group} · MATCHDAY {fixture.matchday} · {fixture.date}
-            </p>
             <MatchCard
               id={fixture.id}
               homeTeam={cardTeam(fixture.homeId)}

@@ -317,6 +317,54 @@ export function topScorers(limit = 5) {
     }));
 }
 
+export function topAssists(limit = 5) {
+  return [...players]
+    .sort((a, b) => b.assists - a.assists || b.goals - a.goals)
+    .slice(0, limit)
+    .map((player) => ({
+      ...player,
+      department: getDepartment(player.departmentId),
+    }));
+}
+
+export interface GoalEvent {
+  minute: number;
+  teamId: string;
+  playerId: string;
+  playerName: string;
+}
+
+const GOAL_MINUTES = [9, 18, 27, 36, 44, 52, 61, 70, 77, 84];
+
+export function goalEvents(fixture: Fixture): GoalEvent[] {
+  if (fixture.status === 'upcoming' || fixture.homeScore == null || fixture.awayScore == null) return [];
+
+  const latestMinute = fixture.status === 'live' && fixture.minute != null ? fixture.minute : 90;
+  const events: GoalEvent[] = [];
+
+  const pushGoals = (teamId: string, count: number, offset: number) => {
+    const scorers = ['FWD', 'MID', 'DEF'].flatMap((position) =>
+      players.filter((player) => player.departmentId === teamId && player.position === position),
+    );
+    for (let index = 0; index < count; index += 1) {
+      const scorer = scorers[index % scorers.length];
+      if (!scorer) continue;
+      const minute = Math.min(GOAL_MINUTES[(offset + index) % GOAL_MINUTES.length], latestMinute);
+      events.push({
+        minute,
+        teamId,
+        playerId: scorer.id,
+        playerName: scorer.name,
+      });
+    }
+  };
+
+  pushGoals(fixture.homeId, fixture.homeScore, fixture.matchday);
+  pushGoals(fixture.awayId, fixture.awayScore, fixture.matchday + 3);
+
+  return events.sort((a, b) => a.minute - b.minute || a.playerName.localeCompare(b.playerName));
+}
+
 export function formatKickoff(date: string, time: string) {
   const value = new Date(`${date}T${time}:00`);
   return value.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });

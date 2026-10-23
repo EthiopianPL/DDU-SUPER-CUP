@@ -1,17 +1,17 @@
-import { Home, Calendar, Trophy, Users } from 'lucide-react';
+import { Home, Calendar, Trophy, Users, Newspaper, BarChart3 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router';
-import { useLanguage } from '../context/LanguageContext';
 
 export function BottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { t } = useLanguage();
 
   const navItems = [
-    { id: 'home', label: t('Home'), icon: Home, path: '/' },
-    { id: 'groups', label: t('Groups'), icon: Trophy, path: '/groups' },
-    { id: 'matches', label: t('Matches'), icon: Calendar, path: '/matches' },
-    { id: 'teams', label: t('Departments'), icon: Users, path: '/teams' },
+    { id: 'home', label: 'Home', icon: Home, path: '/' },
+    { id: 'groups', label: 'Groups', icon: Trophy, path: '/groups' },
+    { id: 'matches', label: 'Matches', icon: Calendar, path: '/matches' },
+    { id: 'teams', label: 'Depts', icon: Users, path: '/teams' },
+    { id: 'stats', label: 'Stats', icon: BarChart3, path: '/stats' },
+    { id: 'news', label: 'News', icon: Newspaper, path: '/news' },
   ];
 
   return (
@@ -32,10 +32,10 @@ export function BottomNav() {
               key={item.id}
               type="button"
               onClick={() => navigate(item.path)}
-              className="flex flex-1 flex-col items-center px-2 py-3"
+              className="flex flex-1 flex-col items-center px-1 py-2.5"
             >
               <Icon className={`mb-1 h-5 w-5 ${isActive ? 'text-[#f5c518]' : 'text-white/40'}`} />
-              <span className={`text-xs ${isActive ? 'font-semibold text-[#f5c518]' : 'text-white/40'}`}>
+              <span className={`text-[10px] ${isActive ? 'font-semibold text-[#f5c518]' : 'text-white/40'}`}>
                 {item.label}
               </span>
             </button>
