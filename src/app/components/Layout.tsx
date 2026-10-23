@@ -6,12 +6,12 @@ import { useAuth } from '../context/AuthContext';
 export function Layout() {
   const location = useLocation();
   const { user, loading } = useAuth();
-  const showHeader = !['/login', '/signup'].includes(location.pathname);
+  const showChrome = !['/login', '/signup'].includes(location.pathname);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-[#ffd700] border-t-transparent rounded-full animate-spin" />
+      <div className="flex min-h-screen items-center justify-center bg-[#070d18]">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-[#f5c518] border-t-transparent" />
       </div>
     );
   }
@@ -21,44 +21,18 @@ export function Layout() {
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden" style={{ fontFamily: 'Inter, sans-serif' }}>
-      {/* Gradient Background */}
-      <div className="fixed inset-0 -z-10 bg-[#0a0e1a]">
-        {/* Green Gradient - Top Left */}
-        <div 
-          className="absolute -top-40 -left-40 w-96 h-96 rounded-full opacity-20 blur-3xl"
-          style={{ background: 'radial-gradient(circle, #009639 0%, transparent 70%)' }}
-        />
-        
-        {/* Gold Gradient - Top Right */}
-        <div 
-          className="absolute -top-20 -right-20 w-80 h-80 rounded-full opacity-20 blur-3xl"
-          style={{ background: 'radial-gradient(circle, #ffd700 0%, transparent 70%)' }}
-        />
-        
-        {/* Red Gradient - Bottom Right */}
-        <div 
-          className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full opacity-15 blur-3xl"
-          style={{ background: 'radial-gradient(circle, #da121a 0%, transparent 70%)' }}
-        />
-        
-        {/* Green Gradient - Bottom Left */}
-        <div 
-          className="absolute -bottom-40 -left-20 w-80 h-80 rounded-full opacity-15 blur-3xl"
-          style={{ background: 'radial-gradient(circle, #009639 0%, transparent 70%)' }}
-        />
+    <div className="relative min-h-screen overflow-hidden bg-[#070d18] text-white">
+      <div className="pointer-events-none fixed inset-0 -z-10">
+        <div className="absolute -left-32 -top-32 h-80 w-80 rounded-full bg-[#2450c8]/25 blur-3xl" />
+        <div className="absolute -right-20 top-10 h-72 w-72 rounded-full bg-[#f5c518]/15 blur-3xl" />
+        <div className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-[#2f9e44]/15 blur-3xl" />
       </div>
 
-      {/* Main Content */}
-      <div className="relative">
-        {showHeader && <Header />}
-        
-        <div className="w-full">
-          <Outlet />
-        </div>
-
-        {showHeader && <BottomNav />}
-      </div>
+      {showChrome && <Header />}
+      <main className="w-full">
+        <Outlet />
+      </main>
+      {showChrome && <BottomNav />}
     </div>
   );
 }

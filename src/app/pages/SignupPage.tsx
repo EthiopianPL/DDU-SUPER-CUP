@@ -1,15 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 import { User, Mail, Lock, Heart, CheckCircle, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
-import { supabase } from '../../lib/supabase';
-
-interface Team {
-  id: number;
-  name: string;
-  short_name: string;
-}
+import { departments } from '../../data/supercup';
+import { BrandLockup } from '../components/BrandLockup';
 
 export function SignupPage() {
   const navigate = useNavigate();
@@ -20,28 +15,11 @@ export function SignupPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [favoriteTeam, setFavoriteTeam] = useState('');
-  const [teams, setTeams] = useState<Team[]>([]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  // Fetch teams from database
-  useEffect(() => {
-    const fetchTeams = async () => {
-      const { data, error } = await supabase
-        .from('teams')
-        .select('id, name, short_name')
-        .order('name');
-
-      if (!error && data) {
-        setTeams(data);
-      }
-    };
-
-    fetchTeams();
-  }, []);
 
   const validateEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
@@ -101,15 +79,8 @@ export function SignupPage() {
         </div>
 
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <div className="flex items-center gap-1">
-              <div className="w-1.5 h-12 bg-[#009639]" />
-              <div className="w-1.5 h-12 bg-[#ffd700]" />
-              <div className="w-1.5 h-12 bg-[#da121a]" />
-            </div>
-            <h1 className="text-4xl text-white" style={{ fontFamily: 'Inter, sans-serif', fontWeight: 900 }}>
-              EPL
-            </h1>
+          <div className="mb-4 flex justify-center">
+            <BrandLockup size="lg" />
           </div>
           <p className="text-gray-400">{t('Join the Ethiopian Premier League community')}</p>
         </div>
@@ -237,16 +208,13 @@ export function SignupPage() {
                   style={{ background: 'rgba(10, 14, 26, 0.5)', border: '1px solid rgba(255, 255, 255, 0.1)' }}
                 >
                   <option value="">{t('Select a team')}</option>
-                  {teams.map((team) => (
+                  {departments.map((team) => (
                     <option key={team.id} value={team.name}>
                       {team.name}
                     </option>
                   ))}
                 </select>
               </div>
-              {teams.length === 0 && (
-                <p className="text-xs text-gray-500 mt-1">{t('Loading teams...')}</p>
-              )}
             </div>
 
             <button

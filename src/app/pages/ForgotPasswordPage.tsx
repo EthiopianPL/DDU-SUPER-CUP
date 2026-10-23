@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { supabase } from '../../lib/supabase';
 import { Mail, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { BrandLockup } from '../components/BrandLockup';
 
 export function ForgotPasswordPage() {
   const { t } = useLanguage();
@@ -43,15 +44,8 @@ export function ForgotPasswordPage() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <div className="flex items-center gap-1">
-              <div className="w-1.5 h-12 bg-[#009639]" />
-              <div className="w-1.5 h-12 bg-[#ffd700]" />
-              <div className="w-1.5 h-12 bg-[#da121a]" />
-            </div>
-            <h1 className="text-4xl text-white" style={{ fontFamily: 'Inter, sans-serif', fontWeight: 900 }}>
-              EPL
-            </h1>
+          <div className="mb-4 flex justify-center">
+            <BrandLockup size="lg" />
           </div>
           <h2 className="text-2xl text-white mb-2">{t('Forgot Password?')}</h2>
           <p className="text-gray-400">{t('Enter your email to receive a reset link')}</p>

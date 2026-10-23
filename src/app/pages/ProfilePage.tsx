@@ -1,6 +1,6 @@
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router';
-import { User, Heart, LogOut, Shield, Bell, Star, Newspaper } from 'lucide-react';
+import { User, Heart, LogOut, Shield, Newspaper } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 
 export function ProfilePage() {
@@ -68,16 +68,6 @@ export function ProfilePage() {
       </div>
 
       <div className="px-4 space-y-3">
-        <button onClick={() => navigate('/profile/favorite-players')} className="w-full flex items-center gap-4 p-4 rounded-lg text-left hover:bg-white/5 transition-colors" style={{ background: 'rgba(26, 31, 46, 0.8)' }}>
-          <Star className="w-5 h-5 text-gray-400" />
-          <div><p className="text-white font-semibold">{t('Favorite Players')}</p><p className="text-xs text-gray-400">{t('Browse and revisit your player shortlist')}</p></div>
-        </button>
-        
-        <button onClick={() => navigate('/profile/notifications')} className="w-full flex items-center gap-4 p-4 rounded-lg text-left hover:bg-white/5 transition-colors" style={{ background: 'rgba(26, 31, 46, 0.8)' }}>
-          <Bell className="w-5 h-5 text-gray-400" />
-          <div><p className="text-white font-semibold">{t('Notifications')}</p><p className="text-xs text-gray-400">{t('Open update shortcuts and notification hub')}</p></div>
-        </button>
-
         {/* Admin Panel Button - Only visible to admins */}
         {user?.role === 'admin' && (
           <button

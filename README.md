@@ -1,8 +1,9 @@
+# Dire Dawa University Super Cup
 
-  # Ethiopian Premier League Website
-  ## Running the code
+Department football league. Six groups, four departments in each group.
 
-  Run `npm i` to install the dependencies.
+## Running the code
 
-  Run `npm run dev` to start the development server.
-  
+Run `npm i` to install the dependencies.
+
+Run `npm run dev` to start the development server.

@@ -2,13 +2,13 @@
 
 :root {
   --font-size: 16px;
-  --background: #0a0e1a;
+  --background: #070d18;
   --foreground: #ffffff;
   --card: #1a1f2e;
   --card-foreground: #ffffff;
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: #ffd700;
+  --primary: #f5c518;
   --primary-foreground: #0a0e1a;
   --secondary: oklch(0.95 0.0058 264.53);
   --secondary-foreground: #030213;
@@ -197,7 +197,7 @@
 
 body {
   font-family: 'Inter', sans-serif;
-  background: #0a0e1a;
+  background: #070d18;
   color: #ffffff;
 }
 }

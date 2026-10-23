@@ -5,7 +5,7 @@ import { MapPin } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 
 interface Team {
-  id: number;
+  id: string | number;
   name: string;
   short_name: string;
   color: string;
@@ -116,10 +116,18 @@ export function MatchCard({
   return (
     <div
       onClick={handleClick}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          handleClick();
+        }
+      }}
+      role="button"
+      tabIndex={0}
       className="rounded-xl overflow-hidden transition-all hover:scale-[1.02] cursor-pointer group"
       style={{
-        background: 'rgba(26, 31, 46, 0.8)',
-        border: status === 'live' ? '1px solid #e63946' : '1px solid rgba(255, 255, 255, 0.06)',
+        background: '#10192b',
+        border: status === 'live' ? '1px solid #e11d48' : '1px solid rgba(255, 255, 255, 0.08)',
       }}
     >
       {/* Status Bar */}
@@ -164,10 +172,10 @@ export function MatchCard({
                   />
                 ) : (
                   <div
-                    className="w-full h-full flex items-center justify-center text-base font-bold text-black"
-                    style={{ background: homeTeam.color }}
+                    className="flex h-full w-full items-center justify-center px-0.5 text-center text-[10px] font-black leading-none text-white"
+                    style={{ background: homeTeam.color, color: homeTeam.color.toLowerCase() === '#f5c518' ? '#102018' : '#fff' }}
                   >
-                    {homeTeam.short_name?.charAt(0) || homeTeam.name.charAt(0)}
+                    {homeTeam.short_name || homeTeam.name.charAt(0)}
                   </div>
                 )}
               </div>
@@ -205,10 +213,10 @@ export function MatchCard({
                   />
                 ) : (
                   <div
-                    className="w-full h-full flex items-center justify-center text-base font-bold text-black"
-                    style={{ background: awayTeam.color }}
+                    className="flex h-full w-full items-center justify-center px-0.5 text-center text-[10px] font-black leading-none"
+                    style={{ background: awayTeam.color, color: awayTeam.color.toLowerCase() === '#f5c518' ? '#102018' : '#fff' }}
                   >
-                    {awayTeam.short_name?.charAt(0) || awayTeam.name.charAt(0)}
+                    {awayTeam.short_name || awayTeam.name.charAt(0)}
                   </div>
                 )}
               </div>
