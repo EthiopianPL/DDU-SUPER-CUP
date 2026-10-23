@@ -1,7 +1,7 @@
 import { useNavigate, useParams } from 'react-router';
 import { ArrowLeft, MapPin } from 'lucide-react';
 import { DepartmentMark } from '../components/DepartmentMark';
-import { formatKickoff, getDepartment, getFixture } from '../../data/supercup';
+import { formatKickoff, getDepartment, getFixture, goalEvents, playersForDepartment } from '../../data/supercup';
 
 export function MatchDetailsPage() {
   const { id } = useParams();
@@ -20,6 +20,9 @@ export function MatchDetailsPage() {
   const home = getDepartment(fixture.homeId);
   const away = getDepartment(fixture.awayId);
   const played = fixture.status !== 'upcoming';
+  const events = goalEvents(fixture);
+  const homeSquad = playersForDepartment(fixture.homeId);
+  const awaySquad = playersForDepartment(fixture.awayId);
 
   return (
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-5">
@@ -69,7 +72,38 @@ export function MatchDetailsPage() {
           {fixture.stadium}
         </p>
       </div>
+
+      <h2 className="mb-3 mt-6 text-lg font-black text-white">Match details</h2>
+      <div className="rounded-2xl border border-white/10 bg-[#10192b] p-4">
+        {events.length === 0 && <p className="text-sm text-white/50">Kickoff is {fixture.time}. No goals yet.</p>}
+        {events.map((event, index) => (
+          <p key={`${event.playerId}-${index}`} className="border-b border-white/5 py-2 text-sm text-white last:border-b-0">
+            <span className="mr-2 font-mono text-[#f5c518]">{event.minute}&apos;</span>
+            {event.playerName}
+            <span className="text-white/40"> · {getDepartment(event.teamId)?.name}</span>
+          </p>
+        ))}
+      </div>
+
+      <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        <SquadList title={home?.name ?? 'Home'} players={homeSquad} />
+        <SquadList title={away?.name ?? 'Away'} players={awaySquad} />
+      </div>
     </div>
+  );
+}
+
+function SquadList({ title, players }: { title: string; players: ReturnType<typeof playersForDepartment> }) {
+  return (
+    <section className="rounded-2xl border border-white/10 bg-[#10192b] p-4">
+      <h3 className="mb-2 text-sm font-black text-white">{title}</h3>
+      {players.map((player) => (
+        <p key={player.id} className="flex justify-between border-t border-white/5 py-1.5 text-xs text-white/70">
+          <span>{player.number} {player.name}</span>
+          <span>{player.position}</span>
+        </p>
+      ))}
+    </section>
   );
 }
 

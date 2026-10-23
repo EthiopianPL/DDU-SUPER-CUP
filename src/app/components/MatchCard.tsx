@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { MapPin } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { formatKickoff, getDepartment, getFixture, goalEvents } from '../../data/supercup';
 
 interface Team {
   id: string | number;
@@ -102,8 +103,11 @@ export function MatchCard({
     return (currentMinute / 90) * 100;
   };
 
-  const homeTeamName = homeTeam.short_name || homeTeam.name;
-  const awayTeamName = awayTeam.short_name || awayTeam.name;
+  const fixture = getFixture(id);
+  const events = fixture ? goalEvents(fixture) : [];
+  const detailLine = fixture
+    ? `Group ${fixture.group} · Matchday ${fixture.matchday} · ${formatKickoff(fixture.date, fixture.time)} · ${fixture.time}`
+    : time;
 
   const handleClick = () => {
     navigate(`/match/${id}`);
@@ -131,8 +135,9 @@ export function MatchCard({
       }}
     >
       {/* Status Bar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-white/10">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-white/10">
+        <p className="text-[11px] font-semibold text-white/70">{detailLine}</p>
+        <div className="flex shrink-0 items-center gap-2">
           {status === 'live' && (
             <>
               <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
@@ -143,16 +148,10 @@ export function MatchCard({
           {status === 'finished' && (
             <span className="text-gray-400 text-xs font-semibold">{t('FULL TIME')}</span>
           )}
-          {status === 'upcoming' && time && (
-            <span className="text-blue-400 text-xs font-semibold">{time}</span>
+          {status === 'upcoming' && (
+            <span className="text-[#9eb6f5] text-xs font-semibold">Kickoff</span>
           )}
         </div>
-        {stadium && (
-          <div className="flex items-center gap-1">
-            <MapPin className="w-3 h-3 text-gray-500" />
-            <span className="text-xs text-gray-500">{stadium}</span>
-          </div>
-        )}
       </div>
 
       {/* Match Content */}
@@ -161,7 +160,7 @@ export function MatchCard({
           {/* Home Team */}
           <div className="flex-1 text-right">
             <div className="flex items-center justify-end gap-3 mb-3">
-              <span className="text-white font-bold text-base sm:text-lg">{homeTeamName}</span>
+              <span className="text-white font-bold text-sm sm:text-base leading-tight">{homeTeam.name}</span>
               <div className="w-12 h-12 rounded-full overflow-hidden bg-white/10 flex items-center justify-center shadow-md">
                 {homeTeam.logo_url && !homeImageError ? (
                   <img
@@ -220,7 +219,7 @@ export function MatchCard({
                   </div>
                 )}
               </div>
-              <span className="text-white font-bold text-base sm:text-lg">{awayTeamName}</span>
+              <span className="text-white font-bold text-sm sm:text-base leading-tight">{awayTeam.name}</span>
             </div>
             {(status === 'live' || status === 'finished') && (
               <div className="text-3xl sm:text-4xl font-black text-white">
@@ -231,6 +230,24 @@ export function MatchCard({
         </div>
 
         {/* Live Match Progress Bar */}
+        {(stadium || events.length > 0) && (
+          <div className="mt-4 space-y-2 border-t border-white/10 pt-3">
+            {stadium && (
+              <div className="flex items-center gap-1">
+                <MapPin className="w-3 h-3 text-gray-500" />
+                <span className="text-xs text-gray-400">{stadium}</span>
+              </div>
+            )}
+            {events.map((event, index) => (
+              <p key={`${event.playerId}-${event.minute}-${index}`} className="text-xs text-white/70">
+                <span className="font-mono text-[#f5c518]">{event.minute}&apos;</span>{' '}
+                {event.playerName}
+                <span className="text-white/40"> · {getDepartment(event.teamId)?.shortName}</span>
+              </p>
+            ))}
+          </div>
+        )}
+
         {status === 'live' && (
           <div className="mt-4 pt-3 border-t border-white/10">
             <div className="flex justify-between text-xs text-gray-400 mb-1">

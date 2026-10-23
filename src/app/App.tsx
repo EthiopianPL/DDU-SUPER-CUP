@@ -8,7 +8,9 @@ import { MatchDetailsPage } from './pages/MatchDetailsPage';
 import { TeamsPage } from './pages/TeamsPage';
 import { TeamDetailsPage } from './pages/TeamDetailsPage';
 import { GroupsPage } from './pages/GroupsPage';
-import { ProfilePage } from './pages/ProfilePage';
+import { NewsPage } from './pages/NewsPage';
+import { NewsDetailPage } from './pages/NewsDetailPage';
+import { StatisticsPage } from './pages/StatisticsPage';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
 import { AuthCallbackPage } from './pages/AuthCallbackPage';
@@ -16,8 +18,6 @@ import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { AdminNewsPage } from './pages/AdminNewsPage';
 import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { AdminMatchesPage } from './pages/AdminMatchesPage';
-import { ResetPasswordPage } from './pages/ResetPasswordPage';
-import { PrivacySecurityPage } from './pages/PrivacySecurityPage';
 import { LanguageProvider } from './context/LanguageContext';
 
 function App() {
@@ -33,13 +33,12 @@ function App() {
               <Route path="match/:id" element={<MatchDetailsPage />} />
               <Route path="teams" element={<TeamsPage />} />
               <Route path="team/:id" element={<TeamDetailsPage />} />
-              <Route path="profile" element={<ProfilePage />} />
-              <Route path="profile/privacy-security" element={<PrivacySecurityPage />} />
-              <Route path="reset-password" element={<ResetPasswordPage />} />
+              <Route path="news" element={<NewsPage />} />
+              <Route path="news/:id" element={<NewsDetailPage />} />
+              <Route path="stats" element={<StatisticsPage />} />
               <Route path="discover" element={<Navigate to="/groups" replace />} />
-              <Route path="news" element={<Navigate to="/" replace />} />
               <Route path="players" element={<Navigate to="/teams" replace />} />
-              <Route path="stats" element={<Navigate to="/groups" replace />} />
+              <Route path="profile" element={<Navigate to="/" replace />} />
             </Route>
 
             <Route path="/admin" element={<AdminRoute />}>
