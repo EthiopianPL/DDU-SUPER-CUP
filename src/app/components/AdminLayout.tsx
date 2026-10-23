@@ -88,7 +88,7 @@ export function AdminLayout() {
             <Shield className="w-5 h-5 text-[#ffd700]" />
           </div>
           <div>
-            <h1 className="text-base font-black text-white leading-tight">EPL Admin</h1>
+            <h1 className="text-base font-black text-white leading-tight">Super Cup Admin</h1>
             <p className="text-[11px] text-gray-500">Management Console</p>
           </div>
           <button

@@ -1,69 +1,39 @@
-// src/app/components/Header.tsx
-import { Menu, Bell, Search } from 'lucide-react';
+import { Menu, Search } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { SearchModal } from './SearchModal';
 import { MobileMenu } from './MobileMenu';
 import { LanguageSwitcher } from './LanguageSwitcher';
+import { BrandLockup } from './BrandLockup';
 
-interface HeaderProps {
-  onMenuClick?: () => void;
-}
-
-export function Header({ onMenuClick }: HeaderProps) {
+export function Header() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const navigate = useNavigate();
 
   return (
     <>
-      <header className="sticky top-0 z-50 backdrop-blur-md" style={{
-        background: 'rgba(10, 14, 26, 0.9)',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
-      }}>
-        <div className="flex items-center justify-between px-4 py-4">
-          <button 
-            onClick={() => {
-              onMenuClick?.();
-              setIsMenuOpen(true);
-            }}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-          >
-            <Menu className="w-6 h-6 text-white" />
-          </button>
-          
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1">
-              <div className="w-1 h-8 bg-[#009639]" />
-              <div className="w-1 h-8 bg-[#ffd700]" />
-              <div className="w-1 h-8 bg-[#da121a]" />
-            </div>
-            <h1 
-              className="text-xl tracking-tight text-white cursor-pointer"
-              style={{ 
-                fontFamily: 'Inter, sans-serif',
-                fontWeight: 900
-              }}
-              onClick={() => navigate('/')}
-            >
-              EPL
-            </h1>
-          </div>
-          
-          <div className="flex gap-2 items-center">
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-[#070d18]/90 backdrop-blur-md">
+        <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
+          <BrandLockup size="sm" onClick={() => navigate('/')} />
+
+          <div className="flex items-center gap-1">
             <LanguageSwitcher />
-            <button 
+            <button
+              type="button"
               onClick={() => setIsSearchOpen(true)}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+              className="rounded-lg p-2 transition-colors hover:bg-white/10"
+              aria-label="Search"
             >
-              <Search className="w-6 h-6 text-white" />
+              <Search className="h-5 w-5 text-white" />
             </button>
             <button
-              onClick={() => navigate('/profile/notifications')}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors relative"
+              type="button"
+              onClick={() => setIsMenuOpen(true)}
+              className="rounded-lg p-2 transition-colors hover:bg-white/10"
+              aria-label="Open menu"
             >
-              <Bell className="w-6 h-6 text-white" />
-              <div className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+              <Menu className="h-5 w-5 text-white" />
             </button>
           </div>
         </div>

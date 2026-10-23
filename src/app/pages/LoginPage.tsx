@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { Mail, Lock, AlertCircle, CheckCircle, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { BrandLockup } from '../components/BrandLockup';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -103,15 +104,8 @@ export function LoginPage() {
         </div>
 
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <div className="flex items-center gap-1">
-              <div className="w-1.5 h-12 bg-[#009639]" />
-              <div className="w-1.5 h-12 bg-[#ffd700]" />
-              <div className="w-1.5 h-12 bg-[#da121a]" />
-            </div>
-            <h1 className="text-4xl text-white" style={{ fontFamily: 'Inter, sans-serif', fontWeight: 900 }}>
-              EPL
-            </h1>
+          <div className="mb-4 flex justify-center">
+            <BrandLockup size="lg" />
           </div>
           <p className="text-gray-400">{t('Welcome back to Ethiopian Premier League')}</p>
         </div>
