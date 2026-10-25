@@ -1,8 +1,6 @@
-// src/app/components/MatchCard.tsx
-import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { MapPin } from 'lucide-react';
-import { formatKickoff, getDepartment, getFixture, goalEvents } from '../../data/supercup';
+import { DepartmentMark } from './DepartmentMark';
+import { formatKickoff, getFixture, goalEvents } from '../../data/supercup';
 
 interface Team {
   id: string | number;
@@ -25,6 +23,7 @@ interface MatchCardProps {
   matchMinute?: number;
   matchSecond?: number;
   injuryTime?: number;
+  showDate?: boolean;
 }
 
 export function MatchCard({
@@ -37,258 +36,70 @@ export function MatchCard({
   time,
   stadium,
   matchMinute = 0,
-  matchSecond = 0,
-  injuryTime = 0
+  showDate = true,
 }: MatchCardProps) {
   const navigate = useNavigate();
-  const [currentMinute, setCurrentMinute] = useState(matchMinute);
-  const [currentSecond, setCurrentSecond] = useState(matchSecond);
-  const [currentHalf, setCurrentHalf] = useState<'first' | 'second'>(matchMinute < 45 ? 'first' : 'second');
-  const [homeImageError, setHomeImageError] = useState(false);
-  const [awayImageError, setAwayImageError] = useState(false);
-
-  // Update when props change (realtime updates)
-  useEffect(() => {
-    setCurrentMinute(matchMinute);
-    setCurrentSecond(matchSecond);
-    setCurrentHalf(matchMinute < 45 ? 'first' : 'second');
-  }, [matchMinute, matchSecond]);
-
-  // Local timer for smooth ticking on live matches
-  useEffect(() => {
-    if (status !== 'live') return;
-
-    const interval = setInterval(() => {
-      setCurrentSecond(prev => {
-        if (prev >= 59) {
-          setCurrentMinute(m => {
-            const newMinute = m + 1;
-            if (newMinute === 45) {
-              setCurrentHalf('second');
-            }
-            return newMinute;
-          });
-          return 0;
-        }
-        return prev + 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [status]);
-
-  const formatTime = () => {
-    let displayMinute = currentMinute;
-    let displayExtra = '';
-
-    // Add injury time only after 45 minutes
-    if (currentMinute >= 45 && injuryTime > 0) {
-      displayExtra = ` +${injuryTime}`;
-    }
-
-    if (currentMinute >= 90) {
-      return 'FT';
-    }
-    if (currentMinute === 45) {
-      return `HT${displayExtra}`;
-    }
-
-    return `${displayMinute}:${currentSecond.toString().padStart(2, '0')}${displayExtra}`;
-  };
-
-  const getProgressPercentage = () => {
-    if (currentMinute >= 90) return 100;
-    return (currentMinute / 90) * 100;
-  };
-
   const fixture = getFixture(id);
-  const events = fixture ? goalEvents(fixture) : [];
-  const detailLine = fixture
-    ? `Group ${fixture.group} · Matchday ${fixture.matchday} · ${formatKickoff(fixture.date, fixture.time)} · ${fixture.time}`
-    : time;
-
-  const handleClick = () => {
-    navigate(`/match/${id}`);
-  };
-
-  const handleTeamClick = (e: React.MouseEvent | React.KeyboardEvent, teamId: string | number) => {
-    e.stopPropagation();
-    navigate(`/team/${teamId}`);
-  };
-
-  // Get the current display time for live matches
-  const liveDisplay = status === 'live' ? formatTime() : null;
-  const progressPercentage = status === 'live' ? getProgressPercentage() : 0;
+  const played = status === 'live' || status === 'finished';
+  const scorers = fixture
+    ? goalEvents(fixture).map((event) => `${event.minute}' ${event.playerName.split(' ').slice(-1)[0]}`).join(' · ')
+    : '';
+  const meta = fixture
+    ? [`Group ${fixture.group}`, `MD${fixture.matchday}`, showDate ? formatKickoff(fixture.date, fixture.time) : '', stadium].filter(Boolean).join(' · ')
+    : [time, stadium].filter(Boolean).join(' · ');
 
   return (
-    <div
-      onClick={handleClick}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          handleClick();
-        }
-      }}
-      role="button"
-      tabIndex={0}
-      aria-label={`Match details: ${homeTeam.name} vs ${awayTeam.name}`}
-      className="rounded-xl overflow-hidden transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518] focus-visible:ring-offset-2 focus-visible:ring-offset-[#070d18]"
-      style={{
-        background: '#10192b',
-        border: status === 'live' ? '1px solid #e11d48' : '1px solid rgba(255, 255, 255, 0.08)',
-      }}
+    <button
+      type="button"
+      onClick={() => navigate(`/match/${id}`)}
+      className={`w-full rounded-2xl border bg-[#10192b] px-3.5 py-3 text-left ${
+        status === 'live' ? 'border-red-500/40' : 'border-white/10'
+      }`}
     >
-      {/* Status Bar */}
-      <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-white/10">
-        <p className="text-[11px] font-semibold text-white/70">{detailLine}</p>
-        <div className="flex shrink-0 items-center gap-2">
-          {status === 'live' && (
-            <>
-              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-              <span className="text-red-500 text-xs font-semibold">LIVE</span>
-              <span className="text-red-400 text-xs font-mono">{liveDisplay}</span>
-            </>
-          )}
-          {status === 'finished' && (
-            <span className="text-gray-400 text-xs font-semibold">FULL TIME</span>
-          )}
-          {status === 'upcoming' && (
-            <span className="text-[#9eb6f5] text-xs font-semibold">Kickoff</span>
-          )}
-        </div>
+      <Side name={homeTeam.name} shortName={homeTeam.short_name} color={homeTeam.color} score={played ? homeScore : null} />
+      <div className="mt-2">
+        <Side name={awayTeam.name} shortName={awayTeam.short_name} color={awayTeam.color} score={played ? awayScore : null} />
       </div>
-
-      {/* Match Content */}
-      <div className="p-4">
-        <div className="flex items-center justify-between gap-4">
-          {/* Home Team */}
-          <div className="flex-1 text-right">
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={(e) => handleTeamClick(e, homeTeam.id)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  handleTeamClick(e, homeTeam.id);
-                }
-              }}
-              className="inline-flex items-center justify-end gap-3 mb-3 hover:opacity-80 transition-opacity"
-              aria-label={`View ${homeTeam.name} squad details`}
-            >
-              <span className="text-white font-bold text-sm sm:text-base leading-tight hover:underline">{homeTeam.name}</span>
-              <div className="w-12 h-12 rounded-full overflow-hidden bg-white/10 flex items-center justify-center shadow-md shrink-0">
-                {homeTeam.logo_url && !homeImageError ? (
-                  <img
-                    src={homeTeam.logo_url}
-                    alt={homeTeam.name}
-                    className="w-full h-full object-cover"
-                    onError={() => setHomeImageError(true)}
-                  />
-                ) : (
-                  <div
-                    className="flex h-full w-full items-center justify-center px-0.5 text-center text-[10px] font-black leading-none text-white"
-                    style={{ background: homeTeam.color, color: homeTeam.color.toLowerCase() === '#f5c518' ? '#102018' : '#fff' }}
-                  >
-                    {homeTeam.short_name || homeTeam.name.charAt(0)}
-                  </div>
-                )}
-              </div>
-            </div>
-            {(status === 'live' || status === 'finished') && (
-              <div className="text-3xl sm:text-4xl font-black text-white">
-                {homeScore !== null && homeScore !== undefined ? homeScore : '-'}
-              </div>
-            )}
-          </div>
-
-          {/* VS Divider */}
-          <div className="text-center">
-            {status === 'live' ? (
-              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
-                <span className="text-red-500 text-xs font-bold">LIVE</span>
-              </div>
-            ) : status === 'finished' ? (
-              <div className="text-gray-500 font-bold text-sm">FT</div>
-            ) : (
-              <div className="text-gray-500 font-bold text-sm">VS</div>
-            )}
-          </div>
-
-          {/* Away Team */}
-          <div className="flex-1 text-left">
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={(e) => handleTeamClick(e, awayTeam.id)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  handleTeamClick(e, awayTeam.id);
-                }
-              }}
-              className="inline-flex items-center gap-3 mb-3 hover:opacity-80 transition-opacity"
-              aria-label={`View ${awayTeam.name} squad details`}
-            >
-              <div className="w-12 h-12 rounded-full overflow-hidden bg-white/10 flex items-center justify-center shadow-md shrink-0">
-                {awayTeam.logo_url && !awayImageError ? (
-                  <img
-                    src={awayTeam.logo_url}
-                    alt={awayTeam.name}
-                    className="w-full h-full object-cover"
-                    onError={() => setAwayImageError(true)}
-                  />
-                ) : (
-                  <div
-                    className="flex h-full w-full items-center justify-center px-0.5 text-center text-[10px] font-black leading-none"
-                    style={{ background: awayTeam.color, color: awayTeam.color.toLowerCase() === '#f5c518' ? '#102018' : '#fff' }}
-                  >
-                    {awayTeam.short_name || awayTeam.name.charAt(0)}
-                  </div>
-                )}
-              </div>
-              <span className="text-white font-bold text-sm sm:text-base leading-tight hover:underline">{awayTeam.name}</span>
-            </div>
-            {(status === 'live' || status === 'finished') && (
-              <div className="text-3xl sm:text-4xl font-black text-white">
-                {awayScore !== null && awayScore !== undefined ? awayScore : '-'}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Live Match Progress Bar */}
-        {(stadium || events.length > 0) && (
-          <div className="mt-4 space-y-2 border-t border-white/10 pt-3">
-            {stadium && (
-              <div className="flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-gray-500" />
-                <span className="text-xs text-gray-400">{stadium}</span>
-              </div>
-            )}
-            {events.map((event, index) => (
-              <p key={`${event.playerId}-${event.minute}-${index}`} className="text-xs text-white/70">
-                <span className="font-mono text-[#f5c518]">{event.minute}&apos;</span>{' '}
-                {event.playerName}
-                <span className="text-white/40"> · {getDepartment(event.teamId)?.shortName}</span>
-              </p>
-            ))}
-          </div>
-        )}
-
-        {status === 'live' && (
-          <div className="mt-4 pt-3 border-t border-white/10">
-            <div className="flex justify-between text-xs text-gray-400 mb-1">
-              <span>{currentHalf === 'first' ? '1st Half' : '2nd Half'}</span>
-              <span className="font-mono">{liveDisplay}</span>
-            </div>
-            <div className="w-full bg-gray-700 rounded-full h-1.5 overflow-hidden">
-              <div
-                className="bg-red-500 h-full rounded-full transition-all duration-1000 ease-linear"
-                style={{ width: `${progressPercentage}%` }}
-              />
-            </div>
-          </div>
-        )}
+      <div className="mt-2.5 flex items-center justify-between gap-3">
+        <p className="min-w-0 truncate text-[11px] text-white/40">{meta}</p>
+        <Stamp status={status} minute={matchMinute} kickoff={fixture?.time ?? time} />
       </div>
-    </div>
+      {scorers && <p className="mt-1 truncate text-[11px] text-white/55">{scorers}</p>}
+    </button>
   );
+}
+
+function Side({
+  name,
+  shortName,
+  color,
+  score,
+}: {
+  name: string;
+  shortName: string;
+  color: string;
+  score?: number | null;
+}) {
+  return (
+    <span className="flex items-center gap-3">
+      <DepartmentMark shortName={shortName} color={color} size={32} />
+      <span className="min-w-0 flex-1 truncate text-sm font-bold text-white">{name}</span>
+      <span className="w-6 text-right text-lg font-black tabular-nums text-white">{score ?? ''}</span>
+    </span>
+  );
+}
+
+function Stamp({ status, minute, kickoff }: { status: MatchCardProps['status']; minute: number; kickoff?: string }) {
+  if (status === 'live') {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-bold text-red-400">
+        <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+        {minute}&apos;
+      </span>
+    );
+  }
+  if (status === 'finished') {
+    return <span className="shrink-0 text-[11px] font-bold text-white/35">FT</span>;
+  }
+  return <span className="shrink-0 text-[11px] font-bold text-[#f5c518]">{kickoff}</span>;
 }
