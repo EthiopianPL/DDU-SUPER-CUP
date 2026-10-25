@@ -2,13 +2,13 @@ import { useNavigate } from 'react-router';
 import { ChevronRight, Flame, Calendar } from 'lucide-react';
 import { MatchCard } from '../components/MatchCard';
 import { GroupTable } from '../components/GroupTable';
-import { GROUPS, cardTeam, fixtures, topScorers } from '../../data/supercup';
+import { GROUPS, cardTeam, fixtures, topScorers, sortFixturesByPriority } from '../../data/supercup';
 import { DepartmentMark } from '../components/DepartmentMark';
 
 export function HomePage() {
   const navigate = useNavigate();
-  const live = fixtures.filter((fixture) => fixture.status === 'live');
-  const upcoming = fixtures.filter((fixture) => fixture.status === 'upcoming').slice(0, 4);
+  const live = sortFixturesByPriority(fixtures.filter((fixture) => fixture.status === 'live'));
+  const upcoming = sortFixturesByPriority(fixtures.filter((fixture) => fixture.status === 'upcoming')).slice(0, 4);
   const leader = topScorers(1)[0];
 
   return (
