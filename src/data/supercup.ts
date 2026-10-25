@@ -369,3 +369,160 @@ export function formatKickoff(date: string, time: string) {
   const value = new Date(`${date}T${time}:00`);
   return value.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
+
+export interface TimelineEvent {
+  minute: number;
+  teamId: string;
+  playerId: string;
+  playerName: string;
+  kind: 'goal' | 'yellow' | 'red';
+  assistName?: string;
+}
+
+export interface MatchStat {
+  label: string;
+  home: number;
+  away: number;
+  percent?: boolean;
+}
+
+export interface MatchSheet {
+  formation: string;
+  starters: Player[];
+  bench: Player[];
+}
+
+function hashString(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function fillerPlayer(departmentId: string, slot: number, position: Player['position'], number: number, taken: Set<string>): Player {
+  const departmentIndex = Math.max(0, departments.findIndex((department) => department.id === departmentId));
+  let seed = 480 + departmentIndex * 17 + slot * 3;
+  let name = `${FIRST_NAMES[seed % FIRST_NAMES.length]} ${LAST_NAMES[seed % LAST_NAMES.length]}`;
+
+  for (let attempt = 0; taken.has(name) && attempt < 40; attempt += 1) {
+    seed += 5;
+    name = `${FIRST_NAMES[seed % FIRST_NAMES.length]} ${LAST_NAMES[(seed + attempt) % LAST_NAMES.length]}`;
+  }
+
+  taken.add(name);
+  return {
+    id: `${departmentId}-x${slot}`,
+    name,
+    position,
+    number,
+    departmentId,
+    goals: 0,
+    assists: 0,
+  };
+}
+
+export function matchSheet(departmentId: string): MatchSheet {
+  const squad = playersForDepartment(departmentId);
+  const taken = new Set(squad.map((player) => player.name));
+  const starters = [
+    ...squad.filter((player) => player.position === 'GK'),
+    ...squad.filter((player) => player.position === 'DEF'),
+    fillerPlayer(departmentId, 0, 'DEF', 3, taken),
+    fillerPlayer(departmentId, 1, 'DEF', 6, taken),
+    ...squad.filter((player) => player.position === 'MID'),
+    ...squad.filter((player) => player.position === 'FWD'),
+    fillerPlayer(departmentId, 2, 'FWD', 7, taken),
+  ];
+
+  return {
+    formation: '4-3-3',
+    starters,
+    bench: [
+      fillerPlayer(departmentId, 3, 'GK', 12, taken),
+      fillerPlayer(departmentId, 4, 'DEF', 14, taken),
+      fillerPlayer(departmentId, 5, 'MID', 15, taken),
+      fillerPlayer(departmentId, 6, 'MID', 16, taken),
+      fillerPlayer(departmentId, 7, 'FWD', 17, taken),
+    ],
+  };
+}
+
+export function matchTimeline(fixture: Fixture): TimelineEvent[] {
+  if (fixture.status === 'upcoming') return [];
+
+  const limit = fixture.status === 'live' && fixture.minute != null ? fixture.minute : 90;
+  const events: TimelineEvent[] = goalEvents(fixture).map((goal) => {
+    const mids = matchSheet(goal.teamId).starters.filter((player) => player.position === 'MID' && player.id !== goal.playerId);
+    const assist = mids[hashString(`${fixture.id}:${goal.playerId}`) % Math.max(mids.length, 1)];
+    return {
+      ...goal,
+      kind: 'goal' as const,
+      assistName: assist?.name,
+    };
+  });
+
+  [fixture.homeId, fixture.awayId].forEach((teamId) => {
+    const pool = matchSheet(teamId).starters.filter((player) => player.position !== 'GK');
+    const seed = hashString(`${fixture.id}:${teamId}:cards`);
+    const used = new Set<string>();
+    const yellowCount = 1 + (seed % 3);
+
+    for (let index = 0; index < yellowCount; index += 1) {
+      const player = pool[(seed + index * 5) % pool.length];
+      if (!player || used.has(player.id)) continue;
+      used.add(player.id);
+      const minute = 14 + ((seed >> (index * 4)) % 68);
+      if (minute > limit) continue;
+      events.push({
+        minute,
+        teamId,
+        playerId: player.id,
+        playerName: player.name,
+        kind: 'yellow',
+      });
+    }
+
+    if (seed % 13 === 0) {
+      const player = pool.find((item) => !used.has(item.id)) ?? pool[0];
+      const minute = Math.min(78, 55 + (seed % 20));
+      if (player && minute <= limit) {
+        events.push({
+          minute,
+          teamId,
+          playerId: player.id,
+          playerName: player.name,
+          kind: 'red',
+        });
+      }
+    }
+  });
+
+  return events
+    .filter((event) => event.minute <= limit)
+    .sort((a, b) => a.minute - b.minute || a.playerName.localeCompare(b.playerName));
+}
+
+export function matchStatRows(fixture: Fixture, timeline: TimelineEvent[]): MatchStat[] | null {
+  if (fixture.status === 'upcoming' || fixture.homeScore == null || fixture.awayScore == null) return null;
+
+  const seed = hashString(fixture.id);
+  const difference = fixture.homeScore - fixture.awayScore;
+  const homePossession = Math.min(68, Math.max(32, 50 + difference * 6 + ((seed % 9) - 4)));
+  const homeShots = fixture.homeScore + 4 + (seed % 6);
+  const awayShots = fixture.awayScore + 3 + ((seed >> 3) % 6);
+  const count = (teamId: string, kind: TimelineEvent['kind']) => timeline.filter((event) => event.teamId === teamId && event.kind === kind).length;
+
+  return [
+    { label: 'Possession', home: homePossession, away: 100 - homePossession, percent: true },
+    { label: 'Shots', home: homeShots, away: awayShots },
+    { label: 'Shots on target', home: Math.min(homeShots, fixture.homeScore + 1 + (seed % 3)), away: Math.min(awayShots, fixture.awayScore + 1 + ((seed >> 2) % 3)) },
+    { label: 'Corners', home: 2 + (seed % 6), away: 1 + ((seed >> 5) % 6) },
+    { label: 'Fouls', home: 7 + (seed % 8), away: 6 + ((seed >> 4) % 8) },
+    { label: 'Yellow cards', home: count(fixture.homeId, 'yellow'), away: count(fixture.awayId, 'yellow') },
+    { label: 'Red cards', home: count(fixture.homeId, 'red'), away: count(fixture.awayId, 'red') },
+    { label: 'Passes', home: 310 + (seed % 160), away: 290 + ((seed >> 6) % 170) },
+    { label: 'Pass accuracy', home: 74 + (seed % 14), away: 72 + ((seed >> 2) % 16), percent: true },
+  ];
+}
