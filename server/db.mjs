@@ -1,17 +1,36 @@
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { MessageChannel, Worker, receiveMessageOnPort } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const idle = new Int32Array(new SharedArrayBuffer(4));
+
+function loadEnv() {
+  const file = join(root, '.env');
+  if (!existsSync(file)) return;
+  for (const line of readFileSync(file, 'utf8').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const split = trimmed.indexOf('=');
+    if (split < 1) continue;
+    const key = trimmed.slice(0, split).trim();
+    if (process.env[key] != null) continue;
+    process.env[key] = trimmed.slice(split + 1).trim();
+  }
+}
 
 export function databasePath() {
   return process.env.DDU_DB || join(root, 'data', 'supercup.db');
 }
 
 export function openDatabase(path = databasePath()) {
+  loadEnv();
+  if (!process.env.DDU_DB && process.env.MYSQL_HOST) return openMysql();
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
+  db.dialect = 'sqlite';
   db.exec('PRAGMA foreign_keys = ON');
   try {
     db.exec('PRAGMA journal_mode = WAL');
@@ -157,6 +176,99 @@ function migrate(db) {
       created_at INTEGER NOT NULL
     );
   `);
+}
+
+function openMysql() {
+  const worker = new Worker(new URL('./mysql-worker.mjs', import.meta.url), { execArgv: [] });
+  const { port1, port2 } = new MessageChannel();
+  port1.start();
+  worker.on('error', (error) => {
+    port1.postMessage({ ok: false, error: error.message });
+  });
+  worker.postMessage({ port: port2 }, [port2]);
+  const ready = waitFor(port1);
+  if (!ready.ok) throw new Error(ready.error || 'The database worker did not start.');
+
+  const call = (message) => {
+    port1.postMessage(message);
+    const payload = waitFor(port1);
+    if (!payload.ok) {
+      const error = new Error(payload.error || 'The database request failed.');
+      error.code = payload.code;
+      throw error;
+    }
+    return payload;
+  };
+
+  call({
+    op: 'connect',
+    host: process.env.MYSQL_HOST,
+    port: Number(process.env.MYSQL_PORT || 3306),
+    user: process.env.MYSQL_USER,
+    password: process.env.MYSQL_PASSWORD || '',
+    database: process.env.MYSQL_DATABASE,
+  });
+
+  const db = {
+    dialect: 'mysql',
+    exec(sql) {
+      const statement = String(sql).replace(/BEGIN IMMEDIATE/g, 'START TRANSACTION').trim();
+      if (!statement) return;
+      call({ op: 'query', sql: statement, params: [] });
+    },
+    prepare(sql) {
+      return {
+        get(...params) {
+          const payload = call({ op: 'query', sql, params: nullable(params) });
+          return payload.result.rows?.[0];
+        },
+        all(...params) {
+          const payload = call({ op: 'query', sql, params: nullable(params) });
+          return payload.result.rows ?? [];
+        },
+        run(...params) {
+          const payload = call({ op: 'query', sql, params: nullable(params) });
+          return {
+            changes: payload.result.changes ?? 0,
+            lastInsertRowid: payload.result.lastInsertRowid ?? 0,
+          };
+        },
+      };
+    },
+    close() {
+      try {
+        call({ op: 'close' });
+      } catch {
+        // The connection may already be gone.
+      }
+      worker.terminate();
+    },
+  };
+
+  for (const statement of readFileSync(new URL('./schema.mysql.sql', import.meta.url), 'utf8').split(';')) {
+    const sql = statement.trim();
+    if (!sql) continue;
+    try {
+      db.exec(sql);
+    } catch (error) {
+      if (error.code !== 'ER_DUP_KEYNAME') throw error;
+    }
+  }
+  return db;
+}
+
+function waitFor(port) {
+  const deadline = Date.now() + 15000;
+  let received;
+  while (!(received = receiveMessageOnPort(port))) {
+    if (Date.now() > deadline) throw new Error('The database did not answer in time.');
+    Atomics.wait(idle, 0, 0, 25);
+  }
+  return received.message;
+}
+
+function nullable(params) {
+  return params.map((value) => value === undefined ? null : value);
 }
 
 export function transaction(db, work) {
