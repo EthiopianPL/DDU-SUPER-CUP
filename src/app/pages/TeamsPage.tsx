@@ -17,11 +17,8 @@ export function TeamsPage() {
   );
 
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-24 pt-5">
-      <h1 className="text-3xl font-black text-white">Departments</h1>
-      <p className="mt-1 text-sm text-white/50">24 department teams across 6 groups</p>
-
-      <div className="relative mt-4">
+    <div className="mx-auto max-w-3xl px-4 pb-24 pt-3 sm:pt-5">
+      <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
         <input
           value={searchTerm}
