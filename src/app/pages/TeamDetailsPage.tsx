@@ -19,7 +19,7 @@ export function TeamDetailsPage() {
     return (
       <div className="mx-auto max-w-3xl px-4 py-16 text-center">
         <p className="text-white/60">Department not found.</p>
-        <button type="button" onClick={() => navigate('/teams')} className="mt-4 text-[#f5c518]">Back to departments</button>
+        <button type="button" onClick={() => navigate('/discover?tab=teams')} className="mt-4 text-[#f5c518]">Back to departments</button>
       </div>
     );
   }
@@ -31,9 +31,9 @@ export function TeamDetailsPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-5">
-      <button type="button" onClick={() => navigate('/teams')} className="mb-4 flex items-center gap-2 text-sm text-white/60">
+      <button type="button" onClick={() => navigate('/discover?tab=teams')} className="mb-4 flex items-center gap-2 text-sm text-white/60 hover:text-white transition-colors">
         <ArrowLeft className="h-4 w-4" />
-        Departments
+        Discover · Departments
       </button>
 
       <div className="rounded-3xl border border-white/10 bg-[#10192b] p-5">

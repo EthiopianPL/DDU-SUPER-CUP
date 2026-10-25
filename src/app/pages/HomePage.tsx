@@ -84,7 +84,7 @@ export function HomePage() {
       <section className="mb-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-black text-white">Groups</h2>
-          <button type="button" onClick={() => navigate('/groups')} className="flex items-center text-sm font-semibold text-[#f5c518]">
+          <button type="button" onClick={() => navigate('/discover?tab=groups')} className="flex items-center text-sm font-semibold text-[#f5c518]">
             Full tables <ChevronRight className="h-4 w-4" />
           </button>
         </div>
