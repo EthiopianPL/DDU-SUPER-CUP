@@ -42,7 +42,7 @@ export function Header() {
         <button
           type="button"
           onClick={() => navigate('/admin')}
-          className="rounded-xl px-2.5 py-1.5 text-xs font-bold text-[#f5c518] sm:hidden"
+          className="rounded-xl px-2.5 py-1.5 text-xs font-semibold text-white/45 sm:hidden"
         >
           Admin
         </button>
@@ -70,9 +70,7 @@ export function Header() {
           <button
             type="button"
             onClick={() => navigate('/admin')}
-            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold ${
-              location.pathname.startsWith('/admin') ? 'bg-[#f5c518] text-[#102018]' : 'text-[#f5c518]'
-            }`}
+            className="rounded-xl px-3.5 py-1.5 text-xs font-semibold text-white/45 hover:bg-white/5 hover:text-white"
           >
             Admin
           </button>
