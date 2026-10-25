@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { MatchCard } from '../components/MatchCard';
 import { GROUPS, cardTeam, fixtures, type GroupId } from '../../data/supercup';
+import { useLeagueVersion } from '../../data/live';
 
 type GroupFilter = 'all' | GroupId;
 type StatusFilter = 'all' | 'live' | 'upcoming' | 'finished';
@@ -16,6 +17,7 @@ export function MatchesPage() {
   const [status, setStatus] = useState<StatusFilter>('all');
   const [group, setGroup] = useState<GroupFilter>('all');
   const [matchday, setMatchday] = useState<0 | 1 | 2 | 3>(0);
+  const version = useLeagueVersion();
 
   const days = useMemo(() => {
     const visible = fixtures.filter((fixture) => {
@@ -33,7 +35,7 @@ export function MatchesPage() {
     return [...grouped.entries()]
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([date, list]) => [date, [...list].sort((left, right) => left.time.localeCompare(right.time) || left.group.localeCompare(right.group))] as const);
-  }, [status, group, matchday]);
+  }, [status, group, matchday, version]);
 
   return (
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-5">
