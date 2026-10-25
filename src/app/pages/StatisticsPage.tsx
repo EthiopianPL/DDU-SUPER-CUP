@@ -11,11 +11,8 @@ export function StatisticsPage() {
   const rows = tab === 'goals' ? topScorers(10) : topAssists(10);
 
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-24 pt-5">
-      <h1 className="text-3xl font-black text-white">Statistics</h1>
-      <p className="mt-1 text-sm text-white/50">Department players across the six groups</p>
-
-      <div className="mt-4 flex gap-2">
+    <div className="mx-auto max-w-3xl px-4 pb-24 pt-3 sm:pt-5">
+      <div className="flex gap-2">
         <button
           type="button"
           onClick={() => setTab('goals')}
