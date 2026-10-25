@@ -12,30 +12,26 @@ import {
   Shield,
 } from 'lucide-react';
 import { DepartmentMark } from '../components/DepartmentMark';
-import { formatMatchClock, HALF_SECONDS, type MatchClock } from '../../data/editor';
+import { useLeagueVersion } from '../../data/live';
 import { useMatchClock } from '../useMatchClock';
 import { GroupTable } from '../components/GroupTable';
 import {
   formatKickoff,
+  formatMatchClock,
   getDepartment,
   getFixture,
   goalEvents,
   GROUP_COLLEGES,
+  manualStats,
   matchSheet,
   matchSubstitutions,
   matchTimeline,
+  periodText,
   type Player,
   type TimelineEvent,
 } from '../../data/supercup';
 
 type MatchTab = 'lineups' | 'standings';
-
-function periodLabel(clock: MatchClock | null) {
-  if (!clock) return 'Live';
-  if (!clock.running && clock.total === HALF_SECONDS) return 'Half time';
-  if (clock.minute < 45) return clock.running ? 'First half' : 'First half paused';
-  return clock.running ? 'Second half' : 'Second half paused';
-}
 
 export function MatchDetailsPage() {
   const { id } = useParams();
@@ -54,6 +50,7 @@ export function MatchDetailsPage() {
 
   const fixture = id ? getFixture(id) : undefined;
   const clock = useMatchClock(fixture?.status === 'live' ? fixture.id : undefined);
+  const version = useLeagueVersion();
 
   // Unknown match ID handling
   if (!fixture) {
@@ -83,11 +80,12 @@ export function MatchDetailsPage() {
   const played = fixture.status !== 'upcoming';
   const isLive = fixture.status === 'live';
 
-  const goals = useMemo(() => goalEvents(fixture), [fixture, clock?.minute, fixture.homeScore, fixture.awayScore, fixture.status]);
-  const timeline = useMemo(() => matchTimeline(fixture), [fixture, clock?.minute, fixture.homeScore, fixture.awayScore, fixture.status]);
-  const substitutions = useMemo(() => matchSubstitutions(fixture), [fixture, clock?.minute, fixture.status]);
-  const homeSheet = useMemo(() => matchSheet(fixture.homeId), [fixture.homeId]);
-  const awaySheet = useMemo(() => matchSheet(fixture.awayId), [fixture.awayId]);
+  const goals = useMemo(() => goalEvents(fixture), [fixture, version, clock?.minute, fixture.homeScore, fixture.awayScore, fixture.status]);
+  const timeline = useMemo(() => matchTimeline(fixture), [fixture, version, clock?.minute, fixture.homeScore, fixture.awayScore, fixture.status]);
+  const substitutions = useMemo(() => matchSubstitutions(fixture), [fixture, version, clock?.minute, fixture.status]);
+  const homeSheet = useMemo(() => matchSheet(fixture.homeId, fixture.id), [fixture.homeId, fixture.id, version]);
+  const awaySheet = useMemo(() => matchSheet(fixture.awayId, fixture.id), [fixture.awayId, fixture.id, version]);
+  const recorded = manualStats.filter((stat) => stat.matchId === fixture.id);
 
   return (
     <div className="mx-auto max-w-3xl overflow-x-clip px-4 pb-24 pt-5 sm:pb-12">
@@ -185,7 +183,10 @@ export function MatchDetailsPage() {
                 <div className="text-4xl font-black tracking-tight text-white sm:text-5xl">
                   {fixture.homeScore} <span className="text-white/30">-</span> {fixture.awayScore}
                 </div>
-                <p className="mt-1 text-[11px] font-semibold text-white/50">{periodLabel(clock)}</p>
+                <p className="mt-1 text-[11px] font-semibold text-white/50">{periodText(fixture.period, clock?.running)}</p>
+                {fixture.pensHome != null && fixture.pensAway != null && (
+                  <p className="text-[11px] font-bold text-[#f5c518]">Pens {fixture.pensHome}-{fixture.pensAway}</p>
+                )}
               </div>
             ) : played ? (
               <div className="text-center">
@@ -195,7 +196,12 @@ export function MatchDetailsPage() {
                 <div className="text-4xl font-black tracking-tight text-white sm:text-5xl">
                   {fixture.homeScore} <span className="text-white/30">-</span> {fixture.awayScore}
                 </div>
-                <p className="mt-1 text-[11px] font-semibold text-white/40">Final Result</p>
+                <p className="mt-1 text-[11px] font-semibold text-white/40">
+                  {fixture.confirmed ? 'Confirmed result' : 'Awaiting confirmation'}
+                </p>
+                {fixture.pensHome != null && fixture.pensAway != null && (
+                  <p className="text-[11px] font-bold text-[#f5c518]">Pens {fixture.pensHome}-{fixture.pensAway}</p>
+                )}
               </div>
             ) : (
               <div className="text-center">
@@ -301,6 +307,19 @@ export function MatchDetailsPage() {
             substitutions={substitutions}
             played={played}
           />
+          <EventList events={timeline} />
+          {recorded.length > 0 && (
+            <div className="rounded-2xl border border-white/10 bg-[#10192b] p-4">
+              <p className="text-[11px] font-bold tracking-[0.14em] text-white/40">ENTERED BY THE MATCH OFFICIAL</p>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                {recorded.map((stat) => (
+                  <p key={`${stat.teamId}-${stat.metric}`} className="text-white/70">
+                    {stat.metric.replaceAll('_', ' ')} · {stat.value}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
       )}
 
@@ -504,8 +523,6 @@ function PitchPlayer({
   const scored = marks.some((event) => event.kind === 'goal');
   const assisted = timeline.some((event) => event.kind === 'goal' && event.assistId === player.id);
   const booked = marks.find((event) => event.kind === 'yellow' || event.kind === 'red');
-  const rating = played ? pitchRating(player, marks) : null;
-  const tone = rating == null ? null : ratingTone(rating);
   const tile = TILES[player.number % TILES.length];
 
   return (
@@ -517,17 +534,6 @@ function PitchPlayer({
         {played && subbed && (
           <span className="absolute -left-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#e11d48] text-white">
             <ArrowDown className="h-3 w-3" strokeWidth={3} />
-          </span>
-        )}
-        {played && booked && (
-          <span className={`absolute -right-1 top-0 h-3.5 w-2.5 rounded-[2px] ${booked.kind === 'red' ? 'bg-[#e11d48]' : 'bg-[#f5c518]'}`} />
-        )}
-        {rating != null && tone && (
-          <span
-            className="absolute -bottom-2 left-1/2 z-10 -translate-x-1/2 rounded-md px-1.5 py-0.5 text-[10px] font-black leading-none"
-            style={{ background: tone.bg, color: tone.fg }}
-          >
-            {rating.toFixed(1)}
           </span>
         )}
         {played && scored && <BallMark />}
@@ -573,6 +579,30 @@ function BootMark() {
   );
 }
 
+function EventList({ events }: { events: TimelineEvent[] }) {
+  if (!events.length) return null;
+  return (
+    <ol className="space-y-2">
+      {events.map((event) => (
+        <li key={`${event.kind}-${event.playerId}-${event.minute}-${event.playerName}`} className="flex items-baseline gap-3 rounded-xl border border-white/10 bg-[#10192b] px-3 py-2 text-sm">
+          <span className="font-mono text-xs font-bold text-[#f5c518]">{event.minute}'</span>
+          <span className="text-white/80">
+            {event.kind === 'goal' && 'Goal'}
+            {event.kind === 'yellow' && 'Yellow card'}
+            {event.kind === 'red' && 'Red card'}
+            {event.kind === 'sub' && 'Substitution'}
+            {event.kind === 'note' && (event.detail || 'Note')}
+            {' · '}
+            {event.playerName}
+            {event.assistName ? ` · assist ${event.assistName}` : ''}
+            {event.kind !== 'note' && event.detail ? ` · ${event.detail.replaceAll('_', ' ')}` : ''}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function compactName(name: string) {
   const [first, last] = name.split(' ');
   return `${first?.[0] ?? ''}. ${last ?? first}`;
@@ -580,20 +610,4 @@ function compactName(name: string) {
 
 function initials(name: string) {
   return name.split(' ').slice(0, 2).map((part) => part[0]).join('');
-}
-
-function pitchRating(player: Player, marks: TimelineEvent[]) {
-  let seed = player.number * 17;
-  for (let index = 0; index < player.id.length; index += 1) seed = (seed * 33 + player.id.charCodeAt(index)) >>> 0;
-  let value = 4.6 + (seed % 16) / 10;
-  if (marks.some((event) => event.kind === 'goal')) value += 1.7;
-  if (marks.some((event) => event.kind === 'yellow')) value -= 0.4;
-  if (marks.some((event) => event.kind === 'red')) value -= 1.2;
-  return Math.round(Math.min(9.1, Math.max(4.2, value)) * 10) / 10;
-}
-
-function ratingTone(value: number) {
-  if (value >= 7) return { bg: '#1f9d55', fg: '#ffffff' };
-  if (value >= 5.5) return { bg: '#e6b325', fg: '#1a1404' };
-  return { bg: '#d64545', fg: '#ffffff' };
 }

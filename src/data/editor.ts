@@ -340,5 +340,3 @@ export function deleteArticle(id: string) {
   replace(newsArticles, newsArticles.filter((article) => article.id !== id));
   persistLeague();
 }
-
-hydrateLeague();

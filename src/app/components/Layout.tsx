@@ -1,9 +1,13 @@
 import { Outlet, useLocation } from 'react-router';
 import { Header } from './Header';
 import { BottomNav } from './BottomNav';
+import { leagueStatus, useLeagueVersion } from '../../data/live';
 
 export function Layout() {
   const desk = useLocation().pathname.startsWith('/admin');
+  const version = useLeagueVersion();
+  const { ready, error } = leagueStatus();
+  void version;
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#070d18] text-white">
@@ -17,9 +21,12 @@ export function Layout() {
 
       {!desk && <Header />}
       <main className="w-full">
-        <Outlet />
+        {!ready && (
+          <p className="px-4 py-16 text-center text-sm text-white/60">{error || 'Connecting to the match server…'}</p>
+        )}
+        {ready && <Outlet />}
       </main>
-      {!desk && <BottomNav />}
+      {!desk && ready && <BottomNav />}
     </div>
   );
 }

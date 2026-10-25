@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router';
 import { DepartmentMark } from './DepartmentMark';
-import { formatMatchClock } from '../../data/editor';
-import { formatKickoff, getFixture, goalEvents } from '../../data/supercup';
+import { formatKickoff, formatMatchClock, getFixture, goalEvents } from '../../data/supercup';
 import { useMatchClock } from '../useMatchClock';
 
 interface Team {
@@ -65,7 +64,7 @@ export function MatchCard({
       </div>
       <div className="mt-2.5 flex items-center justify-between gap-3">
         <p className="min-w-0 truncate text-[11px] text-white/40">{meta}</p>
-        <Stamp status={status} minute={clock?.minute ?? matchMinute} seconds={clock?.seconds} running={clock?.running} kickoff={fixture?.time ?? time} />
+        <Stamp fixtureId={id} status={status} minute={clock?.minute ?? matchMinute} seconds={clock?.seconds} running={clock?.running} added={clock?.added} kickoff={fixture?.time ?? time} />
       </div>
       {scorers && <p className="mt-1 truncate text-[11px] text-white/55">{scorers}</p>}
     </button>
@@ -93,29 +92,40 @@ function Side({
 }
 
 function Stamp({
+  fixtureId,
   status,
   minute,
   seconds,
   running,
+  added = 0,
   kickoff,
 }: {
+  fixtureId: string;
   status: MatchCardProps['status'];
   minute: number;
   seconds?: number;
   running?: boolean;
+  added?: number;
   kickoff?: string;
 }) {
+  const fixture = getFixture(fixtureId);
+  const detail = fixture?.detail;
+  const period = fixture?.period;
+  if (detail === 'postponed') return <span className="shrink-0 text-[11px] font-bold text-white/45">PST</span>;
+  if (detail === 'cancelled') return <span className="shrink-0 text-[11px] font-bold text-white/35">CAN</span>;
+  if (detail === 'abandoned') return <span className="shrink-0 text-[11px] font-bold text-white/35">ABD</span>;
+  if (detail === 'suspended') return <span className="shrink-0 text-[11px] font-bold text-amber-200">SUS</span>;
+  if (period === 'halftime') return <span className="shrink-0 text-[11px] font-bold text-white/70">HT</span>;
+  if (detail === 'penalties' || period === 'penalties') return <span className="shrink-0 text-[11px] font-bold text-[#f5c518]">PEN</span>;
   if (status === 'live') {
-    const label = seconds == null ? `${minute}'` : formatMatchClock({ total: 0, minute, seconds, running: Boolean(running) });
+    const label = seconds == null ? `${minute}'` : formatMatchClock({ minute, seconds });
     return (
       <span className={`inline-flex shrink-0 items-center gap-1.5 font-mono text-[11px] font-bold ${running ? 'text-red-400' : 'text-white/70'}`}>
         <span className={`h-1.5 w-1.5 rounded-full ${running ? 'animate-pulse bg-red-500' : 'bg-white/30'}`} />
-        {label}
+        {label}{added > 0 ? ` +${added}` : ''}
       </span>
     );
   }
-  if (status === 'finished') {
-    return <span className="shrink-0 text-[11px] font-bold text-white/35">FT</span>;
-  }
+  if (status === 'finished') return <span className="shrink-0 text-[11px] font-bold text-white/35">FT</span>;
   return <span className="shrink-0 text-[11px] font-bold text-[#f5c518]">{kickoff}</span>;
 }

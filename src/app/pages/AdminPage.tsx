@@ -1,1184 +1,1028 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import {
-  Calendar,
-  ExternalLink,
-  LayoutDashboard,
-  LogOut,
-  Newspaper,
-  Lock,
-  Pencil,
-  Plus,
-  RotateCcw,
-  Search,
-  Shield,
-  Timer,
-  Trash2,
-  Users,
-} from 'lucide-react';
-import { BrandLockup } from '../components/BrandLockup';
-import { DepartmentMark } from '../components/DepartmentMark';
-import { MatchControl } from '../components/MatchControl';
-import {
-  deleteArticle,
-  deleteDepartment,
-  deleteFixture,
-  deletePlayer,
-  resetLeague,
-  saveArticle,
-  saveDepartment,
-  formatMatchClock,
-  saveFixture,
-  savePlayer,
-} from '../../data/editor';
+import { desk, uploadImage } from '../../data/api';
+import { useLeagueVersion } from '../../data/live';
+import { newsArticles } from '../../data/news';
 import { useMatchClock } from '../useMatchClock';
-import { newsArticles, type NewsArticle } from '../../data/news';
+import { DepartmentMark } from '../components/DepartmentMark';
 import {
-  GROUP_COLLEGES,
-  GROUPS,
   departments,
   fixtures,
+  formatMatchClock,
   getDepartment,
+  getFixture,
+  leagueRules,
+  matchEvents,
+  periodText,
   players,
-  standingsFor,
-  type Department,
-  type Fixture,
+  squads,
   type GroupId,
-  type MatchStatus,
-  type Player,
 } from '../../data/supercup';
 
-const SESSION_KEY = 'ddu-admin-session';
-const PASSWORD = 'supercup';
+type Role = 'super_admin' | 'match_admin' | 'competition_manager' | 'team_manager' | 'reader';
+type Section = 'overview' | 'matches' | 'teams' | 'players' | 'news' | 'users' | 'audit' | 'rules';
 
-type Section = 'overview' | 'teams' | 'players' | 'matches' | 'news';
-type Tone = 'ok' | 'bad';
-
-interface Notice {
-  tone: Tone;
-  text: string;
+interface DeskUser {
+  id: string;
+  username: string;
+  role: Role;
 }
 
-interface ConfirmState {
-  title: string;
-  body: string;
-  action: () => void;
-}
-
-const NAV: { id: Section; label: string; icon: typeof LayoutDashboard }[] = [
-  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { id: 'teams', label: 'Teams', icon: Shield },
-  { id: 'players', label: 'Players', icon: Users },
-  { id: 'matches', label: 'Matches', icon: Calendar },
-  { id: 'news', label: 'News', icon: Newspaper },
+const NAV: { id: Section; label: string }[] = [
+  { id: 'overview', label: 'Dashboard' },
+  { id: 'matches', label: 'Matches' },
+  { id: 'teams', label: 'Teams' },
+  { id: 'players', label: 'Players' },
+  { id: 'news', label: 'News' },
+  { id: 'rules', label: 'Competition' },
+  { id: 'users', label: 'Users' },
+  { id: 'audit', label: 'Audit' },
 ];
 
-function LiveClock({ id }: { id: string }) {
-  const clock = useMatchClock(id);
-  return <>{clock ? formatMatchClock(clock) : '00:00'}</>;
-}
-
-const inputClass =
-  'mt-1.5 w-full rounded-xl border border-white/10 bg-[#0c1424] px-3 py-2.5 text-sm text-white outline-none focus:border-[#f5c518]/70';
+const inputClass = 'mt-1 w-full rounded-xl border border-white/10 bg-[#0c1424] px-3 py-2 text-sm text-white outline-none focus:border-[#f5c518]/70';
 
 export function AdminPage() {
   const navigate = useNavigate();
-  const [authed, setAuthed] = useState(() => sessionStorage.getItem(SESSION_KEY) === '1');
-  const [password, setPassword] = useState('');
-  const [loginError, setLoginError] = useState('');
+  const version = useLeagueVersion();
+  const [user, setUser] = useState<DeskUser | null>(null);
+  const [ready, setReady] = useState(false);
   const [section, setSection] = useState<Section>('overview');
-  const [revision, setRevision] = useState(0);
-  const [notice, setNotice] = useState<Notice | null>(null);
-  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
-  const [teamGroup, setTeamGroup] = useState<'all' | GroupId>('all');
-  const [matchStatus, setMatchStatus] = useState<'all' | MatchStatus>('all');
-  const [focusMatchId, setFocusMatchId] = useState<string | null>(null);
-
-  const refresh = () => setRevision((value) => value + 1);
-  const notify = (text: string, tone: Tone = 'ok') => setNotice({ text, tone });
+  const [matchId, setMatchId] = useState<string | null>(null);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(null), 3400);
+    desk('/api/me').then((data) => setUser(data.user)).catch(() => setUser(null)).finally(() => setReady(true));
+  }, []);
+
+  useEffect(() => {
+    if (!notice && !error) return;
+    const timer = window.setTimeout(() => {
+      setNotice('');
+      setError('');
+    }, 4000);
     return () => window.clearTimeout(timer);
-  }, [notice]);
+  }, [notice, error]);
 
-  if (!authed) {
-    return (
-      <div className="flex min-h-screen items-center justify-center px-4">
-        <form
-          className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#10192b] p-6"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (password.trim() !== PASSWORD) {
-              setLoginError('Wrong password.');
-              return;
-            }
-            sessionStorage.setItem(SESSION_KEY, '1');
-            setAuthed(true);
-          }}
-        >
-          <BrandLockup />
-          <h1 className="mt-6 text-2xl font-black text-white">Admin desk</h1>
-          <p className="mt-2 text-sm leading-6 text-white/55">
-            Manage teams, players, matches, and news. Changes stay in this browser.
-          </p>
-          <p className="mt-3 rounded-xl bg-white/5 px-3 py-2 text-sm text-white/70">
-            Password: <span className="font-bold text-[#f5c518]">{PASSWORD}</span>
-          </p>
-          <label className="mt-4 block text-xs font-semibold text-white/50">
-            Password
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className={inputClass}
-              autoComplete="current-password"
-            />
-          </label>
-          {loginError && <p className="mt-2 text-sm text-red-300">{loginError}</p>}
-          <button type="submit" className="mt-4 w-full rounded-xl bg-[#f5c518] py-2.5 text-sm font-black text-[#102018]">
-            Enter desk
-          </button>
-        </form>
-      </div>
-    );
-  }
+  if (!ready) return <p className="px-6 py-16 text-sm text-white/50">Opening the desk…</p>;
+  if (!user) return <Login onSuccess={setUser} />;
 
-  const counts = {
-    overview: null,
-    teams: departments.length,
-    players: players.length,
-    matches: fixtures.length,
-    news: newsArticles.length,
+  const openMatch = (id: string) => {
+    setMatchId(id);
+    setSection('matches');
   };
 
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[232px_1fr]" data-revision={revision}>
-      <aside className="border-b border-white/10 bg-[#0b1220] lg:min-h-screen lg:border-b-0 lg:border-r">
-        <div className="flex items-center justify-between px-4 py-4 lg:block">
-          <BrandLockup size="sm" onClick={() => navigate('/')} />
-        </div>
-        <nav className="flex gap-1 overflow-x-auto px-3 pb-3 lg:block lg:space-y-1 lg:px-3 lg:pb-0" aria-label="Admin sections">
-          {NAV.map((item) => {
-            const Icon = item.icon;
-            const active = section === item.id;
-            const count = counts[item.id];
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setSection(item.id)}
-                className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold lg:w-full ${
-                  active ? 'bg-[#f5c518] text-[#102018]' : 'text-white/60 hover:bg-white/5 hover:text-white'
-                }`}
-                aria-current={active ? 'page' : undefined}
-              >
-                <Icon className="h-4 w-4" />
-                <span>{item.label}</span>
-                {count !== null && (
-                  <span className={`ml-auto text-xs ${active ? 'text-[#102018]/70' : 'text-white/35'}`}>{count}</span>
-                )}
-              </button>
-            );
-          })}
+    <div className="min-h-screen bg-[#070d18] text-white lg:grid lg:grid-cols-[220px_1fr]">
+      <aside className="border-b border-white/10 px-4 py-4 lg:min-h-screen lg:border-b-0 lg:border-r">
+        <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">SUPER CUP DESK</p>
+        <p className="mt-1 text-xs text-white/40">{user.username} · {user.role.replaceAll('_', ' ')}</p>
+        <nav className="mt-4 flex gap-2 overflow-x-auto lg:flex-col" aria-label="Admin sections">
+          {NAV.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => { setSection(item.id); setMatchId(null); }}
+              className={`shrink-0 rounded-xl px-3 py-2 text-left text-sm font-bold ${section === item.id ? 'bg-[#f5c518] text-[#102018]' : 'text-white/60 hover:bg-white/5'}`}
+            >
+              {item.label}
+            </button>
+          ))}
         </nav>
-        <div className="hidden px-3 py-4 lg:block">
+        <div className="mt-4 flex gap-3 text-sm">
+          <button type="button" onClick={() => navigate('/')} className="text-white/50">View site</button>
           <button
             type="button"
-            onClick={() => {
-              setConfirm({
-                title: 'Restore original data?',
-                body: 'Teams, players, matches, and news in this browser go back to the sample league.',
-                action: () => {
-                  resetLeague();
-                  refresh();
-                  notify('Original league restored.');
-                },
-              });
-            }}
-            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-white/45 hover:bg-white/5 hover:text-white"
+            onClick={() => desk('/api/logout', { method: 'POST', body: {} }).then(() => setUser(null))}
+            className="text-white/50"
           >
-            <RotateCcw className="h-4 w-4" />
-            Restore original
+            Sign out
           </button>
         </div>
       </aside>
-
-      <div className="min-w-0">
-        <header className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3 lg:px-8">
-          <div>
-            <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">SUPER CUP DESK</p>
-            <p className="text-sm text-white/45">Saved in this browser</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => navigate('/')}
-              className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold text-white/60 hover:bg-white/5 hover:text-white"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              View site
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                sessionStorage.removeItem(SESSION_KEY);
-                setAuthed(false);
-              }}
-              className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold text-white/60 hover:bg-white/5 hover:text-white"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              Sign out
-            </button>
-          </div>
-        </header>
-
-        <div className="px-4 py-5 lg:px-8 lg:py-6">
-          {notice && (
-            <p
-              role="status"
-              className={`mb-4 rounded-xl px-3 py-2 text-sm ${notice.tone === 'ok' ? 'bg-[#2f9e44]/15 text-[#7ddea0]' : 'bg-red-500/10 text-red-300'}`}
-            >
-              {notice.text}
-            </p>
-          )}
-
-          {section === 'overview' && (
-            <Overview
-              onOpen={(next) => setSection(next)}
-              onGroup={(group) => {
-                setTeamGroup(group);
-                setSection('teams');
-              }}
-              onStatus={(status) => {
-                setMatchStatus(status);
-                setSection('matches');
-              }}
-              onEditMatch={(id) => {
-                setFocusMatchId(id);
-                setSection('matches');
-              }}
-            />
-          )}
-          {section === 'teams' && (
-            <TeamsPanel
-              group={teamGroup}
-              onGroup={setTeamGroup}
-              refresh={refresh}
-              notify={notify}
-              ask={setConfirm}
-            />
-          )}
-          {section === 'players' && <PlayersPanel refresh={refresh} notify={notify} ask={setConfirm} />}
-          {section === 'matches' && (
-            <MatchesPanel
-              status={matchStatus}
-              onStatus={setMatchStatus}
-              focusId={focusMatchId}
-              onFocused={() => setFocusMatchId(null)}
-              refresh={refresh}
-              notify={notify}
-              ask={setConfirm}
-            />
-          )}
-          {section === 'news' && <NewsPanel refresh={refresh} notify={notify} ask={setConfirm} />}
-
-          <button
-            type="button"
-            onClick={() => {
-              setConfirm({
-                title: 'Restore original data?',
-                body: 'Teams, players, matches, and news in this browser go back to the sample league.',
-                action: () => {
-                  resetLeague();
-                  refresh();
-                  notify('Original league restored.');
-                },
-              });
-            }}
-            className="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-white/40 lg:hidden"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Restore original data
-          </button>
-        </div>
-      </div>
-
-      {confirm && (
-        <Modal title={confirm.title} onClose={() => setConfirm(null)}>
-          <p className="text-sm leading-6 text-white/60">{confirm.body}</p>
-          <div className="mt-4 flex gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                confirm.action();
-                setConfirm(null);
-              }}
-              className="rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white"
-            >
-              Confirm
-            </button>
-            <button type="button" onClick={() => setConfirm(null)} className="rounded-xl bg-white/10 px-4 py-2 text-sm font-bold text-white">
-              Cancel
-            </button>
-          </div>
-        </Modal>
-      )}
+      <main className="px-4 py-5 sm:px-6">
+        {(notice || error) && (
+          <p className={`mb-4 rounded-xl px-3 py-2 text-sm ${error ? 'bg-red-500/15 text-red-200' : 'bg-[#2f9e44]/15 text-[#7ddea0]'}`} role="status">
+            {error || notice}
+          </p>
+        )}
+        {section === 'overview' && <Overview version={version} onOpen={openMatch} />}
+        {section === 'matches' && !matchId && <MatchList version={version} onOpen={openMatch} onMessage={setNotice} onError={setError} />}
+        {section === 'matches' && matchId && (
+          <MatchDesk id={matchId} role={user.role} onClose={() => setMatchId(null)} onMessage={setNotice} onError={setError} />
+        )}
+        {section === 'teams' && <TeamAdmin onMessage={setNotice} onError={setError} />}
+        {section === 'players' && <PlayerAdmin onMessage={setNotice} onError={setError} />}
+        {section === 'news' && <NewsAdmin onMessage={setNotice} onError={setError} />}
+        {section === 'rules' && <RulesAdmin role={user.role} onMessage={setNotice} onError={setError} />}
+        {section === 'users' && <UserAdmin role={user.role} onMessage={setNotice} onError={setError} />}
+        {section === 'audit' && <AuditList />}
+      </main>
     </div>
   );
 }
 
-function Overview({
-  onOpen,
-  onGroup,
-  onStatus,
-  onEditMatch,
-}: {
-  onOpen: (section: Section) => void;
-  onGroup: (group: GroupId) => void;
-  onStatus: (status: MatchStatus) => void;
-  onEditMatch: (id: string) => void;
-}) {
+function Login({ onSuccess }: { onSuccess: (user: DeskUser) => void }) {
+  const [username, setUsername] = useState('admin');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  return (
+    <form
+      className="mx-auto max-w-sm px-4 py-20"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        setError('');
+        try {
+          const data = await desk('/api/login', { body: { username, password } });
+          onSuccess(data.user);
+        } catch (reason) {
+          setError(reason instanceof Error ? reason.message : 'Sign-in failed.');
+        }
+      }}
+    >
+      <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">MATCH DESK</p>
+      <h1 className="mt-2 text-3xl font-black">Sign in</h1>
+      <p className="mt-2 text-sm text-white/50">The desk account is admin. The default password is supercup unless the server was given another one.</p>
+      <label className="mt-5 block text-xs font-bold text-white/50">Username
+        <input className={inputClass} value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" />
+      </label>
+      <label className="mt-3 block text-xs font-bold text-white/50">Password
+        <input className={inputClass} type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" />
+      </label>
+      {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
+      <button type="submit" className="mt-5 w-full rounded-xl bg-[#f5c518] py-3 text-sm font-black text-[#102018]">Enter desk</button>
+    </form>
+  );
+}
+
+function Overview({ version, onOpen }: { version: number; onOpen: (id: string) => void }) {
+  void version;
   const live = fixtures.filter((fixture) => fixture.status === 'live');
-  const upcoming = fixtures.filter((fixture) => fixture.status === 'upcoming').length;
-
+  const upcoming = fixtures.filter((fixture) => fixture.detail === 'scheduled' || fixture.detail === 'postponed');
+  const finished = fixtures.filter((fixture) => fixture.detail === 'finished');
+  const postponed = fixtures.filter((fixture) => fixture.detail === 'postponed');
+  const recent = [...matchEvents].reverse().slice(0, 6);
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-black text-white">Overview</h1>
-        <p className="mt-1 text-sm text-white/50">The public site reads these same lists.</p>
+    <div>
+      <h1 className="text-3xl font-black">Dashboard</h1>
+      <p className="mt-1 text-sm text-white/45">Counts come from the match server.</p>
+      <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat label="Matches" value={fixtures.length} hint={`${live.length} live · ${upcoming.length} scheduled`} />
+        <Stat label="Finished" value={finished.filter((fixture) => fixture.confirmed).length} hint={`${finished.length - finished.filter((fixture) => fixture.confirmed).length} awaiting confirmation`} />
+        <Stat label="Postponed" value={postponed.length} hint="Not in the table" />
+        <Stat label="Teams / players" value={`${departments.length} / ${players.filter((player) => player.registered !== false).length}`} hint="Registered squads" />
       </div>
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Teams" value={departments.length} hint="Departments" onClick={() => onOpen('teams')} />
-        <Stat label="Players" value={players.length} hint="Season squads" onClick={() => onOpen('players')} />
-        <Stat label="Matches" value={fixtures.length} hint={`${live.length} live · ${upcoming} upcoming`} onClick={() => onStatus('live')} />
-        <Stat label="Stories" value={newsArticles.length} hint="Published on the site" onClick={() => onOpen('news')} />
-      </div>
-
-      <section>
-        <SectionTitle title="Groups" meta="Top of the table" />
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {GROUPS.map((group) => {
-            const table = standingsFor(group);
-            const leader = table[0];
-            const started = table.some((row) => row.played > 0);
-            return (
-              <button
-                key={group}
-                type="button"
-                onClick={() => onGroup(group)}
-                className="rounded-2xl border border-white/10 bg-[#10192b] p-4 text-left hover:border-white/20"
-              >
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold tracking-[0.14em] text-[#f5c518]">GROUP {group}</p>
-                  <span className="text-xs text-white/35">{departments.filter((department) => department.group === group).length} teams</span>
-                </div>
-                <p className="mt-2 text-sm text-white/45">{GROUP_COLLEGES[group]}</p>
-                <p className="mt-3 text-sm font-bold text-white">
-                  {started && leader ? `${leader.department.shortName} · ${leader.points} pts` : 'No results yet'}
-                </p>
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      <section>
-        <SectionTitle title="Live" meta="Open a match to run the clock" />
-        <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-[#10192b]">
-          {live.length === 0 && <p className="px-4 py-6 text-sm text-white/40">No live matches.</p>}
-          {live.map((fixture) => {
-            const home = getDepartment(fixture.homeId);
-            const away = getDepartment(fixture.awayId);
-            return (
-              <button
-                key={fixture.id}
-                type="button"
-                onClick={() => onEditMatch(fixture.id)}
-                className="flex w-full items-center justify-between gap-3 border-b border-white/5 px-4 py-3 text-left last:border-b-0 hover:bg-white/[0.03]"
-              >
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-bold text-white">
-                    {home?.shortName} {fixture.homeScore ?? 0}–{fixture.awayScore ?? 0} {away?.shortName}
-                  </span>
-                  <span className="text-xs text-white/40">
-                    <LiveClock id={fixture.id} /> · Group {fixture.group}
-                  </span>
-                </span>
-                <span className="rounded-full bg-[#2f9e44]/20 px-2 py-1 text-[11px] font-bold text-[#7ddea0]">LIVE</span>
-              </button>
-            );
-          })}
+      <section className="mt-6">
+        <h2 className="text-lg font-black">Live and recent events</h2>
+        <div className="mt-3 space-y-2">
+          {live.map((fixture) => (
+            <button key={fixture.id} type="button" onClick={() => onOpen(fixture.id)} className="flex w-full items-center justify-between rounded-2xl border border-red-500/30 bg-[#10192b] px-4 py-3 text-left">
+              <span className="font-bold">{labelOf(fixture.homeId)} {fixture.homeScore}-{fixture.awayScore} {labelOf(fixture.awayId)}</span>
+              <span className="font-mono text-sm text-red-300">{fixture.minute ?? 0}'</span>
+            </button>
+          ))}
+          {!live.length && <p className="text-sm text-white/40">No match is live.</p>}
+          {recent.map((event) => (
+            <p key={event.id} className="text-sm text-white/60">{event.minute}' {event.type.replaceAll('_', ' ')} · {event.playerName || event.detail}</p>
+          ))}
         </div>
       </section>
     </div>
   );
 }
 
-function TeamsPanel({
-  group,
-  onGroup,
-  refresh,
-  notify,
-  ask,
-}: {
-  group: 'all' | GroupId;
-  onGroup: (group: 'all' | GroupId) => void;
-  refresh: () => void;
-  notify: (text: string, tone?: Tone) => void;
-  ask: (state: ConfirmState) => void;
-}) {
-  const [query, setQuery] = useState('');
-  const [draft, setDraft] = useState<Department | null>(null);
-  const [isNew, setIsNew] = useState(false);
-  const [error, setError] = useState('');
-
-  const needle = query.trim().toLowerCase();
-  const rows = departments
-    .filter((department) => group === 'all' || department.group === group)
-    .filter((department) => !needle || `${department.name} ${department.shortName}`.toLowerCase().includes(needle))
-    .sort((a, b) => a.group.localeCompare(b.group) || a.name.localeCompare(b.name));
-
-  const openNew = () => {
-    setError('');
-    setIsNew(true);
-    setDraft({
-      id: '',
-      name: '',
-      shortName: '',
-      college: '',
-      group: group === 'all' ? 'A' : group,
-      color: '#2450c8',
-      pitch: 'DDU Main Pitch',
-    });
-  };
-
+function Stat({ label, value, hint }: { label: string; value: string | number; hint: string }) {
   return (
-    <section>
-      <Toolbar title="Teams" meta={`${rows.length} shown`} action="New team" onAction={openNew} />
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <SearchBox value={query} onChange={setQuery} placeholder="Search departments" />
-        <Chips
-          value={group}
-          onChange={(value) => onGroup(value as 'all' | GroupId)}
-          options={[{ value: 'all', label: 'All' }, ...GROUPS.map((item) => ({ value: item, label: item }))]}
-        />
-      </div>
-      <List head={['Team', 'Group', 'Squad', '']}>
-        {rows.map((department) => {
-          const squad = players.filter((player) => player.departmentId === department.id).length;
-          return (
-            <tr key={department.id} className="border-b border-white/5 last:border-b-0">
-              <td className="px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <DepartmentMark shortName={department.shortName} color={department.color} size={36} />
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-white">{department.name}</p>
-                    <p className="text-xs text-white/40">{department.pitch}</p>
-                  </div>
-                </div>
-              </td>
-              <td className="px-3 py-3 text-sm text-white/70">Group {department.group}</td>
-              <td className="px-3 py-3 text-sm text-white/50">{squad}</td>
-              <td className="px-3 py-3">
-                <Actions
-                  onEdit={() => {
-                    setError('');
-                    setIsNew(false);
-                    setDraft({ ...department });
-                  }}
-                  onDelete={() => {
-                    const used = fixtures.some((fixture) => fixture.homeId === department.id || fixture.awayId === department.id);
-                    if (used) {
-                      notify('Delete this team’s matches before deleting the team.', 'bad');
-                      return;
-                    }
-                    ask({
-                      title: `Delete ${department.name}?`,
-                      body: 'The squad is removed with the department.',
-                      action: () => {
-                        const result = deleteDepartment(department.id);
-                        if (!result.ok) {
-                          notify(result.error, 'bad');
-                          return;
-                        }
-                        refresh();
-                        notify('Team removed.');
-                      },
-                    });
-                  }}
-                />
-              </td>
-            </tr>
-          );
-        })}
-      </List>
-      {rows.length === 0 && <Empty text="No teams match this search." />}
-
-      {draft && (
-        <Modal title={isNew ? 'New team' : 'Edit team'} onClose={() => setDraft(null)}>
-          <div className="space-y-3">
-            <Field label="Name" value={draft.name} onChange={(name) => setDraft({ ...draft, name })} />
-            <Field label="Short name" value={draft.shortName} onChange={(shortName) => setDraft({ ...draft, shortName })} />
-            <Select
-              label="Group"
-              value={draft.group}
-              onChange={(value) => setDraft({ ...draft, group: value as GroupId })}
-              options={GROUPS.map((item) => ({ value: item, label: `Group ${item} · ${GROUP_COLLEGES[item]}` }))}
-            />
-            <Field label="Pitch" value={draft.pitch} onChange={(pitch) => setDraft({ ...draft, pitch })} />
-            <label className="block text-xs font-semibold text-white/50">
-              Color
-              <input
-                type="color"
-                value={draft.color}
-                onChange={(event) => setDraft({ ...draft, color: event.target.value })}
-                className="mt-1.5 h-10 w-full rounded-xl bg-transparent"
-              />
-            </label>
-            {error && <p className="text-sm text-red-300">{error}</p>}
-            <SaveRow
-              onSave={() => {
-                const result = saveDepartment(draft, isNew);
-                if (!result.ok) {
-                  setError(result.error);
-                  return;
-                }
-                setDraft(null);
-                refresh();
-                notify(isNew ? 'Team created.' : 'Team updated.');
-              }}
-              onCancel={() => setDraft(null)}
-            />
-          </div>
-        </Modal>
-      )}
-    </section>
+    <div className="rounded-2xl border border-white/10 bg-[#10192b] p-4">
+      <p className="text-[11px] font-bold tracking-wide text-white/40">{label}</p>
+      <p className="mt-1 text-2xl font-black">{value}</p>
+      <p className="mt-1 text-xs text-white/40">{hint}</p>
+    </div>
   );
 }
 
-function PlayersPanel({
-  refresh,
-  notify,
-  ask,
-}: {
-  refresh: () => void;
-  notify: (text: string, tone?: Tone) => void;
-  ask: (state: ConfirmState) => void;
-}) {
-  const [teamId, setTeamId] = useState(departments[0]?.id ?? '');
-  const [position, setPosition] = useState<'all' | Player['position']>('all');
+function MatchList({ version, onOpen, onMessage, onError }: { version: number; onOpen: (id: string) => void; onMessage: (text: string) => void; onError: (text: string) => void }) {
+  void version;
   const [query, setQuery] = useState('');
-  const [draft, setDraft] = useState<Player | null>(null);
-  const [isNew, setIsNew] = useState(false);
-  const [error, setError] = useState('');
-
-  const teamOptions = departments.map((department) => ({ value: department.id, label: department.name }));
-  const needle = query.trim().toLowerCase();
-  const rows = players
-    .filter((player) => !teamId || player.departmentId === teamId)
-    .filter((player) => position === 'all' || player.position === position)
-    .filter((player) => !needle || player.name.toLowerCase().includes(needle))
-    .sort((a, b) => a.number - b.number || a.name.localeCompare(b.name));
-
-  return (
-    <section>
-      <Toolbar
-        title="Players"
-        meta="Goals and assists here are season totals"
-        action="New player"
-        onAction={() => {
-          setError('');
-          setIsNew(true);
-          setDraft({ id: '', name: '', position: 'MID', number: 12, departmentId: teamId, goals: 0, assists: 0 });
-        }}
-      />
-      <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_220px]">
-        <SearchBox value={query} onChange={setQuery} placeholder="Search players" />
-        <Select value={teamId} onChange={setTeamId} options={teamOptions} />
-      </div>
-      <div className="mt-2">
-        <Chips
-          value={position}
-          onChange={(value) => setPosition(value as 'all' | Player['position'])}
-          options={['all', 'GK', 'DEF', 'MID', 'FWD'].map((item) => ({ value: item, label: item === 'all' ? 'All' : item }))}
-        />
-      </div>
-      <List head={['#', 'Player', 'Pos', 'G', 'A', '']}>
-        {rows.map((player) => {
-          const team = getDepartment(player.departmentId);
-          return (
-            <tr key={player.id} className="border-b border-white/5 last:border-b-0">
-              <td className="px-4 py-3 text-sm font-bold text-white/50">{player.number}</td>
-              <td className="px-3 py-3">
-                <p className="text-sm font-bold text-white">{player.name}</p>
-                <p className="text-xs text-white/40">{team?.shortName ?? 'No team'}</p>
-              </td>
-              <td className="px-3 py-3 text-sm text-white/70">{player.position}</td>
-              <td className="px-3 py-3 text-sm text-white">{player.goals}</td>
-              <td className="px-3 py-3 text-sm text-white">{player.assists}</td>
-              <td className="px-3 py-3">
-                <Actions
-                  onEdit={() => {
-                    setError('');
-                    setIsNew(false);
-                    setDraft({ ...player });
-                  }}
-                  onDelete={() => {
-                    ask({
-                      title: `Delete ${player.name}?`,
-                      body: 'The player leaves the squad. Match scores stay as they are.',
-                      action: () => {
-                        deletePlayer(player.id);
-                        refresh();
-                        notify('Player removed.');
-                      },
-                    });
-                  }}
-                />
-              </td>
-            </tr>
-          );
-        })}
-      </List>
-      {rows.length === 0 && <Empty text="No players match this filter." />}
-
-      {draft && (
-        <Modal title={isNew ? 'New player' : 'Edit player'} onClose={() => setDraft(null)}>
-          <div className="space-y-3">
-            <p className="text-xs leading-5 text-white/45">
-              Season goals and assists feed Statistics. Ball and boot marks on a lineup follow that match’s score.
-            </p>
-            <Field label="Name" value={draft.name} onChange={(name) => setDraft({ ...draft, name })} />
-            <Select label="Team" value={draft.departmentId} onChange={(departmentId) => setDraft({ ...draft, departmentId })} options={teamOptions} />
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Number" value={String(draft.number)} onChange={(number) => setDraft({ ...draft, number: Number(number) })} type="number" />
-              <Select
-                label="Position"
-                value={draft.position}
-                onChange={(value) => setDraft({ ...draft, position: value as Player['position'] })}
-                options={['GK', 'DEF', 'MID', 'FWD'].map((item) => ({ value: item, label: item }))}
-              />
-              <Field label="Goals" value={String(draft.goals)} onChange={(goals) => setDraft({ ...draft, goals: Number(goals) })} type="number" />
-              <Field label="Assists" value={String(draft.assists)} onChange={(assists) => setDraft({ ...draft, assists: Number(assists) })} type="number" />
-            </div>
-            {error && <p className="text-sm text-red-300">{error}</p>}
-            <SaveRow
-              onSave={() => {
-                const result = savePlayer(draft, isNew);
-                if (!result.ok) {
-                  setError(result.error);
-                  return;
-                }
-                setTeamId(draft.departmentId);
-                setDraft(null);
-                refresh();
-                notify(isNew ? 'Player created.' : 'Player updated.');
-              }}
-              onCancel={() => setDraft(null)}
-            />
-          </div>
-        </Modal>
-      )}
-    </section>
-  );
-}
-
-function MatchesPanel({
-  status,
-  onStatus,
-  focusId,
-  onFocused,
-  refresh,
-  notify,
-  ask,
-}: {
-  status: 'all' | MatchStatus;
-  onStatus: (status: 'all' | MatchStatus) => void;
-  focusId: string | null;
-  onFocused: () => void;
-  refresh: () => void;
-  notify: (text: string, tone?: Tone) => void;
-  ask: (state: ConfirmState) => void;
-}) {
-  const [group, setGroup] = useState<'all' | GroupId>('all');
-  const [query, setQuery] = useState('');
-  const [draft, setDraft] = useState<Fixture | null>(null);
-  const [isNew, setIsNew] = useState(false);
-  const [error, setError] = useState('');
-  const [controlId, setControlId] = useState<string | null>(null);
-  const teamOptions = departments.map((department) => ({ value: department.id, label: `${department.shortName} · ${department.name}` }));
-
-  useEffect(() => {
-    if (!focusId) return;
-    const fixture = fixtures.find((item) => item.id === focusId);
-    if (!fixture || fixture.status === 'finished') notify('Full-time matches are locked.', 'bad');
-    else setControlId(fixture.id);
-    onFocused();
-  }, [focusId, notify, onFocused]);
-
-  const needle = query.trim().toLowerCase();
-  const rows = [...fixtures]
-    .filter((fixture) => status === 'all' || fixture.status === status)
-    .filter((fixture) => group === 'all' || fixture.group === group)
-    .filter((fixture) => {
-      if (!needle) return true;
-      const home = getDepartment(fixture.homeId);
-      const away = getDepartment(fixture.awayId);
-      return `${home?.name ?? ''} ${home?.shortName ?? ''} ${away?.name ?? ''} ${away?.shortName ?? ''}`.toLowerCase().includes(needle);
-    })
-    .sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`) || a.group.localeCompare(b.group));
-
-  const blank = (): Fixture => ({
-    id: '',
-    group: departments[0]?.group ?? 'A',
-    matchday: 1,
-    date: new Date().toISOString().slice(0, 10),
-    time: '15:00',
-    stadium: departments[0]?.pitch ?? 'DDU Main Pitch',
-    homeId: departments[0]?.id ?? '',
-    awayId: departments[1]?.id ?? '',
-    status: 'upcoming',
+  const [status, setStatus] = useState('all');
+  const [creating, setCreating] = useState(false);
+  const rows = fixtures.filter((fixture) => {
+    const home = getDepartment(fixture.homeId);
+    const away = getDepartment(fixture.awayId);
+    const text = `${home?.name} ${away?.name} ${fixture.stadium} ${fixture.group}`.toLowerCase();
+    const statusOk = status === 'all' || fixture.detail === status || fixture.status === status;
+    return statusOk && text.includes(query.trim().toLowerCase());
   });
 
   return (
-    <section>
-      <Toolbar
-        title="Matches"
-        meta="Schedule the fixture, then run the clock to 90:00"
-        action="New match"
-        onAction={() => {
-          setError('');
-          setIsNew(true);
-          setDraft(blank());
-        }}
-      />
-      <div className="mt-4">
-        <SearchBox value={query} onChange={setQuery} placeholder="Search teams" />
+    <div>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-3xl font-black">Matches</h1>
+        <button type="button" onClick={() => setCreating((value) => !value)} className="rounded-xl bg-[#f5c518] px-3 py-2 text-sm font-black text-[#102018]">New match</button>
       </div>
-      <div className="mt-2 flex flex-col gap-2">
-        <Chips
-          value={status}
-          onChange={(value) => onStatus(value as 'all' | MatchStatus)}
-          options={[
-            { value: 'all', label: 'All' },
-            { value: 'live', label: 'Live' },
-            { value: 'upcoming', label: 'Upcoming' },
-            { value: 'finished', label: 'Finished' },
-          ]}
-        />
-        <Chips
-          value={group}
-          onChange={(value) => setGroup(value as 'all' | GroupId)}
-          options={[{ value: 'all', label: 'Groups' }, ...GROUPS.map((item) => ({ value: item, label: item }))]}
-        />
-      </div>
-      <List head={['Fixture', 'Score', 'Status', '']}>
-        {rows.map((fixture) => {
-          const home = getDepartment(fixture.homeId);
-          const away = getDepartment(fixture.awayId);
-          const score = fixture.status === 'upcoming' ? fixture.time : `${fixture.homeScore ?? 0}–${fixture.awayScore ?? 0}`;
-          return (
-            <tr key={fixture.id} className="border-b border-white/5 last:border-b-0">
-              <td className="px-4 py-3">
-                <p className="text-sm font-bold text-white">
-                  {home?.shortName ?? '—'} vs {away?.shortName ?? '—'}
-                </p>
-                <p className="text-xs text-white/40">
-                  {fixture.date} · MD{fixture.matchday} · Group {fixture.group}
-                </p>
-              </td>
-              <td className="px-3 py-3 text-sm font-bold text-white">{score}</td>
-              <td className="px-3 py-3">
-                <StatusPill status={fixture.status} />
-              </td>
-              <td className="px-3 py-3">
-                <div className="flex justify-end">
-                  {fixture.status === 'finished' ? (
-                    <button
-                      type="button"
-                      aria-label="Match locked"
-                      onClick={() => notify('Full-time matches are locked.', 'bad')}
-                      className="rounded-lg p-2 text-white/35"
-                    >
-                      <Lock className="h-4 w-4" />
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        aria-label="Control match"
-                        onClick={() => setControlId(fixture.id)}
-                        className="rounded-lg p-2 text-[#7ddea0] hover:bg-[#2f9e44]/10"
-                      >
-                        <Timer className="h-4 w-4" />
-                      </button>
-                      {fixture.status === 'upcoming' && (
-                        <button
-                          type="button"
-                          aria-label="Edit"
-                          onClick={() => {
-                            setError('');
-                            setIsNew(false);
-                            setDraft({ ...fixture });
-                          }}
-                          className="rounded-lg p-2 text-[#f5c518] hover:bg-[#f5c518]/10"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        aria-label="Delete"
-                        onClick={() => {
-                          ask({
-                            title: 'Delete this match?',
-                            body: 'The fixture leaves the list and the group table.',
-                            action: () => {
-                              const result = deleteFixture(fixture.id);
-                              if (!result.ok) {
-                                notify(result.error, 'bad');
-                                return;
-                              }
-                              refresh();
-                              notify('Match removed.');
-                            },
-                          });
-                        }}
-                        className="rounded-lg p-2 text-red-300 hover:bg-red-400/10"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </>
-                  )}
-                </div>
-              </td>
-            </tr>
-          );
-        })}
-      </List>
-      {rows.length === 0 && <Empty text="No matches match this filter." />}
-
-      {draft && (
-        <Modal title={isNew ? 'New match' : 'Edit match'} onClose={() => setDraft(null)}>
-          <div className="space-y-3">
-            <Select label="Home" value={draft.homeId} onChange={(homeId) => setDraft({ ...draft, homeId })} options={teamOptions} />
-            <Select label="Away" value={draft.awayId} onChange={(awayId) => setDraft({ ...draft, awayId })} options={teamOptions} />
-            <p className="text-xs leading-5 text-white/45">Kickoff, the clock, and the score are run from the match control. This form only schedules the fixture.</p>
-            <div className="grid grid-cols-2 gap-3">
-              <Select
-                label="Matchday"
-                value={String(draft.matchday)}
-                onChange={(matchday) => setDraft({ ...draft, matchday: Number(matchday) as 1 | 2 | 3 })}
-                options={[
-                  { value: '1', label: 'Matchday 1' },
-                  { value: '2', label: 'Matchday 2' },
-                  { value: '3', label: 'Matchday 3' },
-                ]}
-              />
-              <Field label="Date" value={draft.date} onChange={(date) => setDraft({ ...draft, date })} type="date" />
-              <Field label="Kickoff" value={draft.time} onChange={(time) => setDraft({ ...draft, time })} type="time" />
-            </div>
-            <Field label="Stadium" value={draft.stadium} onChange={(stadium) => setDraft({ ...draft, stadium })} />
-            {error && <p className="text-sm text-red-300">{error}</p>}
-            <SaveRow
-              onSave={() => {
-                const result = saveFixture(draft, isNew);
-                if (!result.ok) {
-                  setError(result.error);
-                  return;
-                }
-                setDraft(null);
-                refresh();
-                notify(isNew ? 'Match created.' : 'Match updated.');
-              }}
-              onCancel={() => setDraft(null)}
-            />
-          </div>
-        </Modal>
-      )}
-      {controlId && <MatchControl id={controlId} onClose={() => setControlId(null)} onChange={refresh} />}
-    </section>
-  );
-}
-
-function NewsPanel({
-  refresh,
-  notify,
-  ask,
-}: {
-  refresh: () => void;
-  notify: (text: string, tone?: Tone) => void;
-  ask: (state: ConfirmState) => void;
-}) {
-  const [query, setQuery] = useState('');
-  const [draft, setDraft] = useState<NewsArticle | null>(null);
-  const [isNew, setIsNew] = useState(false);
-  const [error, setError] = useState('');
-  const needle = query.trim().toLowerCase();
-  const rows = newsArticles.filter((article) => !needle || `${article.title} ${article.summary}`.toLowerCase().includes(needle));
-
-  return (
-    <section>
-      <Toolbar
-        title="News"
-        meta={`${rows.length} stories`}
-        action="New story"
-        onAction={() => {
-          setError('');
-          setIsNew(true);
-          setDraft({ id: '', title: '', category: 'News', time: 'Today', summary: '', body: '' });
-        }}
-      />
-      <div className="mt-4">
-        <SearchBox value={query} onChange={setQuery} placeholder="Search stories" />
-      </div>
-      <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-[#10192b]">
-        {rows.map((article) => (
-          <div key={article.id} className="flex items-center gap-3 border-b border-white/5 px-4 py-3 last:border-b-0">
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-bold text-white">{article.title}</p>
-              <p className="truncate text-xs text-white/40">
-                {article.category} · {article.time}
-              </p>
-            </div>
-            <Actions
-              onEdit={() => {
-                setError('');
-                setIsNew(false);
-                setDraft({ ...article });
-              }}
-              onDelete={() => {
-                ask({
-                  title: 'Delete this story?',
-                  body: article.title,
-                  action: () => {
-                    deleteArticle(article.id);
-                    refresh();
-                    notify('Story removed.');
-                  },
-                });
-              }}
-            />
-          </div>
+      {creating && <MatchForm onDone={(text) => { setCreating(false); onMessage(text); }} onError={onError} />}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <input className={`${inputClass} mt-0 max-w-xs`} placeholder="Search teams or venue" value={query} onChange={(event) => setQuery(event.target.value)} />
+        {['all', 'scheduled', 'live', 'halftime', 'finished', 'postponed', 'suspended', 'cancelled', 'abandoned'].map((item) => (
+          <button key={item} type="button" onClick={() => setStatus(item)} className={`rounded-full px-3 py-1.5 text-xs font-bold ${status === item ? 'bg-white text-[#102018]' : 'bg-white/5 text-white/60'}`}>{item}</button>
         ))}
-        {rows.length === 0 && <p className="px-4 py-6 text-sm text-white/40">No stories match this search.</p>}
       </div>
-
-      {draft && (
-        <Modal title={isNew ? 'New story' : 'Edit story'} onClose={() => setDraft(null)}>
-          <div className="space-y-3">
-            <Field label="Title" value={draft.title} onChange={(title) => setDraft({ ...draft, title })} />
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Category" value={draft.category} onChange={(category) => setDraft({ ...draft, category })} />
-              <Field label="Time label" value={draft.time} onChange={(time) => setDraft({ ...draft, time })} />
-            </div>
-            <Field label="Summary" value={draft.summary} onChange={(summary) => setDraft({ ...draft, summary })} />
-            <label className="block text-xs font-semibold text-white/50">
-              Story
-              <textarea
-                value={draft.body}
-                onChange={(event) => setDraft({ ...draft, body: event.target.value })}
-                rows={6}
-                className={inputClass}
-              />
-            </label>
-            {error && <p className="text-sm text-red-300">{error}</p>}
-            <SaveRow
-              onSave={() => {
-                const result = saveArticle(draft, isNew);
-                if (!result.ok) {
-                  setError(result.error);
-                  return;
-                }
-                setDraft(null);
-                refresh();
-                notify(isNew ? 'Story published.' : 'Story updated.');
-              }}
-              onCancel={() => setDraft(null)}
-            />
-          </div>
-        </Modal>
-      )}
-    </section>
+      <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
+        <table className="min-w-[760px] w-full text-left text-sm">
+          <thead className="bg-white/[0.03] text-xs uppercase tracking-wide text-white/40">
+            <tr>
+              <th className="px-3 py-2">Fixture</th>
+              <th className="px-3 py-2">Kickoff</th>
+              <th className="px-3 py-2">Score</th>
+              <th className="px-3 py-2">Status</th>
+              <th className="px-3 py-2">Venue</th>
+              <th className="px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((fixture) => (
+              <tr key={fixture.id} className="border-t border-white/5">
+                <td className="px-3 py-2 font-bold">{labelOf(fixture.homeId)} vs {labelOf(fixture.awayId)}<span className="mt-0.5 block text-xs font-normal text-white/35">Group {fixture.group} · MD{fixture.matchday}</span></td>
+                <td className="px-3 py-2 text-white/60">{fixture.date} {fixture.time}</td>
+                <td className="px-3 py-2 font-mono">{fixture.status === 'upcoming' ? '–' : `${fixture.homeScore}-${fixture.awayScore}`}</td>
+                <td className="px-3 py-2">{fixture.detail}{fixture.confirmed ? ' · confirmed' : ''}</td>
+                <td className="px-3 py-2 text-white/50">{fixture.stadium}</td>
+                <td className="px-3 py-2 text-right">
+                  <button type="button" onClick={() => onOpen(fixture.id)} className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold">Open</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!rows.length && <p className="px-3 py-8 text-center text-sm text-white/40">No matches for this filter.</p>}
+      </div>
+    </div>
   );
 }
 
-function Stat({ label, value, hint, onClick }: { label: string; value: number; hint: string; onClick: () => void }) {
+function MatchForm({ onDone, onError }: { onDone: (text: string) => void; onError: (text: string) => void }) {
+  const [homeId, setHomeId] = useState(departments[0]?.id ?? '');
+  const [awayId, setAwayId] = useState(departments[1]?.id ?? '');
+  const [date, setDate] = useState('2026-11-07');
+  const [time, setTime] = useState('15:00');
+  const [venue, setVenue] = useState('DDU Main Pitch');
+  const [allowExtra, setAllowExtra] = useState(false);
   return (
-    <button type="button" onClick={onClick} className="rounded-2xl border border-white/10 bg-[#10192b] p-4 text-left hover:border-[#f5c518]/40">
-      <p className="text-[11px] font-bold tracking-[0.14em] text-white/40">{label.toUpperCase()}</p>
-      <p className="mt-2 text-3xl font-black text-white">{value}</p>
-      <p className="mt-1 text-xs text-white/45">{hint}</p>
-    </button>
+    <form
+      className="mt-4 grid gap-3 rounded-2xl border border-white/10 bg-[#10192b] p-4 sm:grid-cols-2"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        try {
+          await desk('/api/matches', { body: { homeId, awayId, date, time, venue, allowExtra, matchday: 1 } });
+          onDone('Match scheduled.');
+        } catch (reason) {
+          onError(reason instanceof Error ? reason.message : 'Could not schedule the match.');
+        }
+      }}
+    >
+      <Select label="Home" value={homeId} onChange={setHomeId} options={departments.map((team) => ({ id: team.id, label: team.name }))} />
+      <Select label="Away" value={awayId} onChange={setAwayId} options={departments.map((team) => ({ id: team.id, label: team.name }))} />
+      <label className="text-xs font-bold text-white/50">Date<input className={inputClass} type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
+      <label className="text-xs font-bold text-white/50">Kickoff<input className={inputClass} type="time" value={time} onChange={(event) => setTime(event.target.value)} /></label>
+      <label className="text-xs font-bold text-white/50 sm:col-span-2">Venue<input className={inputClass} value={venue} onChange={(event) => setVenue(event.target.value)} /></label>
+      <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={allowExtra} onChange={(event) => setAllowExtra(event.target.checked)} /> Allow extra time and penalties</label>
+      <button type="submit" className="rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018] sm:col-span-2">Schedule</button>
+    </form>
   );
 }
 
-function SectionTitle({ title, meta }: { title: string; meta: string }) {
+function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role: Role; onClose: () => void; onMessage: (text: string) => void; onError: (text: string) => void }) {
+  const version = useLeagueVersion();
+  const fixture = getFixture(id);
+  const clock = useMatchClock(fixture?.status === 'live' ? id : undefined);
+  const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState<{ label: string; action: string } | null>(null);
+  const [editingGoal, setEditingGoal] = useState<number | null>(null);
+  void version;
+  if (!fixture) return <p className="text-sm text-white/50">That match is no longer on the server.</p>;
+  const home = getDepartment(fixture.homeId);
+  const away = getDepartment(fixture.awayId);
+  const events = matchEvents.filter((event) => event.matchId === id && !event.voided);
+  const canCorrect = role === 'super_admin' || role === 'competition_manager';
+  const canRun = role === 'super_admin' || role === 'match_admin' || role === 'competition_manager';
+  const locked = Boolean(fixture.confirmed && !canCorrect);
+
+  const act = async (path: string, body: Record<string, unknown>, method = 'POST') => {
+    setBusy(true);
+    try {
+      await desk(path, { method, body: { ...body, version: getFixture(id)?.version } });
+      onMessage('Saved.');
+      setConfirm(null);
+      setEditingGoal(null);
+    } catch (reason) {
+      onError(reason instanceof Error ? reason.message : 'Could not update the match.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div>
-      <h2 className="text-lg font-black text-white">{title}</h2>
-      <p className="text-xs text-white/40">{meta}</p>
-    </div>
-  );
-}
-
-function Toolbar({ title, meta, action, onAction }: { title: string; meta: string; action: string; onAction: () => void }) {
-  return (
-    <div className="flex items-start justify-between gap-3">
-      <div>
-        <h1 className="text-2xl font-black text-white">{title}</h1>
-        <p className="mt-1 text-sm text-white/45">{meta}</p>
+      <button type="button" onClick={onClose} className="text-sm font-semibold text-white/50">All matches</button>
+      <div className="mt-3 rounded-3xl border border-white/10 bg-[#10192b] p-4 sm:p-6">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+          <TeamBlock team={home} />
+          <div className="text-center">
+            <p className={`font-mono text-4xl font-black ${clock?.running ? 'text-[#7ddea0]' : 'text-white'}`}>
+              {fixture.detail === 'finished' ? 'FT' : clock ? formatMatchClock(clock) : '00:00'}
+            </p>
+            <p className="text-xs font-bold text-white/45">{periodText(fixture.period, clock?.running)}{clock && clock.added > 0 ? ` · +${clock.added}` : ''}</p>
+            <p className="mt-1 text-3xl font-black">{fixture.homeScore ?? 0}–{fixture.awayScore ?? 0}</p>
+            {fixture.pensHome != null && <p className="text-xs font-bold text-[#f5c518]">Pens {fixture.pensHome}-{fixture.pensAway}</p>}
+          </div>
+          <TeamBlock team={away} align="end" />
+        </div>
+        <p className="mt-3 text-center text-xs text-white/35">{fixture.stadium} · {fixture.date} {fixture.time}{fixture.referee ? ` · Ref ${fixture.referee}` : ''}{fixture.confirmed ? ' · Confirmed' : ''}</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {fixture.detail === 'scheduled' || fixture.detail === 'postponed' ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'kickoff' })}>Kick off</Action> : null}
+          {clock?.running ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'pause' })}>Pause</Action> : null}
+          {fixture.status === 'live' && !clock?.running && fixture.period !== 'halftime' && fixture.period !== 'penalties' ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'resume' })}>Resume</Action> : null}
+          {fixture.period === 'first_half' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'halftime' })}>Half time</Action>}
+          {fixture.period === 'halftime' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'second_half' })}>Second half</Action>}
+          {(fixture.allowExtra || leagueRules.allowExtraTime) && fixture.period === 'second_half' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_first' })}>Extra time</Action>}
+          {fixture.period === 'extra_first' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_break' })}>Extra break</Action>}
+          {fixture.period === 'extra_break' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_second' })}>Second extra</Action>}
+          {fixture.allowExtra && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'penalties' })}>Penalties</Action>}
+          {fixture.status === 'live' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'suspend' })}>Suspend</Action>}
+          {fixture.detail === 'suspended' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'resume' })}>Resume match</Action>}
+          {['scheduled', 'postponed', 'suspended'].includes(fixture.detail || '') && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'postpone' })}>Postpone</Action>}
+          {!fixture.confirmed && fixture.detail !== 'cancelled' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'Cancel this match?', action: 'cancel' })}>Cancel</Action>}
+          {fixture.status === 'live' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'Abandon this match? It will not count in the table.', action: 'abandon' })}>Abandon</Action>}
+          {fixture.status !== 'upcoming' && fixture.detail !== 'finished' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'End the match? The result stays unconfirmed until you confirm it.', action: 'full_time' })}>Full time</Action>}
+          {fixture.detail === 'finished' && !fixture.confirmed && canCorrect && <Action disabled={busy} onClick={() => setConfirm({ label: 'Confirm this result and add it to the table?', action: 'confirm' })}>Confirm result</Action>}
+        </div>
+        {confirm && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-white/5 px-3 py-2 text-sm">
+            <span>{confirm.label}</span>
+            <button type="button" disabled={busy} onClick={() => act(`/api/matches/${id}/clock`, { action: confirm.action })} className="rounded-lg bg-red-500 px-3 py-1.5 font-bold">Confirm</button>
+            <button type="button" onClick={() => setConfirm(null)} className="text-white/50">Back</button>
+          </div>
+        )}
+        <ClockCorrection disabled={busy || !canRun} onSave={(seconds) => act(`/api/matches/${id}/clock`, { action: 'set_clock', seconds })} />
       </div>
-      <button type="button" onClick={onAction} className="inline-flex items-center gap-1.5 rounded-xl bg-[#f5c518] px-3 py-2 text-xs font-black text-[#102018]">
-        <Plus className="h-3.5 w-3.5" />
-        {action}
-      </button>
-    </div>
-  );
-}
 
-function SearchBox({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) {
-  return (
-    <label className="relative block min-w-0 flex-1">
-      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" />
-      <input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className="w-full rounded-xl border border-white/10 bg-[#10192b] py-2.5 pl-9 pr-3 text-sm text-white outline-none focus:border-[#f5c518]/70"
+      <FixtureMeta
+        fixture={fixture}
+        disabled={busy || (!canCorrect && fixture.detail !== 'scheduled' && fixture.detail !== 'postponed')}
+        onSave={(body) => act(`/api/matches/${id}`, body, 'PATCH')}
       />
-    </label>
-  );
-}
+      <LineupEditor matchId={id} disabled={busy || !canRun || ((fixture.detail !== 'scheduled' && fixture.detail !== 'postponed') && !canCorrect)} onSave={(body) => act(`/api/matches/${id}/lineup`, body)} />
 
-function Chips({ value, onChange, options }: { value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) {
-  return (
-    <div className="flex gap-1 overflow-x-auto">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          onClick={() => onChange(option.value)}
-          className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${
-            value === option.value ? 'bg-[#f5c518] text-[#102018]' : 'bg-white/5 text-white/55'
-          }`}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function List({ head, children }: { head: string[]; children: ReactNode }) {
-  return (
-    <div className="mt-3 overflow-x-auto rounded-2xl border border-white/10 bg-[#10192b]">
-      <table className="w-full min-w-[520px] text-left">
-        <thead>
-          <tr className="border-b border-white/10">
-            {head.map((label, index) => (
-              <th key={`${label}-${index}`} className="px-3 py-2 text-[11px] font-semibold tracking-[0.12em] text-white/35 first:pl-4">
-                {label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>{children}</tbody>
-      </table>
-    </div>
-  );
-}
-
-function Actions({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
-  return (
-    <div className="flex justify-end">
-      <button type="button" aria-label="Edit" onClick={onEdit} className="rounded-lg p-2 text-[#f5c518] hover:bg-[#f5c518]/10">
-        <Pencil className="h-4 w-4" />
-      </button>
-      <button type="button" aria-label="Delete" onClick={onDelete} className="rounded-lg p-2 text-red-300 hover:bg-red-400/10">
-        <Trash2 className="h-4 w-4" />
-      </button>
-    </div>
-  );
-}
-
-function StatusPill({ status }: { status: MatchStatus }) {
-  const styles = {
-    live: 'bg-[#2f9e44]/20 text-[#7ddea0]',
-    upcoming: 'bg-[#f5c518]/15 text-[#f5c518]',
-    finished: 'bg-white/10 text-white/60',
-  };
-  const labels = { live: 'Live', upcoming: 'Upcoming', finished: 'Full time' };
-  return <span className={`rounded-full px-2 py-1 text-[11px] font-bold ${styles[status]}`}>{labels[status]}</span>;
-}
-
-function Empty({ text }: { text: string }) {
-  return <p className="mt-3 text-center text-sm text-white/40">{text}</p>;
-}
-
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-center sm:p-6" onClick={onClose}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="desk-dialog-title"
-        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-white/10 bg-[#10192b] p-5 sm:rounded-3xl"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <h2 id="desk-dialog-title" className="text-lg font-black text-white">
-          {title}
-        </h2>
-        <div className="mt-4">{children}</div>
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <GoalForm matchId={id} disabled={busy || locked || !canRun} onSubmit={(body) => act(`/api/matches/${id}/events`, body)} />
+        <CardForm matchId={id} disabled={busy || locked || !canRun} onSubmit={(body) => act(`/api/matches/${id}/events`, body)} />
+        <SubForm matchId={id} disabled={busy || locked || !canRun} onSubmit={(body) => act(`/api/matches/${id}/events`, body)} />
+        <OtherForm matchId={id} period={fixture.period} disabled={busy || locked || !canRun} onSubmit={(body) => act(`/api/matches/${id}/events`, body)} />
       </div>
+
+      <section className="mt-4 rounded-2xl border border-white/10 bg-[#10192b] p-4">
+        <h2 className="font-black">Event history</h2>
+        <ul className="mt-3 space-y-2">
+          {events.map((event) => (
+            <li key={event.id} className="border-t border-white/5 py-2 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span>{event.minute}{event.addedMinute ? `+${event.addedMinute}` : ''}' {event.type.replaceAll('_', ' ')} · {event.type === 'substitution' ? `${event.playerName} off, ${event.relatedName} on` : event.playerName || event.detail}{event.assistName ? ` (assist ${event.assistName})` : ''}</span>
+                <span className="flex gap-3">
+                  {canCorrect && event.type === 'goal' && (
+                    <button type="button" className="text-xs font-bold text-[#f5c518]" onClick={() => setEditingGoal(event.id)}>Correct</button>
+                  )}
+                  {canRun && !locked && (
+                    <button type="button" className="text-xs font-bold text-red-300" onClick={() => {
+                      const reason = window.prompt('Reason for removing this event');
+                      if (reason) act(`/api/matches/${id}/events/${event.id}/void`, { reason, disallowed: event.type === 'goal' });
+                    }}>Void</button>
+                  )}
+                </span>
+              </div>
+              {editingGoal === event.id && event.type === 'goal' && (
+                <GoalCorrect event={event} matchId={id} disabled={busy} onSave={(body) => act(`/api/matches/${id}/events/${event.id}`, body, 'PATCH')} />
+              )}
+            </li>
+          ))}
+          {!events.length && <li className="text-sm text-white/40">No events yet.</li>}
+        </ul>
+      </section>
+      <ManualStats matchId={id} disabled={busy || role === 'reader'} onSave={(body) => act(`/api/matches/${id}/stats`, body)} />
     </div>
   );
 }
 
-function SaveRow({ onSave, onCancel }: { onSave: () => void; onCancel: () => void }) {
+function TeamBlock({ team, align = 'start' }: { team?: { shortName: string; name: string; color: string }; align?: 'start' | 'end' }) {
+  if (!team) return null;
   return (
-    <div className="flex gap-2 pt-1">
-      <button type="button" onClick={onSave} className="rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018]">
-        Save
-      </button>
-      <button type="button" onClick={onCancel} className="rounded-xl bg-white/10 px-4 py-2 text-sm font-bold text-white">
-        Cancel
-      </button>
+    <div className={align === 'end' ? 'text-right' : ''}>
+      <DepartmentMark shortName={team.shortName} color={team.color} size={48} />
+      <p className="mt-2 text-sm font-bold">{team.name}</p>
     </div>
   );
 }
 
-function Field({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
+function Action({ children, onClick, disabled }: { children: string; onClick: () => void; disabled?: boolean }) {
+  return <button type="button" disabled={disabled} onClick={onClick} className="rounded-xl bg-white/10 px-3 py-2 text-sm font-bold disabled:opacity-40">{children}</button>;
+}
+
+function ClockCorrection({ disabled, onSave }: { disabled: boolean; onSave: (seconds: number) => void }) {
+  const [value, setValue] = useState('45:00');
   return (
-    <label className="block text-xs font-semibold text-white/50">
-      {label}
-      <input type={type} value={value} min={type === 'number' ? 0 : undefined} onChange={(event) => onChange(event.target.value)} className={inputClass} />
-    </label>
+    <form className="mt-3 flex items-end gap-2" onSubmit={(event) => {
+      event.preventDefault();
+      const [minutes, seconds] = value.split(':').map(Number);
+      if (!Number.isFinite(minutes) || !Number.isFinite(seconds)) return;
+      onSave(minutes * 60 + seconds);
+    }}>
+      <label className="text-xs font-bold text-white/45">Correct clock
+        <input className={inputClass} value={value} onChange={(event) => setValue(event.target.value)} />
+      </label>
+      <button type="submit" disabled={disabled} className="rounded-xl bg-white/10 px-3 py-2 text-sm font-bold">Set</button>
+    </form>
   );
 }
 
-function Select({ label, value, onChange, options }: { label?: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) {
+function FixtureMeta({
+  fixture,
+  disabled,
+  onSave,
+}: {
+  fixture: NonNullable<ReturnType<typeof getFixture>>;
+  disabled: boolean;
+  onSave: (body: Record<string, unknown>) => void;
+}) {
+  const [date, setDate] = useState(fixture.date);
+  const [time, setTime] = useState(fixture.time);
+  const [venue, setVenue] = useState(fixture.stadium);
+  const [referee, setReferee] = useState(fixture.referee ?? '');
+  const [assistant1, setAssistant1] = useState(fixture.assistant1 ?? '');
+  const [assistant2, setAssistant2] = useState(fixture.assistant2 ?? '');
   return (
-    <label className="block text-xs font-semibold text-white/50">
-      {label}
-      <select value={value} onChange={(event) => onChange(event.target.value)} className={label ? inputClass : inputClass.replace('mt-1.5 ', '')}>
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
+    <form className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-[#10192b] p-4 sm:grid-cols-3" onSubmit={(event) => {
+      event.preventDefault();
+      onSave({ date, time, venue, referee, assistant1, assistant2 });
+    }}>
+      <h2 className="font-black sm:col-span-3">Fixture and officials</h2>
+      <label className="text-xs font-bold text-white/45">Date<input className={inputClass} type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
+      <label className="text-xs font-bold text-white/45">Kickoff<input className={inputClass} type="time" value={time} onChange={(event) => setTime(event.target.value)} /></label>
+      <label className="text-xs font-bold text-white/45">Venue<input className={inputClass} value={venue} onChange={(event) => setVenue(event.target.value)} /></label>
+      <label className="text-xs font-bold text-white/45">Referee<input className={inputClass} value={referee} onChange={(event) => setReferee(event.target.value)} /></label>
+      <label className="text-xs font-bold text-white/45">Assistant 1<input className={inputClass} value={assistant1} onChange={(event) => setAssistant1(event.target.value)} /></label>
+      <label className="text-xs font-bold text-white/45">Assistant 2<input className={inputClass} value={assistant2} onChange={(event) => setAssistant2(event.target.value)} /></label>
+      <button type="submit" disabled={disabled} className="rounded-xl bg-white/10 px-4 py-2 text-sm font-bold disabled:opacity-40 sm:col-span-3">Save fixture</button>
+    </form>
+  );
+}
+
+function LineupEditor({ matchId, disabled, onSave }: { matchId: string; disabled: boolean; onSave: (body: Record<string, unknown>) => void }) {
+  const fixture = getFixture(matchId);
+  const [side, setSide] = useState<'home' | 'away'>('home');
+  if (!fixture) return null;
+  const teamId = side === 'home' ? fixture.homeId : fixture.awayId;
+  return (
+    <section className="mt-4 rounded-2xl border border-white/10 bg-[#10192b] p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="font-black">Lineup</h2>
+        <Select label="Team" value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={[{ id: 'home', label: 'Home' }, { id: 'away', label: 'Away' }]} />
+      </div>
+      <LineupSide key={`${matchId}-${teamId}`} matchId={matchId} teamId={teamId} formation={side === 'home' ? fixture.formationHome : fixture.formationAway} disabled={disabled} onSave={onSave} />
+    </section>
+  );
+}
+
+function LineupSide({
+  matchId,
+  teamId,
+  formation,
+  disabled,
+  onSave,
+}: {
+  matchId: string;
+  teamId: string;
+  formation?: string;
+  disabled: boolean;
+  onSave: (body: Record<string, unknown>) => void;
+}) {
+  const current = squads.filter((row) => row.matchId === matchId && row.teamId === teamId);
+  const currentIds = new Set(current.map((row) => row.playerId));
+  const roster = players.filter((player) => player.departmentId === teamId && player.active !== false && (player.registered !== false || currentIds.has(player.id)));
+  const [starters, setStarters] = useState(current.filter((row) => row.role === 'starter').map((row) => row.playerId));
+  const [bench, setBench] = useState(current.filter((row) => row.role === 'bench').map((row) => row.playerId));
+  const [shape, setShape] = useState(formation || '4-2-3-1');
+  const place = (playerId: string, role: 'starter' | 'bench' | 'out') => {
+    setStarters((list) => list.filter((id) => id !== playerId));
+    setBench((list) => list.filter((id) => id !== playerId));
+    if (role === 'starter') setStarters((list) => list.length >= 11 ? list : [...list, playerId]);
+    if (role === 'bench') setBench((list) => [...list, playerId]);
+  };
+  return (
+    <form onSubmit={(event) => {
+      event.preventDefault();
+      onSave({ teamId, starters, bench, formation: shape });
+    }}>
+      <label className="mt-3 block text-xs font-bold text-white/45">Formation
+        <input className={inputClass} value={shape} onChange={(event) => setShape(event.target.value)} />
+      </label>
+      <ul className="mt-3 max-h-72 space-y-1 overflow-auto">
+        {roster.map((player) => {
+          const role = starters.includes(player.id) ? 'starter' : bench.includes(player.id) ? 'bench' : 'out';
+          return (
+            <li key={player.id} className="flex items-center justify-between gap-2 text-sm">
+              <span>{player.number} {player.name}</span>
+              <span className="flex gap-1">
+                {(['starter', 'bench', 'out'] as const).map((choice) => (
+                  <button key={choice} type="button" onClick={() => place(player.id, choice)} className={`rounded-lg px-2 py-1 text-[11px] font-bold ${role === choice ? 'bg-[#f5c518] text-[#102018]' : 'bg-white/10 text-white/70'}`}>
+                    {choice === 'out' ? 'Out' : choice === 'starter' ? 'XI' : 'Bench'}
+                  </button>
+                ))}
+              </span>
+            </li>
+          );
+        })}
+        {!roster.length && <li className="text-sm text-white/40">Register players for this team before setting a lineup.</li>}
+      </ul>
+      <p className="mt-2 text-xs text-white/40">{starters.length} starters · {bench.length} substitutes</p>
+      <button type="submit" disabled={disabled || !starters.length} className="mt-3 rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018] disabled:opacity-40">Save lineup</button>
+    </form>
+  );
+}
+
+function GoalCorrect({
+  event,
+  matchId,
+  disabled,
+  onSave,
+}: {
+  event: (typeof matchEvents)[number];
+  matchId: string;
+  disabled: boolean;
+  onSave: (body: Record<string, unknown>) => void;
+}) {
+  const fixture = getFixture(matchId);
+  const pitch = usePitch(matchId);
+  const [side, setSide] = useState<'home' | 'away'>(fixture && event.creditedTeamId === fixture.awayId ? 'away' : 'home');
+  const [goalType, setGoalType] = useState(event.goalType || 'open_play');
+  const [playerId, setPlayerId] = useState(event.playerId || '');
+  const [assistId, setAssistId] = useState(event.assistId || '');
+  const [minute, setMinute] = useState(String(event.minute));
+  const [addedMinute, setAddedMinute] = useState(String(event.addedMinute || 0));
+  if (!fixture) return null;
+  const credited = side === 'home' ? fixture.homeId : fixture.awayId;
+  const scorerTeam = goalType === 'own_goal' ? (side === 'home' ? fixture.awayId : fixture.homeId) : credited;
+  const onTeam = (teamId: string) => [...pitch.entries()].filter(([id, row]) => row.teamId === teamId && (row.on || id === playerId)).map(([id]) => id);
+  const scorers = onTeam(scorerTeam);
+  const assisters = [...pitch.entries()].filter(([, row]) => row.teamId === credited && row.on).map(([id]) => id).filter((id) => id !== playerId);
+  return (
+    <form className="mt-2 grid w-full grid-cols-2 gap-2" onSubmit={(submit) => {
+      submit.preventDefault();
+      onSave({ side, goalType, playerId, assistId: goalType === 'own_goal' ? '' : assistId, minute: Number(minute), addedMinute: Number(addedMinute) });
+    }}>
+      <Select label="Team credited" value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={[{ id: 'home', label: 'Home' }, { id: 'away', label: 'Away' }]} />
+      <Select label="Type" value={goalType} onChange={setGoalType} options={[{ id: 'open_play', label: 'Open play' }, { id: 'penalty', label: 'Penalty' }, { id: 'free_kick', label: 'Free kick' }, { id: 'own_goal', label: 'Own goal' }]} />
+      <Select label="Scorer" value={playerId} onChange={setPlayerId} options={scorers.map((id) => ({ id, label: playerName(id) }))} />
+      {goalType !== 'own_goal' && <Select label="Assist" value={assistId} onChange={setAssistId} options={[{ id: '', label: 'No assist' }, ...assisters.map((id) => ({ id, label: playerName(id) }))]} />}
+      <label className="text-xs font-bold text-white/45">Minute<input className={inputClass} value={minute} onChange={(input) => setMinute(input.target.value)} /></label>
+      <label className="text-xs font-bold text-white/45">Added<input className={inputClass} value={addedMinute} onChange={(input) => setAddedMinute(input.target.value)} /></label>
+      <button type="submit" disabled={disabled || !playerId} className="col-span-2 rounded-xl bg-[#f5c518] px-3 py-2 text-sm font-black text-[#102018] disabled:opacity-40">Save correction</button>
+    </form>
+  );
+}
+
+function usePitch(matchId: string) {
+  const version = useLeagueVersion();
+  return useMemo(() => {
+    const state = new Map<string, { teamId: string; on: boolean; used: boolean; dismissed: boolean }>();
+    for (const row of squads.filter((item) => item.matchId === matchId)) {
+      state.set(row.playerId, { teamId: row.teamId, on: row.role === 'starter', used: row.role === 'starter', dismissed: false });
+    }
+    for (const event of matchEvents.filter((item) => item.matchId === matchId && !item.voided)) {
+      if (event.type === 'substitution') {
+        const outgoing = state.get(event.playerId || '');
+        const incoming = state.get(event.relatedPlayerId || '');
+        if (outgoing) outgoing.on = false;
+        if (incoming) {
+          incoming.on = true;
+          incoming.used = true;
+        }
+      }
+      if (event.type === 'card' && (event.cardType === 'red' || event.cardType === 'second_yellow')) {
+        const player = state.get(event.playerId || '');
+        if (player) {
+          player.dismissed = true;
+          player.on = false;
+        }
+      }
+    }
+    return state;
+  }, [matchId, version]);
+}
+
+function GoalForm({ matchId, disabled, onSubmit }: { matchId: string; disabled: boolean; onSubmit: (body: Record<string, unknown>) => void }) {
+  const fixture = getFixture(matchId);
+  const pitch = usePitch(matchId);
+  const clock = useMatchClock(fixture?.status === 'live' ? matchId : undefined);
+  const [side, setSide] = useState<'home' | 'away'>('home');
+  const [goalType, setGoalType] = useState('open_play');
+  const [playerId, setPlayerId] = useState('');
+  const [assistId, setAssistId] = useState('');
+  const [minute, setMinute] = useState(String(clock?.minute ?? fixture?.minute ?? 0));
+  const [addedMinute, setAddedMinute] = useState('0');
+  const minuteTouched = useRef(false);
+  useEffect(() => {
+    if (!minuteTouched.current && clock?.minute != null) setMinute(String(clock.minute));
+  }, [clock?.minute]);
+  if (!fixture) return null;
+  const credited = side === 'home' ? fixture.homeId : fixture.awayId;
+  const scorerTeam = goalType === 'own_goal' ? (side === 'home' ? fixture.awayId : fixture.homeId) : credited;
+  const onTeam = (teamId: string) => [...pitch.entries()].filter(([, row]) => row.teamId === teamId && row.on && !row.dismissed).map(([id]) => id);
+  const scorers = onTeam(scorerTeam);
+  const assisters = onTeam(credited).filter((id) => id !== playerId);
+  return (
+    <form className="rounded-2xl border border-white/10 bg-[#10192b] p-4" onSubmit={(event) => {
+      event.preventDefault();
+      onSubmit({ type: 'goal', side, goalType, playerId, assistId: goalType === 'own_goal' ? '' : assistId, minute: Number(minute), addedMinute: Number(addedMinute), clientKey: crypto.randomUUID() });
+    }}>
+      <h2 className="font-black">Goal</h2>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <Select label="Team credited" value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={[{ id: 'home', label: 'Home' }, { id: 'away', label: 'Away' }]} />
+        <Select label="Type" value={goalType} onChange={setGoalType} options={[{ id: 'open_play', label: 'Open play' }, { id: 'penalty', label: 'Penalty' }, { id: 'free_kick', label: 'Free kick' }, { id: 'own_goal', label: 'Own goal' }]} />
+        <Select label="Scorer" value={playerId} onChange={setPlayerId} options={[{ id: '', label: 'Choose' }, ...scorers.map((id) => ({ id, label: playerName(id) }))]} />
+        {goalType !== 'own_goal' && <Select label="Assist (optional)" value={assistId} onChange={setAssistId} options={[{ id: '', label: 'No assist' }, ...assisters.map((id) => ({ id, label: playerName(id) }))]} />}
+        <label className="text-xs font-bold text-white/45">Minute<input className={inputClass} value={minute} onChange={(event) => { minuteTouched.current = true; setMinute(event.target.value); }} /></label>
+        <label className="text-xs font-bold text-white/45">Added<input className={inputClass} value={addedMinute} onChange={(event) => setAddedMinute(event.target.value)} /></label>
+      </div>
+      <button type="submit" disabled={disabled || !playerId} className="mt-3 rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018] disabled:opacity-40">Record goal</button>
+    </form>
+  );
+}
+
+function CardForm({ matchId, disabled, onSubmit }: { matchId: string; disabled: boolean; onSubmit: (body: Record<string, unknown>) => void }) {
+  const fixture = getFixture(matchId);
+  const pitch = usePitch(matchId);
+  const [side, setSide] = useState<'home' | 'away'>('home');
+  const [playerId, setPlayerId] = useState('');
+  const [cardType, setCardType] = useState('yellow');
+  const [detail, setDetail] = useState('');
+  if (!fixture) return null;
+  const teamId = side === 'home' ? fixture.homeId : fixture.awayId;
+  const options = [...pitch.entries()].filter(([, row]) => row.teamId === teamId && row.on).map(([id]) => ({ id, label: playerName(id) }));
+  return (
+    <form className="rounded-2xl border border-white/10 bg-[#10192b] p-4" onSubmit={(event) => {
+      event.preventDefault();
+      onSubmit({ type: 'card', side, playerId, cardType, detail, clientKey: crypto.randomUUID() });
+    }}>
+      <h2 className="font-black">Card</h2>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <Select label="Team" value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={[{ id: 'home', label: 'Home' }, { id: 'away', label: 'Away' }]} />
+        <Select label="Card" value={cardType} onChange={setCardType} options={[{ id: 'yellow', label: 'Yellow' }, { id: 'second_yellow', label: 'Second yellow' }, { id: 'red', label: 'Direct red' }]} />
+        <Select label="Player" value={playerId} onChange={setPlayerId} options={[{ id: '', label: 'Choose' }, ...options]} />
+        <label className="text-xs font-bold text-white/45">Reason<input className={inputClass} value={detail} onChange={(event) => setDetail(event.target.value)} /></label>
+      </div>
+      <button type="submit" disabled={disabled || !playerId} className="mt-3 rounded-xl bg-white/10 px-4 py-2 text-sm font-bold disabled:opacity-40">Record card</button>
+    </form>
+  );
+}
+
+function SubForm({ matchId, disabled, onSubmit }: { matchId: string; disabled: boolean; onSubmit: (body: Record<string, unknown>) => void }) {
+  const fixture = getFixture(matchId);
+  const pitch = usePitch(matchId);
+  const [side, setSide] = useState<'home' | 'away'>('home');
+  const [playerId, setPlayerId] = useState('');
+  const [relatedPlayerId, setRelatedPlayerId] = useState('');
+  if (!fixture) return null;
+  const teamId = side === 'home' ? fixture.homeId : fixture.awayId;
+  const outgoing = [...pitch.entries()].filter(([, row]) => row.teamId === teamId && row.on).map(([id]) => ({ id, label: playerName(id) }));
+  const incoming = [...pitch.entries()].filter(([, row]) => row.teamId === teamId && !row.used && !row.dismissed).map(([id]) => ({ id, label: playerName(id) }));
+  return (
+    <form className="rounded-2xl border border-white/10 bg-[#10192b] p-4" onSubmit={(event) => {
+      event.preventDefault();
+      onSubmit({ type: 'substitution', side, playerId, relatedPlayerId, detail: 'tactical', clientKey: crypto.randomUUID() });
+    }}>
+      <h2 className="font-black">Substitution</h2>
+      <div className="mt-3 grid gap-2">
+        <Select label="Team" value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={[{ id: 'home', label: 'Home' }, { id: 'away', label: 'Away' }]} />
+        <Select label="Off" value={playerId} onChange={setPlayerId} options={[{ id: '', label: 'Choose' }, ...outgoing]} />
+        <Select label="On" value={relatedPlayerId} onChange={setRelatedPlayerId} options={[{ id: '', label: 'Choose' }, ...incoming]} />
+      </div>
+      <button type="submit" disabled={disabled || !playerId || !relatedPlayerId} className="mt-3 rounded-xl bg-white/10 px-4 py-2 text-sm font-bold disabled:opacity-40">Record substitution</button>
+    </form>
+  );
+}
+
+function OtherForm({ matchId, period, disabled, onSubmit }: { matchId: string; period?: string; disabled: boolean; onSubmit: (body: Record<string, unknown>) => void }) {
+  const [type, setType] = useState('foul');
+  const [side, setSide] = useState<'home' | 'away'>('home');
+  const [detail, setDetail] = useState('');
+  const [scored, setScored] = useState(true);
+  const fixture = getFixture(matchId);
+  const pitch = usePitch(matchId);
+  const teamId = side === 'home' ? fixture?.homeId : fixture?.awayId;
+  const takers = [...pitch.entries()].filter(([, row]) => row.teamId === teamId && !row.dismissed).map(([id]) => ({ id, label: playerName(id) }));
+  const [playerId, setPlayerId] = useState('');
+  return (
+    <form className="rounded-2xl border border-white/10 bg-[#10192b] p-4" onSubmit={(event) => {
+      event.preventDefault();
+      if (type === 'added_time') onSubmit({ type, addedMinute: Number(detail), clientKey: crypto.randomUUID() });
+      else if (type === 'penalty_kick') onSubmit({ type, side, playerId, scored, clientKey: crypto.randomUUID() });
+      else onSubmit({ type, side, detail, playerId: playerId || undefined, clientKey: crypto.randomUUID() });
+    }}>
+      <h2 className="font-black">Other event</h2>
+      <div className="mt-3 grid gap-2">
+        <Select label="Event" value={type} onChange={setType} options={['foul', 'free_kick', 'corner', 'offside', 'save', 'injury', 'penalty_awarded', 'penalty_missed', 'penalty_saved', 'var', 'added_time', 'note', 'penalty_kick'].map((id) => ({ id, label: id.replaceAll('_', ' ') }))} />
+        {type !== 'added_time' && <Select label="Team" value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={[{ id: 'home', label: 'Home' }, { id: 'away', label: 'Away' }]} />}
+        {type === 'penalty_kick' && <Select label="Taker" value={playerId} onChange={setPlayerId} options={takers} />}
+        {type === 'penalty_kick' && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={scored} onChange={(event) => setScored(event.target.checked)} /> Scored</label>}
+        {type !== 'penalty_kick' && (
+          <label className="text-xs font-bold text-white/45">{type === 'added_time' ? 'Added minutes' : 'Detail'}
+            <input className={inputClass} value={detail} onChange={(event) => setDetail(event.target.value)} />
+          </label>
+        )}
+        {period !== 'penalties' && type === 'penalty_kick' && <p className="text-xs text-white/40">Start the shootout before recording kicks. They do not change the match score.</p>}
+      </div>
+      <button type="submit" disabled={disabled} className="mt-3 rounded-xl bg-white/10 px-4 py-2 text-sm font-bold disabled:opacity-40">Record</button>
+    </form>
+  );
+}
+
+function ManualStats({ matchId, disabled, onSave }: { matchId: string; disabled: boolean; onSave: (body: Record<string, unknown>) => void }) {
+  const [metric, setMetric] = useState('corners');
+  const [side, setSide] = useState('home');
+  const [value, setValue] = useState('');
+  return (
+    <form className="mt-4 rounded-2xl border border-white/10 bg-[#10192b] p-4" onSubmit={(event) => { event.preventDefault(); onSave({ metric, side, value: Number(value) }); }}>
+      <h2 className="font-black">Manual team statistic</h2>
+      <p className="mt-1 text-xs text-white/40">Only numbers an official enters are stored. Possession and shots are never invented.</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-4">
+        <Select label="Stat" value={metric} onChange={setMetric} options={['possession', 'shots', 'shots_on_target', 'shots_off_target', 'blocked_shots', 'corners', 'fouls', 'offsides', 'saves', 'passes', 'pass_accuracy'].map((id) => ({ id, label: id.replaceAll('_', ' ') }))} />
+        <Select label="Team" value={side} onChange={setSide} options={[{ id: 'home', label: 'Home' }, { id: 'away', label: 'Away' }]} />
+        <label className="text-xs font-bold text-white/45">Value<input className={inputClass} value={value} onChange={(event) => setValue(event.target.value)} /></label>
+        <button type="submit" disabled={disabled || value === ''} className="self-end rounded-xl bg-white/10 px-3 py-2 text-sm font-bold disabled:opacity-40">Save</button>
+      </div>
+    </form>
+  );
+}
+
+function TeamAdmin({ onMessage, onError }: { onMessage: (text: string) => void; onError: (text: string) => void }) {
+  const [editing, setEditing] = useState<string | null>(null);
+  const team = departments.find((item) => item.id === editing);
+  return (
+    <div>
+      <h1 className="text-3xl font-black">Teams</h1>
+      <TeamEditor
+        key={team?.id ?? 'new'}
+        initial={team}
+        onDone={onMessage}
+        onError={onError}
+      />
+      <ul className="mt-4 divide-y divide-white/5 rounded-2xl border border-white/10">
+        {departments.map((item) => (
+          <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-2">
+            <span className="flex items-center gap-2 text-sm font-bold"><DepartmentMark shortName={item.shortName} color={item.color} size={28} />{item.name}<span className="font-normal text-white/35">Group {item.group}</span></span>
+            <button type="button" onClick={() => setEditing(item.id)} className="text-xs font-bold text-[#f5c518]">Edit</button>
+          </li>
         ))}
+      </ul>
+    </div>
+  );
+}
+
+function TeamEditor({ initial, onDone, onError }: { initial?: (typeof departments)[number]; onDone: (text: string) => void; onError: (text: string) => void }) {
+  const [name, setName] = useState(initial?.name ?? '');
+  const [shortName, setShortName] = useState(initial?.shortName ?? '');
+  const [group, setGroup] = useState<GroupId>(initial?.group ?? 'A');
+  const [coach, setCoach] = useState(initial?.coach ?? '');
+  const [pitch, setPitch] = useState(initial?.pitch ?? '');
+  return (
+    <form className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-[#10192b] p-4 sm:grid-cols-2" onSubmit={async (event) => {
+      event.preventDefault();
+      try {
+        await desk(initial ? `/api/teams/${initial.id}` : '/api/teams', { method: initial ? 'PATCH' : 'POST', body: { name, shortName, group, coach, pitch, college: initial?.college ?? '', color: initial?.color ?? '#2450c8' } });
+        onDone(initial ? 'Team updated.' : 'Team created.');
+      } catch (reason) {
+        onError(reason instanceof Error ? reason.message : 'Could not save the team.');
+      }
+    }}>
+      <label className="text-xs font-bold text-white/45">Name<input className={inputClass} value={name} onChange={(event) => setName(event.target.value)} /></label>
+      <label className="text-xs font-bold text-white/45">Short name<input className={inputClass} value={shortName} onChange={(event) => setShortName(event.target.value)} /></label>
+      <Select label="Group" value={group} onChange={(value) => setGroup(value as GroupId)} options={['A', 'B', 'C', 'D', 'E', 'F'].map((id) => ({ id, label: id }))} />
+      <label className="text-xs font-bold text-white/45">Coach<input className={inputClass} value={coach} onChange={(event) => setCoach(event.target.value)} /></label>
+      <label className="text-xs font-bold text-white/45 sm:col-span-2">Pitch<input className={inputClass} value={pitch} onChange={(event) => setPitch(event.target.value)} /></label>
+      {initial && (
+        <label className="text-xs font-bold text-white/45 sm:col-span-2">Crest
+          <input className="mt-1 block text-sm" type="file" accept="image/png,image/jpeg,image/webp" onChange={async (event) => {
+            const file = event.target.files?.[0];
+            if (!file) return;
+            try {
+              await uploadImage(`/api/teams/${initial.id}/image`, file);
+              onDone('Crest saved.');
+            } catch (reason) {
+              onError(reason instanceof Error ? reason.message : 'Could not upload the crest.');
+            }
+          }} />
+        </label>
+      )}
+      <button type="submit" className="rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018] sm:col-span-2">{initial ? 'Save team' : 'Create team'}</button>
+    </form>
+  );
+}
+
+function PlayerAdmin({ onMessage, onError }: { onMessage: (text: string) => void; onError: (text: string) => void }) {
+  const [teamId, setTeamId] = useState(departments[0]?.id ?? '');
+  const [name, setName] = useState('');
+  const [position, setPosition] = useState('MID');
+  const [number, setNumber] = useState('18');
+  const squad = players.filter((player) => player.departmentId === teamId && player.registered !== false);
+  return (
+    <div>
+      <h1 className="text-3xl font-black">Players</h1>
+      <form className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-[#10192b] p-4 sm:grid-cols-2" onSubmit={async (event) => {
+        event.preventDefault();
+        try {
+          await desk('/api/players', { body: { name, teamId, position, number: Number(number) } });
+          setName('');
+          onMessage('Player registered.');
+        } catch (reason) {
+          onError(reason instanceof Error ? reason.message : 'Could not save the player.');
+        }
+      }}>
+        <Select label="Team" value={teamId} onChange={setTeamId} options={departments.map((team) => ({ id: team.id, label: team.name }))} />
+        <label className="text-xs font-bold text-white/45">Name<input className={inputClass} value={name} onChange={(event) => setName(event.target.value)} /></label>
+        <Select label="Position" value={position} onChange={setPosition} options={['GK', 'DEF', 'MID', 'FWD'].map((id) => ({ id, label: id }))} />
+        <label className="text-xs font-bold text-white/45">Number<input className={inputClass} value={number} onChange={(event) => setNumber(event.target.value)} /></label>
+        <button type="submit" className="rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018] sm:col-span-2">Add player</button>
+      </form>
+      <ul className="mt-4 divide-y divide-white/5 rounded-2xl border border-white/10">
+        {squad.map((player) => (
+          <li key={player.id} className="flex items-center justify-between px-3 py-2 text-sm">
+            <span>{player.number} {player.name} · {player.position}</span>
+            <span className="flex items-center gap-3 text-white/40">
+              <span>{player.goals}G {player.assists}A {player.yellowCards ?? 0}Y {player.redCards ?? 0}R · {player.appearances ?? 0} apps</span>
+              <select
+                className="rounded-lg bg-[#0c1424] px-2 py-1 text-xs text-white"
+                value={player.departmentId}
+                onChange={async (event) => {
+                  try {
+                    await desk(`/api/players/${player.id}`, { method: 'PATCH', body: { name: player.name, teamId: event.target.value, position: player.position, number: player.number } });
+                    onMessage('Player moved. Past match events stay with this player.');
+                  } catch (reason) {
+                    onError(reason instanceof Error ? reason.message : 'Could not move the player.');
+                  }
+                }}
+              >
+                {departments.map((team) => <option key={team.id} value={team.id}>{team.shortName}</option>)}
+              </select>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; onError: (text: string) => void }) {
+  const [title, setTitle] = useState('');
+  const [summary, setSummary] = useState('');
+  const [body, setBody] = useState('');
+  return (
+    <div>
+      <h1 className="text-3xl font-black">News</h1>
+      <form className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-[#10192b] p-4" onSubmit={async (event) => {
+        event.preventDefault();
+        try {
+          await desk('/api/news', { body: { title, summary, body, category: 'News', time: 'Today' } });
+          setTitle(''); setSummary(''); setBody('');
+          onMessage('Story published.');
+        } catch (reason) {
+          onError(reason instanceof Error ? reason.message : 'Could not publish the story.');
+        }
+      }}>
+        <label className="text-xs font-bold text-white/45">Title<input className={inputClass} value={title} onChange={(event) => setTitle(event.target.value)} /></label>
+        <label className="text-xs font-bold text-white/45">Summary<input className={inputClass} value={summary} onChange={(event) => setSummary(event.target.value)} /></label>
+        <label className="text-xs font-bold text-white/45">Story<textarea className={inputClass} rows={4} value={body} onChange={(event) => setBody(event.target.value)} /></label>
+        <button type="submit" className="rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018]">Publish</button>
+      </form>
+      <ul className="mt-4 space-y-2">
+        {newsArticles.map((article) => (
+          <li key={article.id} className="flex items-center justify-between rounded-xl border border-white/10 px-3 py-2 text-sm">
+            <span>{article.title}</span>
+            <button type="button" className="text-xs font-bold text-red-300" onClick={async () => {
+              try {
+                await desk(`/api/news/${article.id}`, { method: 'DELETE', body: {} });
+                onMessage('Story removed.');
+              } catch (reason) {
+                onError(reason instanceof Error ? reason.message : 'Could not remove the story.');
+              }
+            }}>Delete</button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function RulesAdmin({ role, onMessage, onError }: { role: Role; onMessage: (text: string) => void; onError: (text: string) => void }) {
+  const [halfMinutes, setHalfMinutes] = useState(String(leagueRules.halfMinutes));
+  const [pointsWin, setPointsWin] = useState(String(leagueRules.pointsWin));
+  const [maxSubs, setMaxSubs] = useState(String(leagueRules.maxSubs));
+  const locked = role === 'reader' || role === 'match_admin' || role === 'team_manager';
+  return (
+    <form className="max-w-lg" onSubmit={async (event) => {
+      event.preventDefault();
+      try {
+        await desk('/api/rules', { method: 'PATCH', body: { halfMinutes: Number(halfMinutes), pointsWin: Number(pointsWin), maxSubs: Number(maxSubs) } });
+        onMessage('Competition rules saved. Matches already created keep their own half length.');
+      } catch (reason) {
+        onError(reason instanceof Error ? reason.message : 'Could not save the rules.');
+      }
+    }}>
+      <h1 className="text-3xl font-black">Competition</h1>
+      <p className="mt-1 text-sm text-white/45">Group tables use confirmed results only. Tie-break is points, goal difference, then goals scored.</p>
+      <label className="mt-4 block text-xs font-bold text-white/45">Half length (minutes)<input className={inputClass} value={halfMinutes} onChange={(event) => setHalfMinutes(event.target.value)} /></label>
+      <label className="mt-3 block text-xs font-bold text-white/45">Points for a win<input className={inputClass} value={pointsWin} onChange={(event) => setPointsWin(event.target.value)} /></label>
+      <label className="mt-3 block text-xs font-bold text-white/45">Substitutions<input className={inputClass} value={maxSubs} onChange={(event) => setMaxSubs(event.target.value)} /></label>
+      <button type="submit" disabled={locked} className="mt-4 rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018] disabled:opacity-40">Save rules</button>
+    </form>
+  );
+}
+
+function UserAdmin({ role, onMessage, onError }: { role: Role; onMessage: (text: string) => void; onError: (text: string) => void }) {
+  const [users, setUsers] = useState<Array<{ id: string; username: string; role: string }>>([]);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [nextRole, setNextRole] = useState<Role>('match_admin');
+  useEffect(() => {
+    if (role !== 'super_admin') return;
+    desk('/api/users').then((data) => setUsers(data.users)).catch((reason) => onError(reason.message));
+  }, [role, onError]);
+  if (role !== 'super_admin') return <p className="text-sm text-white/50">Only a super admin can manage accounts.</p>;
+  return (
+    <div>
+      <h1 className="text-3xl font-black">Users</h1>
+      <form className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-[#10192b] p-4 sm:grid-cols-2" onSubmit={async (event) => {
+        event.preventDefault();
+        try {
+          await desk('/api/users', { body: { username, password, role: nextRole } });
+          const data = await desk('/api/users');
+          setUsers(data.users);
+          setUsername('');
+          setPassword('');
+          onMessage('Account created.');
+        } catch (reason) {
+          onError(reason instanceof Error ? reason.message : 'Could not create the account.');
+        }
+      }}>
+        <label className="text-xs font-bold text-white/45">Username<input className={inputClass} value={username} onChange={(event) => setUsername(event.target.value)} /></label>
+        <label className="text-xs font-bold text-white/45">Password<input className={inputClass} type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+        <Select label="Role" value={nextRole} onChange={(value) => setNextRole(value as Role)} options={['super_admin', 'match_admin', 'competition_manager', 'team_manager', 'reader'].map((id) => ({ id, label: id.replaceAll('_', ' ') }))} />
+        <button type="submit" className="self-end rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018]">Create</button>
+      </form>
+      <ul className="mt-4 divide-y divide-white/5 rounded-2xl border border-white/10">
+        {users.map((account) => <li key={account.id} className="flex justify-between px-3 py-2 text-sm"><span>{account.username}</span><span className="text-white/40">{account.role.replaceAll('_', ' ')}</span></li>)}
+      </ul>
+    </div>
+  );
+}
+
+function AuditList() {
+  const [rows, setRows] = useState<Array<{ id: number; actor_name: string; action: string; entity: string; entity_id: string; created_at: number }>>([]);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    desk('/api/audit').then((data) => setRows(data.audit)).catch((reason) => setError(reason.message));
+  }, []);
+  return (
+    <div>
+      <h1 className="text-3xl font-black">Audit</h1>
+      {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
+      <ul className="mt-4 divide-y divide-white/5 rounded-2xl border border-white/10">
+        {rows.map((row) => (
+          <li key={row.id} className="px-3 py-2 text-sm">
+            <span className="font-bold">{row.action}</span>
+            <span className="text-white/45"> · {row.actor_name} · {row.entity} {row.entity_id} · {new Date(row.created_at).toLocaleString()}</span>
+          </li>
+        ))}
+        {!rows.length && !error && <li className="px-3 py-6 text-sm text-white/40">No audit entries yet.</li>}
+      </ul>
+    </div>
+  );
+}
+
+function Select({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: Array<{ id: string; label: string }> }) {
+  return (
+    <label className="text-xs font-bold text-white/45">{label}
+      <select className={inputClass} value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.map((option) => <option key={option.id || 'none'} value={option.id}>{option.label}</option>)}
       </select>
     </label>
   );
+}
+
+function labelOf(id: string) {
+  return getDepartment(id)?.shortName ?? id;
+}
+
+function playerName(id: string) {
+  const player = players.find((item) => item.id === id);
+  return player ? `${player.number} ${player.name}` : id;
 }
