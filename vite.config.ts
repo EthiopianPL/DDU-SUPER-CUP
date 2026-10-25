@@ -14,14 +14,11 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    include: ['react', 'react-dom', 'react-router', '@supabase/supabase-js', 'lucide-react'],
+    include: ['react', 'react-dom', 'react-router', 'lucide-react'],
   },
   build: {
     outDir: 'dist',
     sourcemap: true,
-    commonjsOptions: {
-      include: [/@supabase/, /node_modules/],
-    },
   },
   server: {
     port: 5173,

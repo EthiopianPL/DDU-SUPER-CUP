@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { MapPin } from 'lucide-react';
-import { useLanguage } from '../context/LanguageContext';
 import { formatKickoff, getDepartment, getFixture, goalEvents } from '../../data/supercup';
 
 interface Team {
@@ -42,7 +41,6 @@ export function MatchCard({
   injuryTime = 0
 }: MatchCardProps) {
   const navigate = useNavigate();
-  const { t } = useLanguage();
   const [currentMinute, setCurrentMinute] = useState(matchMinute);
   const [currentSecond, setCurrentSecond] = useState(matchSecond);
   const [currentHalf, setCurrentHalf] = useState<'first' | 'second'>(matchMinute < 45 ? 'first' : 'second');
@@ -89,10 +87,10 @@ export function MatchCard({
     }
 
     if (currentMinute >= 90) {
-      return t('FT');
+      return 'FT';
     }
     if (currentMinute === 45) {
-      return t('HT') + displayExtra;
+      return `HT${displayExtra}`;
     }
 
     return `${displayMinute}:${currentSecond.toString().padStart(2, '0')}${displayExtra}`;
@@ -141,12 +139,12 @@ export function MatchCard({
           {status === 'live' && (
             <>
               <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-              <span className="text-red-500 text-xs font-semibold">{t('LIVE')}</span>
+              <span className="text-red-500 text-xs font-semibold">LIVE</span>
               <span className="text-red-400 text-xs font-mono">{liveDisplay}</span>
             </>
           )}
           {status === 'finished' && (
-            <span className="text-gray-400 text-xs font-semibold">{t('FULL TIME')}</span>
+            <span className="text-gray-400 text-xs font-semibold">FULL TIME</span>
           )}
           {status === 'upcoming' && (
             <span className="text-[#9eb6f5] text-xs font-semibold">Kickoff</span>
@@ -190,12 +188,12 @@ export function MatchCard({
           <div className="text-center">
             {status === 'live' ? (
               <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
-                <span className="text-red-500 text-xs font-bold">{t('LIVE')}</span>
+                <span className="text-red-500 text-xs font-bold">LIVE</span>
               </div>
             ) : status === 'finished' ? (
-              <div className="text-gray-500 font-bold text-sm">{t('FT')}</div>
+              <div className="text-gray-500 font-bold text-sm">FT</div>
             ) : (
-              <div className="text-gray-500 font-bold text-sm">{t('VS')}</div>
+              <div className="text-gray-500 font-bold text-sm">VS</div>
             )}
           </div>
 
@@ -251,7 +249,7 @@ export function MatchCard({
         {status === 'live' && (
           <div className="mt-4 pt-3 border-t border-white/10">
             <div className="flex justify-between text-xs text-gray-400 mb-1">
-              <span>{currentHalf === 'first' ? t('1st Half') : t('2nd Half')}</span>
+              <span>{currentHalf === 'first' ? '1st Half' : '2nd Half'}</span>
               <span className="font-mono">{liveDisplay}</span>
             </div>
             <div className="w-full bg-gray-700 rounded-full h-1.5 overflow-hidden">
