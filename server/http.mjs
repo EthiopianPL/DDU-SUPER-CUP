@@ -1,9 +1,7 @@
 import { createServer } from 'node:http';
-import { createReadStream, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
-import { tmpdir } from 'node:os';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import * as esbuild from 'esbuild';
+import { fileURLToPath } from 'node:url';
 import { can, newToken, verifyPassword } from './auth.mjs';
 import { openDatabase } from './db.mjs';
 import {
@@ -295,25 +293,10 @@ function send(response, status, body) {
   response.end(JSON.stringify(body));
 }
 
-export async function loadLeagueSource() {
-  const dir = mkdtempSync(join(tmpdir(), 'ddu-seed-'));
-  const outfile = join(dir, 'league.mjs');
-  await esbuild.build({
-    entryPoints: [join(root, 'src/data/league-seed.ts')],
-    bundle: true,
-    format: 'esm',
-    platform: 'node',
-    outfile,
-  });
-  return import(pathToFileURL(outfile).href);
-}
-
 export function startServer(db = openDatabase(), port = Number(process.env.PORT || 8787)) {
-  const sourcePromise = loadLeagueSource().then((league) => {
-    seedDatabase(db, league, process.env.ADMIN_PASSWORD || 'supercup');
-  });
+  seedDatabase(db, process.env.ADMIN_PASSWORD || 'supercup');
   const server = createApp(db);
-  return sourcePromise.then(() => new Promise((resolve) => {
+  return new Promise((resolve) => {
     server.listen(port, '127.0.0.1', () => resolve({ server, db }));
-  }));
+  });
 }

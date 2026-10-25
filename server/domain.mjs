@@ -179,7 +179,7 @@ function onPitch(db, match, playerId, teamId, beforeId = null) {
   return player;
 }
 
-export function seedDatabase(db, source, password) {
+export function seedDatabase(db, password) {
   const existing = db.prepare('SELECT COUNT(*) AS total FROM users').get();
   if (existing.total > 0) return false;
 
@@ -198,96 +198,7 @@ export function seedDatabase(db, source, password) {
       'groups',
       JSON.stringify(DEFAULT_RULES),
     );
-
-    const insertTeam = db.prepare(`INSERT INTO teams (id, name, short_name, college, group_id, color, pitch, coach, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, '', 'active')`);
-    for (const team of source.departments) {
-      insertTeam.run(team.id, team.name, team.shortName, team.college, team.group, team.color, team.pitch);
-    }
-
-    const insertPlayer = db.prepare(`INSERT INTO players (id, team_id, name, position, number, nationality, registered, active)
-      VALUES (?, ?, ?, ?, ?, '', ?, 1)`);
-    for (const player of source.players) insertPlayer.run(player.id, player.departmentId, player.name, player.position, player.number, 1);
-
-    const knownPlayers = new Set(source.players.map((player) => player.id));
-    const remember = (player) => {
-      if (knownPlayers.has(player.id)) return;
-      knownPlayers.add(player.id);
-      insertPlayer.run(player.id, player.departmentId, player.name, player.position, player.number, 0);
-    };
-
-    const insertMatch = db.prepare(`INSERT INTO matches (
-      id, competition_id, group_id, matchday, home_id, away_id, venue, kickoff_date, kickoff_time,
-      status, period, elapsed_ms, running_since, added_ms, half_ms, regulation_ms, et_half_ms, allow_extra,
-      home_score, away_score, confirmed, formation_home, formation_away, version, updated_at
-    ) VALUES (?, 'super-cup', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?, ?, 0, 0, 0, ?, '4-2-3-1', '4-2-3-1', 1, ?)`);
-    const insertSquad = db.prepare('INSERT INTO match_squad (match_id, team_id, player_id, role, sort_index) VALUES (?, ?, ?, ?, ?)');
-    const insertEvent = db.prepare(`INSERT INTO match_events (
-      match_id, client_key, type, team_id, credited_team_id, player_id, assist_id, related_player_id,
-      minute, added_minute, period, goal_type, card_type, detail, counts_for_score, shootout, scored, voided, created_by, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, 0, NULL, 0, 'user-admin', ?)`);
-
-    const halfMs = DEFAULT_RULES.halfMinutes * 60 * 1000;
-    for (const fixture of source.fixtures) {
-      const homeSheet = source.matchSheet(fixture.homeId);
-      const awaySheet = source.matchSheet(fixture.awayId);
-      for (const player of [...homeSheet.starters, ...homeSheet.bench, ...awaySheet.starters, ...awaySheet.bench]) remember(player);
-
-      const scheduled = fixture.status === 'upcoming';
-      const live = fixture.status === 'live';
-      const status = scheduled ? 'scheduled' : live ? 'live' : 'finished';
-      const period = scheduled ? 'pre' : live ? 'second_half' : 'full_time';
-      const elapsed = live ? (fixture.minute ?? 0) * 60 * 1000 : status === 'finished' ? halfMs * 2 : 0;
-      insertMatch.run(
-        fixture.id,
-        fixture.group,
-        fixture.matchday,
-        fixture.homeId,
-        fixture.awayId,
-        fixture.stadium,
-        fixture.date,
-        fixture.time,
-        status,
-        period,
-        elapsed,
-        halfMs,
-        halfMs * 2,
-        DEFAULT_RULES.extraHalfMinutes * 60 * 1000,
-        status === 'finished' ? 1 : 0,
-        now,
-      );
-
-      const writeSquad = (sheet, teamId) => {
-        sheet.starters.forEach((player, index) => insertSquad.run(fixture.id, teamId, player.id, 'starter', index));
-        sheet.bench.forEach((player, index) => insertSquad.run(fixture.id, teamId, player.id, 'bench', index));
-      };
-      writeSquad(homeSheet, fixture.homeId);
-      writeSquad(awaySheet, fixture.awayId);
-
-      if (!scheduled) {
-        for (const event of source.matchTimeline(fixture)) {
-          if (event.kind === 'goal') {
-            insertEvent.run(fixture.id, `seed-${fixture.id}-g-${event.playerId}-${event.minute}`, 'goal', event.teamId, event.teamId, event.playerId, event.assistId ?? null, null, event.minute, 'second_half', 'open_play', null, '', 1, now);
-          } else {
-            insertEvent.run(fixture.id, `seed-${fixture.id}-${event.kind}-${event.playerId}-${event.minute}`, 'card', event.teamId, null, event.playerId, null, null, event.minute, 'second_half', null, event.kind === 'red' ? 'red' : 'yellow', '', 0, now);
-          }
-        }
-        for (const change of source.matchSubstitutions(fixture)) {
-          insertEvent.run(fixture.id, `seed-${fixture.id}-sub-${change.offId}-${change.minute}`, 'substitution', change.teamId, null, change.offId, null, change.onPlayer.id, change.minute, 'second_half', null, null, 'tactical', 0, now);
-        }
-        recomputeScore(db, fixture.id);
-        const scored = db.prepare('SELECT home_score, away_score FROM matches WHERE id = ?').get(fixture.id);
-        const expectedHome = fixture.homeScore ?? 0;
-        const expectedAway = fixture.awayScore ?? 0;
-        if (scored.home_score !== expectedHome || scored.away_score !== expectedAway) {
-          throw new Error(`Seed score mismatch for ${fixture.id}: ${scored.home_score}-${scored.away_score} vs ${expectedHome}-${expectedAway}`);
-        }
-      }
-    }
-
-    const insertNews = db.prepare('INSERT INTO news (id, title, category, time_label, summary, body) VALUES (?, ?, ?, ?, ?, ?)');
-    for (const article of source.news) insertNews.run(article.id, article.title, article.category, article.time, article.summary, article.body);
-    audit(db, { id: 'user-admin', username: 'system' }, 'seed', 'competition', 'super-cup', null, { matches: source.fixtures.length });
+    audit(db, { id: 'user-admin', username: 'system' }, 'seed', 'competition', 'super-cup', null, { teams: 0, matches: 0 });
   });
   return true;
 }

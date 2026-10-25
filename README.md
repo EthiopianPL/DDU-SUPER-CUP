@@ -14,4 +14,4 @@ Run `npm test` to check goals, cards, substitutions, permissions, and standings.
 
 Run `npm run build` and then `npm start` to serve the built site and the API together.
 
-The desk signs in as `admin`. Set `ADMIN_PASSWORD` on the server if the default password should not be used. The database file is `data/supercup.db`.
+The desk signs in as `admin`. Set `ADMIN_PASSWORD` on the server if the default password should not be used. A new database has that account and an empty Super Cup. Teams, players, matches, and news are added from the desk. The database file is `data/supercup.db`. The tables are in `server/schema.sql`.

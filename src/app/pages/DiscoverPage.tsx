@@ -280,7 +280,7 @@ export function DiscoverPage() {
         >
           <div>
             <h2 className="text-xl font-black text-white">Departments & Teams</h2>
-            <p className="mt-0.5 text-xs text-white/50">24 university departments competing in the Super Cup</p>
+            <p className="mt-0.5 text-xs text-white/50">{departments.length} university departments competing in the Super Cup</p>
           </div>
 
           {/* Search bar */}

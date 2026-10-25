@@ -41,12 +41,10 @@ test('match events, permissions, clock, and standings stay consistent', async ()
   try {
     const opened = await call('/api/snapshot');
     assert.equal(opened.status, 200);
-    const live = opened.data.matches.find((match) => match.detail === 'live');
-    assert.ok(live);
-    assert.equal(live.homeScore, 1);
-    assert.equal(live.confirmed, false);
-    const finished = opened.data.matches.filter((match) => match.detail === 'finished' && match.confirmed);
-    assert.ok(finished.length >= 17);
+    assert.equal(opened.data.teams.length, 0);
+    assert.equal(opened.data.players.length, 0);
+    assert.equal(opened.data.matches.length, 0);
+    assert.equal(opened.data.news.length, 0);
 
     const admin = await signIn('admin', 'supercup');
     const createdReader = await call('/api/users', {
@@ -56,23 +54,59 @@ test('match events, permissions, clock, and standings stay consistent', async ()
     });
     assert.equal(createdReader.status, 200, createdReader.data.error);
     const reader = await signIn('reader', 'readerpass');
-    const denied = await call(`/api/matches/${live.id}/clock`, {
-      method: 'POST',
-      cookie: reader,
-      body: { action: 'pause', version: live.version },
-    });
-    assert.equal(denied.status, 403);
+
+    const addTeam = async (name, shortName) => {
+      const result = await call('/api/teams', {
+        method: 'POST',
+        cookie: admin,
+        body: { name, shortName, group: 'A', college: 'Institute of Technology', pitch: 'DDU Main Pitch', color: '#2450c8' },
+      });
+      assert.equal(result.status, 200, result.data.error);
+      return result.data.id;
+    };
+    const homeId = await addTeam('Software Engineering', 'SWE');
+    const awayId = await addTeam('Computer Science', 'CS');
+    const addPlayer = async (teamId, name, position, number) => {
+      const result = await call('/api/players', {
+        method: 'POST',
+        cookie: admin,
+        body: { teamId, name, position, number },
+      });
+      assert.equal(result.status, 200, result.data.error);
+      return result.data.id;
+    };
+    const homePlayers = [
+      ['Abel Tesfaye', 'GK', 1],
+      ['Kaleb Bekele', 'DEF', 2],
+      ['Yonas Tadesse', 'DEF', 3],
+      ['Nahom Desta', 'DEF', 4],
+      ['Biniam Haile', 'DEF', 5],
+      ['Samuel Getachew', 'MID', 6],
+      ['Henok Alemu', 'MID', 7],
+      ['Meron Kebede', 'MID', 8],
+      ['Sara Abebe', 'FWD', 9],
+      ['Lidya Worku', 'FWD', 10],
+      ['Dawit Mulugeta', 'FWD', 11],
+      ['Robel Bekele', 'MID', 20],
+    ];
+    const homeIds = [];
+    for (const [name, position, number] of homePlayers) homeIds.push(await addPlayer(homeId, name, position, number));
+    const awayStarterId = await addPlayer(awayId, 'Hana Desta', 'GK', 1);
+    const homeStarter = { playerId: homeIds[0] };
+    const homeAssist = { playerId: homeIds[8] };
+    const homeBench = { playerId: homeIds[11] };
+    const awayStarter = { playerId: awayStarterId };
 
     const created = await call('/api/matches', {
       method: 'POST',
       cookie: admin,
       body: {
-        homeId: 'software-engineering',
-        awayId: 'computer-science',
+        homeId,
+        awayId,
         date: '2026-12-01',
         time: '15:00',
         venue: 'DDU Main Pitch',
-        matchday: 4,
+        matchday: 1,
         allowExtra: true,
         halfMinutes: 45,
       },
@@ -80,11 +114,12 @@ test('match events, permissions, clock, and standings stay consistent', async ()
     assert.equal(created.status, 200, created.data.error);
     const matchId = created.data.id;
     let version = created.data.snapshot.matches.find((match) => match.id === matchId).version;
-    const squad = (side) => created.data.snapshot.squads.filter((row) => row.matchId === matchId && row.teamId === (side === 'home' ? 'software-engineering' : 'computer-science'));
-    const homeStarter = squad('home').find((row) => row.role === 'starter');
-    const homeBench = squad('home').find((row) => row.role === 'bench');
-    const awayStarter = squad('away').find((row) => row.role === 'starter');
-    const homeAssist = squad('home').find((row) => row.role === 'starter' && row.playerId !== homeStarter.playerId);
+    const denied = await call(`/api/matches/${matchId}/clock`, {
+      method: 'POST',
+      cookie: reader,
+      body: { action: 'pause', version },
+    });
+    assert.equal(denied.status, 403);
 
     const kick = await call(`/api/matches/${matchId}/clock`, { method: 'POST', cookie: admin, body: { action: 'kickoff', version } });
     assert.equal(kick.status, 200, kick.data.error);
