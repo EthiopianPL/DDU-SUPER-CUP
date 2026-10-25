@@ -549,6 +549,7 @@ export function getTournamentTimeString(date: Date = new Date()): string {
     minute: '2-digit',
     hour12: false,
   }).format(date);
+}
 
 export function goalEvents(fixture: Fixture): GoalEvent[] {
   return matchEvents
@@ -560,7 +561,6 @@ export function goalEvents(fixture: Fixture): GoalEvent[] {
       playerName: event.goalType === 'own_goal' ? `${event.playerName} (OG)` : event.playerName,
     }))
     .sort((a, b) => a.minute - b.minute || a.playerName.localeCompare(b.playerName));
- main
 }
 
 export function formatKickoff(date: string, time: string) {

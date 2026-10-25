@@ -192,8 +192,7 @@ export function MatchCard({
         <MapPin className="mr-1 h-3 w-3 shrink-0 text-white/30" />
         <span className="truncate">{venue}</span>
       </div>
-      {scorers && <p className="mt-1 truncate text-[11px] text-white/55">{scorers}</p>}
-    </button>
+    </div>
   );
 }
 
