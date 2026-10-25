@@ -369,3 +369,113 @@ export function formatKickoff(date: string, time: string) {
   const value = new Date(`${date}T${time}:00`);
   return value.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
+
+export interface TeamStats {
+  possession: number;
+  shots: number;
+  shotsOnTarget: number;
+  corners: number;
+  fouls: number;
+  yellowCards: number;
+  redCards: number;
+}
+
+export interface MatchStats {
+  home: TeamStats;
+  away: TeamStats;
+}
+
+export interface MatchCardEvent {
+  minute: number;
+  teamId: string;
+  playerId: string;
+  playerName: string;
+  type: 'yellow' | 'red';
+}
+
+export function getMatchStats(fixture: Fixture): MatchStats | undefined {
+  if (fixture.status === 'upcoming' || fixture.homeScore == null || fixture.awayScore == null) {
+    return undefined;
+  }
+
+  const homeScore = fixture.homeScore;
+  const awayScore = fixture.awayScore;
+  const isLive = fixture.status === 'live';
+  const progressRatio = isLive && fixture.minute ? Math.min(fixture.minute / 90, 1) : 1;
+
+  const scoreDiff = homeScore - awayScore;
+  const homePossession = Math.min(Math.max(50 + scoreDiff * 3 + (fixture.matchday % 2 === 0 ? 2 : -2), 38), 65);
+  const awayPossession = 100 - homePossession;
+
+  const baseHomeShots = Math.round((homeScore * 3 + 5 + (fixture.homeId.length % 3)) * progressRatio);
+  const baseAwayShots = Math.round((awayScore * 3 + 4 + (fixture.awayId.length % 3)) * progressRatio);
+
+  const homeOnTarget = Math.max(homeScore, Math.round(baseHomeShots * 0.45));
+  const awayOnTarget = Math.max(awayScore, Math.round(baseAwayShots * 0.42));
+
+  const homeCorners = Math.max(1, Math.round((3 + homeScore + (fixture.matchday % 3)) * progressRatio));
+  const awayCorners = Math.max(1, Math.round((2 + awayScore + (fixture.group.charCodeAt(0) % 3)) * progressRatio));
+
+  const homeFouls = Math.max(2, Math.round((7 + (fixture.homeId.length % 4)) * progressRatio));
+  const awayFouls = Math.max(2, Math.round((8 + (fixture.awayId.length % 4)) * progressRatio));
+
+  const homeYellow = scoreDiff < 0 ? 2 : 1;
+  const awayYellow = scoreDiff > 0 ? 2 : 1;
+
+  return {
+    home: {
+      possession: homePossession,
+      shots: Math.max(baseHomeShots, homeOnTarget),
+      shotsOnTarget: homeOnTarget,
+      corners: homeCorners,
+      fouls: homeFouls,
+      yellowCards: homeYellow,
+      redCards: 0,
+    },
+    away: {
+      possession: awayPossession,
+      shots: Math.max(baseAwayShots, awayOnTarget),
+      shotsOnTarget: awayOnTarget,
+      corners: awayCorners,
+      fouls: awayFouls,
+      yellowCards: awayYellow,
+      redCards: 0,
+    },
+  };
+}
+
+export function cardEvents(fixture: Fixture): MatchCardEvent[] {
+  if (fixture.status === 'upcoming') return [];
+
+  const events: MatchCardEvent[] = [];
+  const latestMinute = fixture.status === 'live' && fixture.minute != null ? fixture.minute : 90;
+
+  const homePlayers = playersForDepartment(fixture.homeId);
+  const awayPlayers = playersForDepartment(fixture.awayId);
+
+  const homeDefender = homePlayers.find((p) => p.position === 'DEF') || homePlayers[1];
+  const awayMidfielder = awayPlayers.find((p) => p.position === 'MID') || awayPlayers[3];
+
+  if (homeDefender && 38 <= latestMinute) {
+    events.push({
+      minute: 38,
+      teamId: fixture.homeId,
+      playerId: homeDefender.id,
+      playerName: homeDefender.name,
+      type: 'yellow',
+    });
+  }
+
+  if (awayMidfielder && 71 <= latestMinute) {
+    events.push({
+      minute: 71,
+      teamId: fixture.awayId,
+      playerId: awayMidfielder.id,
+      playerName: awayMidfielder.name,
+      type: 'yellow',
+    });
+  }
+
+  return events;
+}
+

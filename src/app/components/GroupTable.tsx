@@ -5,9 +5,18 @@ import { GROUP_COLLEGES, standingsFor, type GroupId } from '../../data/supercup'
 interface GroupTableProps {
   group: GroupId;
   compact?: boolean;
+  highlightTeamIds?: string[];
+  homeTeamId?: string;
+  awayTeamId?: string;
 }
 
-export function GroupTable({ group, compact = false }: GroupTableProps) {
+export function GroupTable({
+  group,
+  compact = false,
+  highlightTeamIds = [],
+  homeTeamId,
+  awayTeamId,
+}: GroupTableProps) {
   const navigate = useNavigate();
   const rows = standingsFor(group);
 
@@ -53,25 +62,46 @@ export function GroupTable({ group, compact = false }: GroupTableProps) {
             )}
           </div>
 
-          {rows.map((row) => (
-            <button
-              key={row.department.id}
-              type="button"
-              onClick={() => navigate(`/team/${row.department.id}`)}
-              className="grid w-full items-center gap-2 border-t border-white/[0.07] px-4 py-3 text-left transition-colors hover:bg-white/[0.06] active:bg-white/[0.09] focus-visible:bg-white/[0.08] focus-visible:outline-none"
-              style={{
-                gridTemplateColumns: compact
-                  ? '28px 1fr 32px 42px'
-                  : '28px minmax(130px, 1fr) 32px 30px 30px 30px 38px 42px 76px',
-              }}
-            >
-              <span className={`text-sm font-black ${row.position <= 2 ? 'text-[#7ddea0]' : 'text-white/40'}`}>
-                {row.position}
-              </span>
-              <span className="flex min-w-0 items-center gap-2.5">
-                <DepartmentMark shortName={row.department.shortName} color={row.department.color} size={32} />
-                <span className="truncate text-sm font-bold tracking-tight text-white">{row.department.name}</span>
-              </span>
+          {rows.map((row) => {
+            const isHighlighted = highlightTeamIds.includes(row.department.id);
+            const isHome = row.department.id === homeTeamId;
+            const isAway = row.department.id === awayTeamId;
+
+            return (
+              <button
+                key={row.department.id}
+                type="button"
+                onClick={() => navigate(`/team/${row.department.id}`)}
+                className={`grid w-full items-center gap-2 border-t border-white/[0.07] px-4 py-3 text-left transition-colors focus-visible:bg-white/[0.08] focus-visible:outline-none ${
+                  isHighlighted
+                    ? 'bg-[#f5c518]/10 ring-1 ring-inset ring-[#f5c518]/40 hover:bg-[#f5c518]/15'
+                    : 'hover:bg-white/[0.06] active:bg-white/[0.09]'
+                }`}
+                style={{
+                  gridTemplateColumns: compact
+                    ? '28px 1fr 32px 42px'
+                    : '28px minmax(130px, 1fr) 32px 30px 30px 30px 38px 42px 76px',
+                }}
+              >
+                <span className={`text-sm font-black ${row.position <= 2 ? 'text-[#7ddea0]' : 'text-white/40'}`}>
+                  {row.position}
+                </span>
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <DepartmentMark shortName={row.department.shortName} color={row.department.color} size={32} />
+                  <span className="flex min-w-0 items-center gap-1.5 truncate">
+                    <span className="truncate text-sm font-bold tracking-tight text-white">{row.department.name}</span>
+                    {isHome && (
+                      <span className="shrink-0 rounded bg-[#2450c8]/40 px-1.5 py-0.5 text-[9px] font-black tracking-wider text-[#9eb6f5]">
+                        HOME
+                      </span>
+                    )}
+                    {isAway && (
+                      <span className="shrink-0 rounded bg-white/15 px-1.5 py-0.5 text-[9px] font-black tracking-wider text-white/90">
+                        AWAY
+                      </span>
+                    )}
+                  </span>
+                </span>
               {compact ? (
                 <>
                   <span className="text-center text-sm font-semibold text-white/80">{row.played}</span>
@@ -106,7 +136,8 @@ export function GroupTable({ group, compact = false }: GroupTableProps) {
                 </>
               )}
             </button>
-          ))}
+          );
+        })}
         </div>
       </div>
     </section>
