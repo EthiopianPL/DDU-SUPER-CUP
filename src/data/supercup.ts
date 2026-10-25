@@ -291,8 +291,78 @@ export function getFixture(id: string) {
   return fixtures.find((fixture) => fixture.id === id);
 }
 
+export const STATUS_PRIORITY: Record<MatchStatus, number> = {
+  live: 1,
+  upcoming: 2,
+  finished: 3,
+};
+
+/**
+ * Sorts fixtures according to the smart match priority:
+ * 1. LIVE matches — always appear at the top.
+ * 2. UPCOMING matches — appear next, sorted by kickoff date and time ascending (earliest first).
+ * 3. FINISHED matches — appear after upcoming matches, sorted by most recently finished first (latest date & time first).
+ *
+ * Does not mutate the original array; returns a sorted copy.
+ */
+export function sortFixturesByPriority(fixtureList: Fixture[]): Fixture[] {
+  return [...fixtureList].sort((a, b) => {
+    const priorityA = STATUS_PRIORITY[a.status] ?? 99;
+    const priorityB = STATUS_PRIORITY[b.status] ?? 99;
+
+    // 1. Primary ordering: status priority rank
+    if (priorityA !== priorityB) {
+      return priorityA - priorityB;
+    }
+
+    // 2. Both are LIVE
+    if (a.status === 'live') {
+      const minA = typeof a.minute === 'number' ? a.minute : -1;
+      const minB = typeof b.minute === 'number' ? b.minute : -1;
+      if (minA !== minB) {
+        return minB - minA; // highest minute first
+      }
+      return (a.time || '').localeCompare(b.time || '');
+    }
+
+    // 3. Both are UPCOMING: earliest kickoff first (date ascending, then time ascending)
+    if (a.status === 'upcoming') {
+      const dateA = a.date || '';
+      const dateB = b.date || '';
+      if (dateA !== dateB) {
+        return dateA.localeCompare(dateB);
+      }
+      const timeA = a.time || '';
+      const timeB = b.time || '';
+      if (timeA !== timeB) {
+        return timeA.localeCompare(timeB);
+      }
+      return (a.group || '').localeCompare(b.group || '');
+    }
+
+    // 4. Both are FINISHED: most recently finished first (latest date descending, then latest time descending)
+    if (a.status === 'finished') {
+      const dateA = a.date || '';
+      const dateB = b.date || '';
+      if (dateA !== dateB) {
+        return dateB.localeCompare(dateA); // most recent date first
+      }
+      const timeA = a.time || '';
+      const timeB = b.time || '';
+      if (timeA !== timeB) {
+        return timeB.localeCompare(timeA); // most recent kickoff time first
+      }
+      return (a.group || '').localeCompare(b.group || '');
+    }
+
+    return 0;
+  });
+}
+
 export function fixturesForDepartment(id: string) {
-  return fixtures.filter((fixture) => fixture.homeId === id || fixture.awayId === id);
+  return sortFixturesByPriority(
+    fixtures.filter((fixture) => fixture.homeId === id || fixture.awayId === id)
+  );
 }
 
 export function playersForDepartment(id: string) {
@@ -448,6 +518,38 @@ function sampleGoalEvents(fixture: Fixture): GoalEvent[] {
   return events.sort((a, b) => a.minute - b.minute || a.playerName.localeCompare(b.playerName));
 }
 
+
+export const TOURNAMENT_TIMEZONE = 'Africa/Addis_Ababa';
+
+/**
+ * Matchday 2 date (Saturday, October 24, 2026) represents the active tournament game day
+ * in the static mock dataset, featuring completed matches, a live match, and upcoming matches.
+ */
+export const TOURNAMENT_ACTIVE_MATCHDAY_DATE = '2026-10-24';
+
+/**
+ * Returns a date string formatted as YYYY-MM-DD in the tournament timezone (Africa/Addis_Ababa).
+ */
+export function getTournamentTodayString(date: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: TOURNAMENT_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+/**
+ * Returns formatted time as HH:mm in the tournament timezone (Africa/Addis_Ababa).
+ */
+export function getTournamentTimeString(date: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: TOURNAMENT_TIMEZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date);
+
 export function goalEvents(fixture: Fixture): GoalEvent[] {
   return matchEvents
     .filter((event) => event.matchId === fixture.id && event.type === 'goal' && event.countsForScore && !event.voided && !event.shootout)
@@ -458,22 +560,69 @@ export function goalEvents(fixture: Fixture): GoalEvent[] {
       playerName: event.goalType === 'own_goal' ? `${event.playerName} (OG)` : event.playerName,
     }))
     .sort((a, b) => a.minute - b.minute || a.playerName.localeCompare(b.playerName));
+ main
 }
 
 export function formatKickoff(date: string, time: string) {
   const value = new Date(`${date}T${time}:00`);
-  return value.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return value.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: TOURNAMENT_TIMEZONE });
 }
 
-export interface TimelineEvent {
-  minute: number;
-  teamId: string;
-  playerId: string;
-  playerName: string;
-  kind: 'goal' | 'yellow' | 'red' | 'sub' | 'note';
-  assistId?: string;
-  assistName?: string;
-  detail?: string;
+/**
+ * Shifts a YYYY-MM-DD string by a given number of days.
+ */
+export function shiftDate(dateStr: string, days: number): string {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const d = new Date(Date.UTC(year, month - 1, day + days, 12, 0, 0));
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Returns formatted date strings for display in the Date Navigator:
+ * e.g. "Today, 25 Oct", "Yesterday, 24 Oct", "Saturday, 10 Oct"
+ */
+export function formatDateLabel(
+  dateStr: string,
+  todayStr: string = getTournamentTodayString(),
+): { main: string; sub: string } {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dateObj = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  const dayOfWeek = dateObj.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
+  const dayFull = dateObj.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
+  const formattedShort = dateObj.toLocaleDateString('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const year = dateObj.toLocaleDateString('en-US', { year: 'numeric', timeZone: 'UTC' });
+
+  const yesterdayStr = shiftDate(todayStr, -1);
+  const tomorrowStr = shiftDate(todayStr, 1);
+
+  if (dateStr === todayStr) {
+    return { main: `Today, ${formattedShort}`, sub: `${dayFull}, ${year}` };
+  }
+  if (dateStr === yesterdayStr) {
+    return { main: `Yesterday, ${formattedShort}`, sub: `${dayFull}, ${year}` };
+  }
+  if (dateStr === tomorrowStr) {
+    return { main: `Tomorrow, ${formattedShort}`, sub: `${dayFull}, ${year}` };
+  }
+  return { main: `${dayOfWeek}, ${formattedShort}`, sub: `${dayFull}, ${year}` };
+}
+
+/**
+ * Distinct tournament fixture dates, sorted chronologically.
+ */
+export const TOURNAMENT_MATCH_DATES = ['2026-10-10', '2026-10-11', '2026-10-24', '2026-10-31'];
+export const MIN_TOURNAMENT_DATE = '2026-10-09';
+export const MAX_TOURNAMENT_DATE = '2026-11-01';
+
+
+export interface TeamStats {
+  possession: number;
+  shots: number;
+  shotsOnTarget: number;
+  corners: number;
+  fouls: number;
+  yellowCards: number;
+  redCards: number;
 }
 
 export interface MatchSheet {
@@ -716,6 +865,58 @@ export function viewClock(fixture: Fixture | undefined, now = Date.now()) {
   };
 }
 
+export interface CategorizedFixtures {
+  previous: Fixture[];
+  today: Fixture[];
+  upcoming: Fixture[];
+  unplayedHistorical: Fixture[];
+}
+
+/**
+ * Categorizes fixtures into Previous, Today's, and Upcoming buckets.
+ * - Previous: completed matches dated before today, plus any overdue uncompleted matches.
+ * - Today: fixtures scheduled today, plus any actively live matches.
+ * - Upcoming: fixtures scheduled after today.
+ */
+export function categorizeFixtures(
+  fixtureList: Fixture[],
+  referenceDate: string = getTournamentTodayString(),
+): CategorizedFixtures {
+  const previous: Fixture[] = [];
+  const today: Fixture[] = [];
+  const upcoming: Fixture[] = [];
+  const unplayedHistorical: Fixture[] = [];
+
+  for (const fixture of fixtureList) {
+    if (fixture.date === referenceDate || fixture.status === 'live') {
+      today.push(fixture);
+    } else if (fixture.date < referenceDate) {
+      previous.push(fixture);
+      if (fixture.status === 'upcoming') {
+        unplayedHistorical.push(fixture);
+      }
+    } else {
+      upcoming.push(fixture);
+    }
+  }
+
+  // Today: Live matches first, then chronological
+  today.sort((a, b) => {
+    if (a.status === 'live' && b.status !== 'live') return -1;
+    if (b.status === 'live' && a.status !== 'live') return 1;
+    return a.time.localeCompare(b.time);
+  });
+
+  // Previous: Chronological by date, then kickoff time
+  previous.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+
+  // Upcoming: Chronological by date, then kickoff time
+  upcoming.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+
+  return { previous, today, upcoming, unplayedHistorical };
+}
+
+
 export function periodText(period?: string, running = false) {
   if (period === 'pre') return 'Kickoff';
   if (period === 'first_half') return running ? 'First half' : 'First half paused';
@@ -727,3 +928,4 @@ export function periodText(period?: string, running = false) {
   if (period === 'full_time') return 'Full time';
   return running ? 'Live' : 'Paused';
 }
+

@@ -5,11 +5,8 @@ export function NewsPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-24 pt-5">
-      <h1 className="text-3xl font-black text-white">News</h1>
-      <p className="mt-1 text-sm text-white/50">Dire Dawa University Super Cup</p>
-
-      <div className="mt-5 space-y-3">
+    <div className="mx-auto max-w-3xl px-4 pb-24 pt-3 sm:pt-5">
+      <div className="space-y-3">
         {newsArticles.map((article) => (
           <button
             key={article.id}
