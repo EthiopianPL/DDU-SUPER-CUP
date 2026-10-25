@@ -34,6 +34,8 @@ export interface Fixture {
   awayScore?: number;
   status: MatchStatus;
   minute?: number;
+  elapsedSeconds?: number;
+  runningSince?: number;
 }
 
 export interface Standing {

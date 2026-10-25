@@ -6,16 +6,19 @@ import {
   LayoutDashboard,
   LogOut,
   Newspaper,
+  Lock,
   Pencil,
   Plus,
   RotateCcw,
   Search,
   Shield,
+  Timer,
   Trash2,
   Users,
 } from 'lucide-react';
 import { BrandLockup } from '../components/BrandLockup';
 import { DepartmentMark } from '../components/DepartmentMark';
+import { MatchControl } from '../components/MatchControl';
 import {
   deleteArticle,
   deleteDepartment,
@@ -24,9 +27,11 @@ import {
   resetLeague,
   saveArticle,
   saveDepartment,
+  formatMatchClock,
   saveFixture,
   savePlayer,
 } from '../../data/editor';
+import { useMatchClock } from '../useMatchClock';
 import { newsArticles, type NewsArticle } from '../../data/news';
 import {
   GROUP_COLLEGES,
@@ -67,6 +72,11 @@ const NAV: { id: Section; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'matches', label: 'Matches', icon: Calendar },
   { id: 'news', label: 'News', icon: Newspaper },
 ];
+
+function LiveClock({ id }: { id: string }) {
+  const clock = useMatchClock(id);
+  return <>{clock ? formatMatchClock(clock) : '00:00'}</>;
+}
 
 const inputClass =
   'mt-1.5 w-full rounded-xl border border-white/10 bg-[#0c1424] px-3 py-2.5 text-sm text-white outline-none focus:border-[#f5c518]/70';
@@ -376,7 +386,7 @@ function Overview({
       </section>
 
       <section>
-        <SectionTitle title="Live" meta="Open a match to change the score" />
+        <SectionTitle title="Live" meta="Open a match to run the clock" />
         <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-[#10192b]">
           {live.length === 0 && <p className="px-4 py-6 text-sm text-white/40">No live matches.</p>}
           {live.map((fixture) => {
@@ -393,7 +403,9 @@ function Overview({
                   <span className="block truncate text-sm font-bold text-white">
                     {home?.shortName} {fixture.homeScore ?? 0}–{fixture.awayScore ?? 0} {away?.shortName}
                   </span>
-                  <span className="text-xs text-white/40">{fixture.minute ?? 1}' · Group {fixture.group}</span>
+                  <span className="text-xs text-white/40">
+                    <LiveClock id={fixture.id} /> · Group {fixture.group}
+                  </span>
                 </span>
                 <span className="rounded-full bg-[#2f9e44]/20 px-2 py-1 text-[11px] font-bold text-[#7ddea0]">LIVE</span>
               </button>
@@ -696,18 +708,16 @@ function MatchesPanel({
   const [draft, setDraft] = useState<Fixture | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [error, setError] = useState('');
+  const [controlId, setControlId] = useState<string | null>(null);
   const teamOptions = departments.map((department) => ({ value: department.id, label: `${department.shortName} · ${department.name}` }));
 
   useEffect(() => {
     if (!focusId) return;
     const fixture = fixtures.find((item) => item.id === focusId);
-    if (fixture) {
-      setError('');
-      setIsNew(false);
-      setDraft({ ...fixture });
-    }
+    if (!fixture || fixture.status === 'finished') notify('Full-time matches are locked.', 'bad');
+    else setControlId(fixture.id);
     onFocused();
-  }, [focusId, onFocused]);
+  }, [focusId, notify, onFocused]);
 
   const needle = query.trim().toLowerCase();
   const rows = [...fixtures]
@@ -737,7 +747,7 @@ function MatchesPanel({
     <section>
       <Toolbar
         title="Matches"
-        meta="Scores update the table and the match page"
+        meta="Schedule the fixture, then run the clock to 90:00"
         action="New match"
         onAction={() => {
           setError('');
@@ -785,24 +795,65 @@ function MatchesPanel({
                 <StatusPill status={fixture.status} />
               </td>
               <td className="px-3 py-3">
-                <Actions
-                  onEdit={() => {
-                    setError('');
-                    setIsNew(false);
-                    setDraft({ ...fixture });
-                  }}
-                  onDelete={() => {
-                    ask({
-                      title: 'Delete this match?',
-                      body: 'The fixture leaves the list and the group table.',
-                      action: () => {
-                        deleteFixture(fixture.id);
-                        refresh();
-                        notify('Match removed.');
-                      },
-                    });
-                  }}
-                />
+                <div className="flex justify-end">
+                  {fixture.status === 'finished' ? (
+                    <button
+                      type="button"
+                      aria-label="Match locked"
+                      onClick={() => notify('Full-time matches are locked.', 'bad')}
+                      className="rounded-lg p-2 text-white/35"
+                    >
+                      <Lock className="h-4 w-4" />
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        aria-label="Control match"
+                        onClick={() => setControlId(fixture.id)}
+                        className="rounded-lg p-2 text-[#7ddea0] hover:bg-[#2f9e44]/10"
+                      >
+                        <Timer className="h-4 w-4" />
+                      </button>
+                      {fixture.status === 'upcoming' && (
+                        <button
+                          type="button"
+                          aria-label="Edit"
+                          onClick={() => {
+                            setError('');
+                            setIsNew(false);
+                            setDraft({ ...fixture });
+                          }}
+                          className="rounded-lg p-2 text-[#f5c518] hover:bg-[#f5c518]/10"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        aria-label="Delete"
+                        onClick={() => {
+                          ask({
+                            title: 'Delete this match?',
+                            body: 'The fixture leaves the list and the group table.',
+                            action: () => {
+                              const result = deleteFixture(fixture.id);
+                              if (!result.ok) {
+                                notify(result.error, 'bad');
+                                return;
+                              }
+                              refresh();
+                              notify('Match removed.');
+                            },
+                          });
+                        }}
+                        className="rounded-lg p-2 text-red-300 hover:bg-red-400/10"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </>
+                  )}
+                </div>
               </td>
             </tr>
           );
@@ -815,6 +866,7 @@ function MatchesPanel({
           <div className="space-y-3">
             <Select label="Home" value={draft.homeId} onChange={(homeId) => setDraft({ ...draft, homeId })} options={teamOptions} />
             <Select label="Away" value={draft.awayId} onChange={(awayId) => setDraft({ ...draft, awayId })} options={teamOptions} />
+            <p className="text-xs leading-5 text-white/45">Kickoff, the clock, and the score are run from the match control. This form only schedules the fixture.</p>
             <div className="grid grid-cols-2 gap-3">
               <Select
                 label="Matchday"
@@ -826,29 +878,10 @@ function MatchesPanel({
                   { value: '3', label: 'Matchday 3' },
                 ]}
               />
-              <Select
-                label="Status"
-                value={draft.status}
-                onChange={(value) => setDraft({ ...draft, status: value as MatchStatus })}
-                options={[
-                  { value: 'upcoming', label: 'Upcoming' },
-                  { value: 'live', label: 'Live' },
-                  { value: 'finished', label: 'Full time' },
-                ]}
-              />
               <Field label="Date" value={draft.date} onChange={(date) => setDraft({ ...draft, date })} type="date" />
               <Field label="Kickoff" value={draft.time} onChange={(time) => setDraft({ ...draft, time })} type="time" />
             </div>
             <Field label="Stadium" value={draft.stadium} onChange={(stadium) => setDraft({ ...draft, stadium })} />
-            {draft.status !== 'upcoming' && (
-              <div className="grid grid-cols-3 gap-3">
-                <Field label="Home score" value={String(draft.homeScore ?? 0)} onChange={(homeScore) => setDraft({ ...draft, homeScore: Number(homeScore) })} type="number" />
-                <Field label="Away score" value={String(draft.awayScore ?? 0)} onChange={(awayScore) => setDraft({ ...draft, awayScore: Number(awayScore) })} type="number" />
-                {draft.status === 'live' && (
-                  <Field label="Minute" value={String(draft.minute ?? 1)} onChange={(minute) => setDraft({ ...draft, minute: Number(minute) })} type="number" />
-                )}
-              </div>
-            )}
             {error && <p className="text-sm text-red-300">{error}</p>}
             <SaveRow
               onSave={() => {
@@ -866,6 +899,7 @@ function MatchesPanel({
           </div>
         </Modal>
       )}
+      {controlId && <MatchControl id={controlId} onClose={() => setControlId(null)} onChange={refresh} />}
     </section>
   );
 }

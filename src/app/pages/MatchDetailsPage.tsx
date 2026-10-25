@@ -12,6 +12,8 @@ import {
   Shield,
 } from 'lucide-react';
 import { DepartmentMark } from '../components/DepartmentMark';
+import { formatMatchClock, HALF_SECONDS, type MatchClock } from '../../data/editor';
+import { useMatchClock } from '../useMatchClock';
 import { GroupTable } from '../components/GroupTable';
 import {
   formatKickoff,
@@ -27,6 +29,13 @@ import {
 } from '../../data/supercup';
 
 type MatchTab = 'lineups' | 'standings';
+
+function periodLabel(clock: MatchClock | null) {
+  if (!clock) return 'Live';
+  if (!clock.running && clock.total === HALF_SECONDS) return 'Half time';
+  if (clock.minute < 45) return clock.running ? 'First half' : 'First half paused';
+  return clock.running ? 'Second half' : 'Second half paused';
+}
 
 export function MatchDetailsPage() {
   const { id } = useParams();
@@ -44,6 +53,7 @@ export function MatchDetailsPage() {
   };
 
   const fixture = id ? getFixture(id) : undefined;
+  const clock = useMatchClock(fixture?.status === 'live' ? fixture.id : undefined);
 
   // Unknown match ID handling
   if (!fixture) {
@@ -73,9 +83,9 @@ export function MatchDetailsPage() {
   const played = fixture.status !== 'upcoming';
   const isLive = fixture.status === 'live';
 
-  const goals = useMemo(() => goalEvents(fixture), [fixture]);
-  const timeline = useMemo(() => matchTimeline(fixture), [fixture]);
-  const substitutions = useMemo(() => matchSubstitutions(fixture), [fixture]);
+  const goals = useMemo(() => goalEvents(fixture), [fixture, clock?.minute, fixture.homeScore, fixture.awayScore, fixture.status]);
+  const timeline = useMemo(() => matchTimeline(fixture), [fixture, clock?.minute, fixture.homeScore, fixture.awayScore, fixture.status]);
+  const substitutions = useMemo(() => matchSubstitutions(fixture), [fixture, clock?.minute, fixture.status]);
   const homeSheet = useMemo(() => matchSheet(fixture.homeId), [fixture.homeId]);
   const awaySheet = useMemo(() => matchSheet(fixture.awayId), [fixture.awayId]);
 
@@ -168,12 +178,14 @@ export function MatchDetailsPage() {
                 <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-red-500/40 bg-red-500/20 px-3 py-1">
                   <div className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
                   <span className="text-xs font-black tracking-wide text-red-500">LIVE</span>
-                  <span className="font-mono text-xs font-bold text-red-400">{fixture.minute}&apos;</span>
+                  <span className="font-mono text-xs font-bold text-red-400">
+                    {clock ? formatMatchClock(clock) : `${fixture.minute ?? 0}'`}
+                  </span>
                 </div>
                 <div className="text-4xl font-black tracking-tight text-white sm:text-5xl">
                   {fixture.homeScore} <span className="text-white/30">-</span> {fixture.awayScore}
                 </div>
-                <p className="mt-1 text-[11px] font-semibold text-white/50">2nd Half In Progress</p>
+                <p className="mt-1 text-[11px] font-semibold text-white/50">{periodLabel(clock)}</p>
               </div>
             ) : played ? (
               <div className="text-center">

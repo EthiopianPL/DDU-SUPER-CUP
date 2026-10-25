@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router';
 import { DepartmentMark } from './DepartmentMark';
+import { formatMatchClock } from '../../data/editor';
 import { formatKickoff, getFixture, goalEvents } from '../../data/supercup';
+import { useMatchClock } from '../useMatchClock';
 
 interface Team {
   id: string | number;
@@ -40,6 +42,7 @@ export function MatchCard({
 }: MatchCardProps) {
   const navigate = useNavigate();
   const fixture = getFixture(id);
+  const clock = useMatchClock(status === 'live' ? id : undefined);
   const played = status === 'live' || status === 'finished';
   const scorers = fixture
     ? goalEvents(fixture).map((event) => `${event.minute}' ${event.playerName.split(' ').slice(-1)[0]}`).join(' · ')
@@ -62,7 +65,7 @@ export function MatchCard({
       </div>
       <div className="mt-2.5 flex items-center justify-between gap-3">
         <p className="min-w-0 truncate text-[11px] text-white/40">{meta}</p>
-        <Stamp status={status} minute={matchMinute} kickoff={fixture?.time ?? time} />
+        <Stamp status={status} minute={clock?.minute ?? matchMinute} seconds={clock?.seconds} running={clock?.running} kickoff={fixture?.time ?? time} />
       </div>
       {scorers && <p className="mt-1 truncate text-[11px] text-white/55">{scorers}</p>}
     </button>
@@ -89,12 +92,25 @@ function Side({
   );
 }
 
-function Stamp({ status, minute, kickoff }: { status: MatchCardProps['status']; minute: number; kickoff?: string }) {
+function Stamp({
+  status,
+  minute,
+  seconds,
+  running,
+  kickoff,
+}: {
+  status: MatchCardProps['status'];
+  minute: number;
+  seconds?: number;
+  running?: boolean;
+  kickoff?: string;
+}) {
   if (status === 'live') {
+    const label = seconds == null ? `${minute}'` : formatMatchClock({ total: 0, minute, seconds, running: Boolean(running) });
     return (
-      <span className="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-bold text-red-400">
-        <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-        {minute}&apos;
+      <span className={`inline-flex shrink-0 items-center gap-1.5 font-mono text-[11px] font-bold ${running ? 'text-red-400' : 'text-white/70'}`}>
+        <span className={`h-1.5 w-1.5 rounded-full ${running ? 'animate-pulse bg-red-500' : 'bg-white/30'}`} />
+        {label}
       </span>
     );
   }

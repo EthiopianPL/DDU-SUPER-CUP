@@ -145,6 +145,13 @@ export function saveFixture(input: Fixture, isNew: boolean) {
   const home = departments.find((department) => department.id === input.homeId);
   if (!home) return { ok: false as const, error: 'Home team not found.' };
 
+  if (!isNew) {
+    const current = fixtures.find((fixture) => fixture.id === input.id);
+    if (!current) return { ok: false as const, error: 'Match not found.' };
+    if (current.status === 'finished') return { ok: false as const, error: 'Full-time matches are locked.' };
+    if (current.status === 'live') return { ok: false as const, error: 'Run a live match from the match control.' };
+  }
+
   const next: Fixture = {
     ...input,
     id: isNew ? `${home.group.toLowerCase()}-md${input.matchday}-${Date.now()}` : input.id,
@@ -152,9 +159,12 @@ export function saveFixture(input: Fixture, isNew: boolean) {
     date: input.date || new Date().toISOString().slice(0, 10),
     time: input.time || '15:00',
     stadium: input.stadium.trim() || home.pitch,
-    homeScore: input.status === 'upcoming' ? undefined : Math.max(0, Number(input.homeScore) || 0),
-    awayScore: input.status === 'upcoming' ? undefined : Math.max(0, Number(input.awayScore) || 0),
-    minute: input.status === 'live' ? Math.max(1, Number(input.minute) || 1) : undefined,
+    status: 'upcoming',
+    homeScore: undefined,
+    awayScore: undefined,
+    minute: undefined,
+    elapsedSeconds: undefined,
+    runningSince: undefined,
   };
 
   if (isNew) fixtures.push(next);
@@ -169,8 +179,134 @@ export function saveFixture(input: Fixture, isNew: boolean) {
 }
 
 export function deleteFixture(id: string) {
-  replace(fixtures, fixtures.filter((fixture) => fixture.id !== id));
+  const fixture = fixtures.find((item) => item.id === id);
+  if (!fixture) return { ok: false as const, error: 'Match not found.' };
+  if (fixture.status === 'finished') return { ok: false as const, error: 'Full-time matches are locked.' };
+  replace(fixtures, fixtures.filter((item) => item.id !== id));
   persistLeague();
+  return { ok: true as const };
+}
+
+export const MATCH_SECONDS = 90 * 60;
+export const HALF_SECONDS = 45 * 60;
+
+export interface MatchClock {
+  total: number;
+  minute: number;
+  seconds: number;
+  running: boolean;
+}
+
+export function matchClock(fixture: Fixture, now = Date.now()): MatchClock {
+  const base = fixture.elapsedSeconds ?? (fixture.status === 'live' ? (fixture.minute ?? 0) * 60 : 0);
+  const running = fixture.status === 'live' && typeof fixture.runningSince === 'number';
+  const extra = running ? Math.max(0, (now - (fixture.runningSince as number)) / 1000) : 0;
+  const total = Math.min(MATCH_SECONDS, base + extra);
+  return {
+    total,
+    minute: Math.floor(total / 60),
+    seconds: Math.floor(total % 60),
+    running: running && total < MATCH_SECONDS,
+  };
+}
+
+export function formatMatchClock(clock: MatchClock) {
+  return `${String(clock.minute).padStart(2, '0')}:${String(clock.seconds).padStart(2, '0')}`;
+}
+
+function findFixture(id: string) {
+  return fixtures.find((fixture) => fixture.id === id);
+}
+
+function lockFullTime(fixture: Fixture) {
+  fixture.status = 'finished';
+  fixture.homeScore = fixture.homeScore ?? 0;
+  fixture.awayScore = fixture.awayScore ?? 0;
+  fixture.minute = undefined;
+  fixture.elapsedSeconds = undefined;
+  fixture.runningSince = undefined;
+}
+
+export function syncLiveClock(id: string) {
+  const fixture = findFixture(id);
+  if (!fixture || fixture.status !== 'live' || fixture.runningSince == null) return false;
+  const clock = matchClock(fixture);
+  if (clock.total >= MATCH_SECONDS) {
+    lockFullTime(fixture);
+    persistLeague();
+    return true;
+  }
+  if (fixture.minute !== clock.minute) {
+    fixture.minute = clock.minute;
+    persistLeague();
+    return true;
+  }
+  return false;
+}
+
+export function kickOff(id: string) {
+  const fixture = findFixture(id);
+  if (!fixture) return { ok: false as const, error: 'Match not found.' };
+  if (fixture.status === 'finished') return { ok: false as const, error: 'Full-time matches are locked.' };
+  if (fixture.status === 'live') return { ok: false as const, error: 'This match is already live.' };
+  fixture.status = 'live';
+  fixture.homeScore = 0;
+  fixture.awayScore = 0;
+  fixture.minute = 0;
+  fixture.elapsedSeconds = 0;
+  fixture.runningSince = Date.now();
+  persistLeague();
+  return { ok: true as const };
+}
+
+export function setClockRunning(id: string, running: boolean) {
+  const fixture = findFixture(id);
+  if (!fixture) return { ok: false as const, error: 'Match not found.' };
+  if (fixture.status !== 'live') return { ok: false as const, error: 'Kick off before running the clock.' };
+  const clock = matchClock(fixture);
+  if (clock.total >= MATCH_SECONDS) {
+    lockFullTime(fixture);
+    persistLeague();
+    return { ok: true as const };
+  }
+  fixture.elapsedSeconds = clock.total;
+  fixture.minute = clock.minute;
+  fixture.runningSince = running ? Date.now() : undefined;
+  persistLeague();
+  return { ok: true as const };
+}
+
+export function callHalfTime(id: string) {
+  const fixture = findFixture(id);
+  if (!fixture) return { ok: false as const, error: 'Match not found.' };
+  if (fixture.status !== 'live') return { ok: false as const, error: 'Half time is only for a live match.' };
+  const clock = matchClock(fixture);
+  if (clock.total >= HALF_SECONDS) return { ok: false as const, error: 'The first half is already over.' };
+  fixture.elapsedSeconds = HALF_SECONDS;
+  fixture.minute = 45;
+  fixture.runningSince = undefined;
+  persistLeague();
+  return { ok: true as const };
+}
+
+export function adjustScore(id: string, side: 'home' | 'away', delta: number) {
+  const fixture = findFixture(id);
+  if (!fixture) return { ok: false as const, error: 'Match not found.' };
+  if (fixture.status !== 'live') return { ok: false as const, error: 'The score changes only while the match is live.' };
+  const key = side === 'home' ? 'homeScore' : 'awayScore';
+  fixture[key] = Math.max(0, (fixture[key] ?? 0) + delta);
+  persistLeague();
+  return { ok: true as const };
+}
+
+export function fullTime(id: string) {
+  const fixture = findFixture(id);
+  if (!fixture) return { ok: false as const, error: 'Match not found.' };
+  if (fixture.status === 'finished') return { ok: false as const, error: 'Full-time matches are locked.' };
+  if (fixture.status !== 'live') return { ok: false as const, error: 'Kick off before ending the match.' };
+  lockFullTime(fixture);
+  persistLeague();
+  return { ok: true as const };
 }
 
 export function saveArticle(input: NewsArticle, isNew: boolean) {
