@@ -84,12 +84,17 @@ function assertVersion(match, version) {
 
 function assertWritable(actor, match) {
   deny(actor, 'match.write');
+  if (match.status === 'finished') throw new RuleError('A finished match cannot be edited.');
   if (match.confirmed && !can(actor, 'match.correct')) {
     throw new RuleError('This result is confirmed and locked.');
   }
   if (['cancelled', 'abandoned'].includes(match.status) && !can(actor, 'match.correct')) {
     throw new RuleError('This match is closed.');
   }
+}
+
+function assertNotFinished(match) {
+  if (match.status === 'finished') throw new RuleError('A finished match cannot be edited.');
 }
 
 function squadRows(db, matchId) {
@@ -692,6 +697,7 @@ export function updateMatch(db, actor, id, input) {
   return transaction(db, () => {
     const match = matchRow(db, id);
     assertVersion(match, input.version);
+    assertNotFinished(match);
     if (match.confirmed && !can(actor, 'match.correct')) throw new RuleError('This result is confirmed and locked.');
     if (match.status !== 'scheduled' && match.status !== 'postponed' && !can(actor, 'match.correct')) {
       throw new RuleError('Reschedule the match before it kicks off, or ask a competition manager.');
@@ -723,9 +729,7 @@ export function saveLineup(db, actor, matchId, input) {
   return transaction(db, () => {
     const match = matchRow(db, matchId);
     assertVersion(match, input.version);
-    if (!['scheduled', 'postponed'].includes(match.status) && !can(actor, 'match.correct')) {
-      throw new RuleError('Change the lineup with a substitution once the match has started.');
-    }
+    assertNotFinished(match);
     if (teamId !== match.home_id && teamId !== match.away_id) throw new RuleError('That team is not in this match.');
     const formation = String(input.formation ?? '4-2-3-1');
     for (const playerId of [...starters, ...bench]) ensureSquadPlayerSafe(db, playerId, teamId);
@@ -932,6 +936,7 @@ export function correctEvent(db, actor, matchId, eventId, input) {
   return transaction(db, () => {
     const match = matchRow(db, matchId);
     assertVersion(match, input.version);
+    assertNotFinished(match);
     const event = db.prepare('SELECT * FROM match_events WHERE id = ? AND match_id = ?').get(eventId, matchId);
     if (!event || event.voided) throw new RuleError('Event not found.', 404);
     const before = { ...event };
@@ -970,6 +975,7 @@ export function voidEvent(db, actor, matchId, eventId, input) {
   if (!can(actor, 'match.correct') && !can(actor, 'match.write')) throw new RuleError('You do not have permission for that action.', 403);
   return transaction(db, () => {
     const match = matchRow(db, matchId);
+    assertNotFinished(match);
     if (match.confirmed && !can(actor, 'match.correct')) throw new RuleError('This result is confirmed and locked.');
     assertVersion(match, input.version);
     const event = db.prepare('SELECT * FROM match_events WHERE id = ? AND match_id = ?').get(eventId, matchId);
@@ -1003,6 +1009,7 @@ export function saveManualStat(db, actor, matchId, input) {
   if (!Number.isFinite(value) || value < 0 || value > 1000) throw new RuleError('Enter a valid number.');
   return transaction(db, () => {
     const match = matchRow(db, matchId);
+    assertNotFinished(match);
     if (match.confirmed && !can(actor, 'match.correct')) throw new RuleError('This result is confirmed and locked.');
     const teamId = sideTeam(match, input.side);
     db.prepare(`INSERT INTO manual_stats (match_id, team_id, metric, value) VALUES (?, ?, ?, ?)
@@ -1021,6 +1028,7 @@ export function controlMatch(db, actor, matchId, input) {
   return transaction(db, () => {
     const match = matchRow(db, matchId);
     assertVersion(match, input.version);
+    if (match.status === 'finished' && action !== 'confirm') throw new RuleError('A finished match cannot be edited.');
     const now = Date.now();
     const elapsed = freezeElapsed(match, now);
     const rules = rulesOf(db);

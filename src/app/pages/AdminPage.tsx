@@ -40,6 +40,7 @@ const NAV: { id: Section; label: string }[] = [
 ];
 
 const inputClass = 'mt-1 w-full rounded-xl border border-white/10 bg-[#0c1424] px-3 py-2 text-sm text-white outline-none focus:border-[#f5c518]/70';
+const FORMATIONS = ['4-2-3-1', '4-3-3', '4-4-2', '4-1-4-1', '3-5-2', '3-4-3', '5-3-2', '5-4-1'];
 
 export function AdminPage() {
   const navigate = useNavigate();
@@ -162,7 +163,7 @@ function Overview({ version, onOpen }: { version: number; onOpen: (id: string) =
   const upcoming = fixtures.filter((fixture) => fixture.detail === 'scheduled' || fixture.detail === 'postponed');
   const finished = fixtures.filter((fixture) => fixture.detail === 'finished');
   const postponed = fixtures.filter((fixture) => fixture.detail === 'postponed');
-  const recent = [...matchEvents].reverse().slice(0, 6);
+  const recent = [...matchEvents].reverse().filter((event) => !event.voided).slice(0, 6);
   return (
     <div>
       <h1 className="text-3xl font-black">Dashboard</h1>
@@ -306,7 +307,8 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
   const events = matchEvents.filter((event) => event.matchId === id && !event.voided);
   const canCorrect = role === 'super_admin' || role === 'competition_manager';
   const canRun = role === 'super_admin' || role === 'match_admin' || role === 'competition_manager';
-  const locked = Boolean(fixture.confirmed && !canCorrect);
+  const finished = fixture.detail === 'finished';
+  const live = fixture.status === 'live' || fixture.detail === 'suspended';
 
   const act = async (path: string, body: Record<string, unknown>, method = 'POST') => {
     setBusy(true);
@@ -340,21 +342,22 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
         </div>
         <p className="mt-3 text-center text-xs text-white/35">{fixture.stadium} · {fixture.date} {fixture.time}{fixture.referee ? ` · Ref ${fixture.referee}` : ''}{fixture.confirmed ? ' · Confirmed' : ''}</p>
         <div className="mt-4 flex flex-wrap gap-2">
-          {fixture.detail === 'scheduled' || fixture.detail === 'postponed' ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'kickoff' })}>Kick off</Action> : null}
-          {clock?.running ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'pause' })}>Pause</Action> : null}
-          {fixture.status === 'live' && !clock?.running && fixture.period !== 'halftime' && fixture.period !== 'penalties' ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'resume' })}>Resume</Action> : null}
-          {fixture.period === 'first_half' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'halftime' })}>Half time</Action>}
-          {fixture.period === 'halftime' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'second_half' })}>Second half</Action>}
-          {(fixture.allowExtra || leagueRules.allowExtraTime) && fixture.period === 'second_half' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_first' })}>Extra time</Action>}
-          {fixture.period === 'extra_first' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_break' })}>Extra break</Action>}
-          {fixture.period === 'extra_break' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_second' })}>Second extra</Action>}
-          {fixture.allowExtra && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'penalties' })}>Penalties</Action>}
-          {fixture.status === 'live' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'suspend' })}>Suspend</Action>}
-          {fixture.detail === 'suspended' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'resume' })}>Resume match</Action>}
-          {['scheduled', 'postponed', 'suspended'].includes(fixture.detail || '') && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'postpone' })}>Postpone</Action>}
-          {!fixture.confirmed && fixture.detail !== 'cancelled' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'Cancel this match?', action: 'cancel' })}>Cancel</Action>}
-          {fixture.status === 'live' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'Abandon this match? It will not count in the table.', action: 'abandon' })}>Abandon</Action>}
-          {fixture.status !== 'upcoming' && fixture.detail !== 'finished' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'End the match? The result stays unconfirmed until you confirm it.', action: 'full_time' })}>Full time</Action>}
+          {finished && <p className="w-full text-sm text-white/50">This match is finished. The score, lineup, and events stay as recorded.</p>}
+          {!finished && (fixture.detail === 'scheduled' || fixture.detail === 'postponed') ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'kickoff' })}>Kick off</Action> : null}
+          {!finished && clock?.running ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'pause' })}>Pause</Action> : null}
+          {!finished && fixture.status === 'live' && !clock?.running && fixture.period !== 'halftime' && fixture.period !== 'penalties' ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'resume' })}>Resume</Action> : null}
+          {!finished && fixture.period === 'first_half' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'halftime' })}>Half time</Action>}
+          {!finished && fixture.period === 'halftime' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'second_half' })}>Second half</Action>}
+          {!finished && (fixture.allowExtra || leagueRules.allowExtraTime) && fixture.period === 'second_half' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_first' })}>Extra time</Action>}
+          {!finished && fixture.period === 'extra_first' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_break' })}>Extra break</Action>}
+          {!finished && fixture.period === 'extra_break' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_second' })}>Second extra</Action>}
+          {!finished && fixture.allowExtra && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'penalties' })}>Penalties</Action>}
+          {!finished && fixture.status === 'live' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'suspend' })}>Suspend</Action>}
+          {!finished && fixture.detail === 'suspended' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'resume' })}>Resume match</Action>}
+          {!finished && ['scheduled', 'postponed', 'suspended'].includes(fixture.detail || '') && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'postpone' })}>Postpone</Action>}
+          {!finished && !fixture.confirmed && fixture.detail !== 'cancelled' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'Cancel this match?', action: 'cancel' })}>Cancel</Action>}
+          {!finished && fixture.status === 'live' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'Abandon this match? It will not count in the table.', action: 'abandon' })}>Abandon</Action>}
+          {!finished && fixture.status !== 'upcoming' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'End the match? The result stays unconfirmed until you confirm it.', action: 'full_time' })}>Full time</Action>}
           {fixture.detail === 'finished' && !fixture.confirmed && canCorrect && <Action disabled={busy} onClick={() => setConfirm({ label: 'Confirm this result and add it to the table?', action: 'confirm' })}>Confirm result</Action>}
         </div>
         {confirm && (
@@ -364,22 +367,26 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
             <button type="button" onClick={() => setConfirm(null)} className="text-white/50">Back</button>
           </div>
         )}
-        <ClockCorrection disabled={busy || !canRun} onSave={(seconds) => act(`/api/matches/${id}/clock`, { action: 'set_clock', seconds })} />
+        {!finished && <ClockCorrection disabled={busy || !canRun} onSave={(seconds) => act(`/api/matches/${id}/clock`, { action: 'set_clock', seconds })} />}
       </div>
 
-      <FixtureMeta
-        fixture={fixture}
-        disabled={busy || (!canCorrect && fixture.detail !== 'scheduled' && fixture.detail !== 'postponed')}
-        onSave={(body) => act(`/api/matches/${id}`, body, 'PATCH')}
-      />
-      <LineupEditor matchId={id} disabled={busy || !canRun || ((fixture.detail !== 'scheduled' && fixture.detail !== 'postponed') && !canCorrect)} onSave={(body) => act(`/api/matches/${id}/lineup`, body)} />
-
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <GoalForm matchId={id} disabled={busy || locked || !canRun} onSubmit={(body) => act(`/api/matches/${id}/events`, body)} />
-        <CardForm matchId={id} disabled={busy || locked || !canRun} onSubmit={(body) => act(`/api/matches/${id}/events`, body)} />
-        <SubForm matchId={id} disabled={busy || locked || !canRun} onSubmit={(body) => act(`/api/matches/${id}/events`, body)} />
-        <OtherForm matchId={id} period={fixture.period} disabled={busy || locked || !canRun} onSubmit={(body) => act(`/api/matches/${id}/events`, body)} />
-      </div>
+      {!finished && !live && (
+        <FixtureMeta
+          fixture={fixture}
+          disabled={busy || !canRun}
+          onSave={(body) => act(`/api/matches/${id}`, body, 'PATCH')}
+        />
+      )}
+      {!finished && <LineupEditor matchId={id} disabled={busy || !canRun} onSave={(body) => act(`/api/matches/${id}/lineup`, body)} />}
+      {!finished && canRun && (
+        <EventPicker
+          matchId={id}
+          period={fixture.period}
+          disabled={busy}
+          onEvent={(body) => act(`/api/matches/${id}/events`, body)}
+          onStat={(body) => act(`/api/matches/${id}/stats`, body)}
+        />
+      )}
 
       <section className="mt-4 rounded-2xl border border-white/10 bg-[#10192b] p-4">
         <h2 className="font-black">Event history</h2>
@@ -388,19 +395,21 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
             <li key={event.id} className="border-t border-white/5 py-2 text-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span>{event.minute}{event.addedMinute ? `+${event.addedMinute}` : ''}' {event.type.replaceAll('_', ' ')} · {event.type === 'substitution' ? `${event.playerName} off, ${event.relatedName} on` : event.playerName || event.detail}{event.assistName ? ` (assist ${event.assistName})` : ''}</span>
-                <span className="flex gap-3">
-                  {canCorrect && event.type === 'goal' && (
-                    <button type="button" className="text-xs font-bold text-[#f5c518]" onClick={() => setEditingGoal(event.id)}>Correct</button>
-                  )}
-                  {canRun && !locked && (
-                    <button type="button" className="text-xs font-bold text-red-300" onClick={() => {
-                      const reason = window.prompt('Reason for removing this event');
-                      if (reason) act(`/api/matches/${id}/events/${event.id}/void`, { reason, disallowed: event.type === 'goal' });
-                    }}>Void</button>
-                  )}
-                </span>
+                {!finished && (
+                  <span className="flex gap-3">
+                    {canCorrect && event.type === 'goal' && (
+                      <button type="button" className="text-xs font-bold text-[#f5c518]" onClick={() => setEditingGoal(event.id)}>Correct</button>
+                    )}
+                    {canRun && (
+                      <button type="button" className="text-xs font-bold text-red-300" onClick={() => {
+                        const reason = window.prompt('Reason for removing this event');
+                        if (reason) act(`/api/matches/${id}/events/${event.id}/void`, { reason, disallowed: event.type === 'goal' });
+                      }}>Void</button>
+                    )}
+                  </span>
+                )}
               </div>
-              {editingGoal === event.id && event.type === 'goal' && (
+              {!finished && editingGoal === event.id && event.type === 'goal' && (
                 <GoalCorrect event={event} matchId={id} disabled={busy} onSave={(body) => act(`/api/matches/${id}/events/${event.id}`, body, 'PATCH')} />
               )}
             </li>
@@ -408,7 +417,6 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
           {!events.length && <li className="text-sm text-white/40">No events yet.</li>}
         </ul>
       </section>
-      <ManualStats matchId={id} disabled={busy || role === 'reader'} onSave={(body) => act(`/api/matches/${id}/stats`, body)} />
     </div>
   );
 }
@@ -523,7 +531,9 @@ function LineupSide({
       onSave({ teamId, starters, bench, formation: shape });
     }}>
       <label className="mt-3 block text-xs font-bold text-white/45">Formation
-        <input className={inputClass} value={shape} onChange={(event) => setShape(event.target.value)} />
+        <select className={inputClass} value={FORMATIONS.includes(shape) ? shape : FORMATIONS[0]} onChange={(event) => setShape(event.target.value)}>
+          {FORMATIONS.map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
       </label>
       <ul className="mt-3 max-h-72 space-y-1 overflow-auto">
         {roster.map((player) => {
@@ -531,13 +541,11 @@ function LineupSide({
           return (
             <li key={player.id} className="flex items-center justify-between gap-2 text-sm">
               <span>{player.number} {player.name}</span>
-              <span className="flex gap-1">
-                {(['starter', 'bench', 'out'] as const).map((choice) => (
-                  <button key={choice} type="button" onClick={() => place(player.id, choice)} className={`rounded-lg px-2 py-1 text-[11px] font-bold ${role === choice ? 'bg-[#f5c518] text-[#102018]' : 'bg-white/10 text-white/70'}`}>
-                    {choice === 'out' ? 'Out' : choice === 'starter' ? 'XI' : 'Bench'}
-                  </button>
-                ))}
-              </span>
+              <select className="rounded-lg bg-[#0c1424] px-2 py-1 text-xs font-bold" value={role} onChange={(event) => place(player.id, event.target.value as 'starter' | 'bench' | 'out')}>
+                <option value="starter">Starting XI</option>
+                <option value="bench">Bench</option>
+                <option value="out">Out</option>
+              </select>
             </li>
           );
         })}
@@ -619,7 +627,55 @@ function usePitch(matchId: string) {
   }, [matchId, version]);
 }
 
-function GoalForm({ matchId, disabled, onSubmit }: { matchId: string; disabled: boolean; onSubmit: (body: Record<string, unknown>) => void }) {
+function EventPicker({
+  matchId,
+  period,
+  disabled,
+  onEvent,
+  onStat,
+}: {
+  matchId: string;
+  period?: string;
+  disabled: boolean;
+  onEvent: (body: Record<string, unknown>) => void;
+  onStat: (body: Record<string, unknown>) => void;
+}) {
+  const [tool, setTool] = useState('goal');
+  const tools = [
+    { id: 'goal', label: 'Goal' },
+    { id: 'card', label: 'Card' },
+    { id: 'sub', label: 'Substitution' },
+    { id: 'other', label: 'Other event' },
+    { id: 'stat', label: 'Manual statistic' },
+  ];
+  return (
+    <section className="mt-4 rounded-2xl border border-white/10 bg-[#10192b] p-4">
+      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Match action">
+        {tools.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={tool === item.id}
+            onClick={() => setTool(item.id)}
+            className={`rounded-full px-3 py-1.5 text-sm font-bold ${tool === item.id ? 'bg-[#f5c518] text-[#102018]' : 'bg-white/10 text-white/70'}`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      <div className="mt-4">
+        {tool === 'goal' && <GoalForm matchId={matchId} disabled={disabled} onSubmit={onEvent} bare />}
+        {tool === 'card' && <CardForm matchId={matchId} disabled={disabled} onSubmit={onEvent} bare />}
+        {tool === 'sub' && <SubForm matchId={matchId} disabled={disabled} onSubmit={onEvent} bare />}
+        {tool === 'other' && <OtherForm matchId={matchId} period={period} disabled={disabled} onSubmit={onEvent} bare />}
+        {tool === 'stat' && <ManualStats matchId={matchId} disabled={disabled} onSave={onStat} bare />}
+      </div>
+    </section>
+  );
+}
+
+function GoalForm({ matchId, disabled, onSubmit, bare = false }: { matchId: string; disabled: boolean; onSubmit: (body: Record<string, unknown>) => void; bare?: boolean }) {
   const fixture = getFixture(matchId);
   const pitch = usePitch(matchId);
   const clock = useMatchClock(fixture?.status === 'live' ? matchId : undefined);
@@ -640,11 +696,11 @@ function GoalForm({ matchId, disabled, onSubmit }: { matchId: string; disabled: 
   const scorers = onTeam(scorerTeam);
   const assisters = onTeam(credited).filter((id) => id !== playerId);
   return (
-    <form className="rounded-2xl border border-white/10 bg-[#10192b] p-4" onSubmit={(event) => {
+    <form className={bare ? '' : 'rounded-2xl border border-white/10 bg-[#10192b] p-4'} onSubmit={(event) => {
       event.preventDefault();
       onSubmit({ type: 'goal', side, goalType, playerId, assistId: goalType === 'own_goal' ? '' : assistId, minute: Number(minute), addedMinute: Number(addedMinute), clientKey: crypto.randomUUID() });
     }}>
-      <h2 className="font-black">Goal</h2>
+      {!bare && <h2 className="font-black">Goal</h2>}
       <div className="mt-3 grid grid-cols-2 gap-2">
         <Select label="Team credited" value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={[{ id: 'home', label: 'Home' }, { id: 'away', label: 'Away' }]} />
         <Select label="Type" value={goalType} onChange={setGoalType} options={[{ id: 'open_play', label: 'Open play' }, { id: 'penalty', label: 'Penalty' }, { id: 'free_kick', label: 'Free kick' }, { id: 'own_goal', label: 'Own goal' }]} />
@@ -658,7 +714,7 @@ function GoalForm({ matchId, disabled, onSubmit }: { matchId: string; disabled: 
   );
 }
 
-function CardForm({ matchId, disabled, onSubmit }: { matchId: string; disabled: boolean; onSubmit: (body: Record<string, unknown>) => void }) {
+function CardForm({ matchId, disabled, onSubmit, bare = false }: { matchId: string; disabled: boolean; onSubmit: (body: Record<string, unknown>) => void; bare?: boolean }) {
   const fixture = getFixture(matchId);
   const pitch = usePitch(matchId);
   const [side, setSide] = useState<'home' | 'away'>('home');
@@ -669,11 +725,11 @@ function CardForm({ matchId, disabled, onSubmit }: { matchId: string; disabled: 
   const teamId = side === 'home' ? fixture.homeId : fixture.awayId;
   const options = [...pitch.entries()].filter(([, row]) => row.teamId === teamId && row.on).map(([id]) => ({ id, label: playerName(id) }));
   return (
-    <form className="rounded-2xl border border-white/10 bg-[#10192b] p-4" onSubmit={(event) => {
+    <form className={bare ? '' : 'rounded-2xl border border-white/10 bg-[#10192b] p-4'} onSubmit={(event) => {
       event.preventDefault();
       onSubmit({ type: 'card', side, playerId, cardType, detail, clientKey: crypto.randomUUID() });
     }}>
-      <h2 className="font-black">Card</h2>
+      {!bare && <h2 className="font-black">Card</h2>}
       <div className="mt-3 grid grid-cols-2 gap-2">
         <Select label="Team" value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={[{ id: 'home', label: 'Home' }, { id: 'away', label: 'Away' }]} />
         <Select label="Card" value={cardType} onChange={setCardType} options={[{ id: 'yellow', label: 'Yellow' }, { id: 'second_yellow', label: 'Second yellow' }, { id: 'red', label: 'Direct red' }]} />
@@ -685,7 +741,7 @@ function CardForm({ matchId, disabled, onSubmit }: { matchId: string; disabled: 
   );
 }
 
-function SubForm({ matchId, disabled, onSubmit }: { matchId: string; disabled: boolean; onSubmit: (body: Record<string, unknown>) => void }) {
+function SubForm({ matchId, disabled, onSubmit, bare = false }: { matchId: string; disabled: boolean; onSubmit: (body: Record<string, unknown>) => void; bare?: boolean }) {
   const fixture = getFixture(matchId);
   const pitch = usePitch(matchId);
   const [side, setSide] = useState<'home' | 'away'>('home');
@@ -696,11 +752,11 @@ function SubForm({ matchId, disabled, onSubmit }: { matchId: string; disabled: b
   const outgoing = [...pitch.entries()].filter(([, row]) => row.teamId === teamId && row.on).map(([id]) => ({ id, label: playerName(id) }));
   const incoming = [...pitch.entries()].filter(([, row]) => row.teamId === teamId && !row.used && !row.dismissed).map(([id]) => ({ id, label: playerName(id) }));
   return (
-    <form className="rounded-2xl border border-white/10 bg-[#10192b] p-4" onSubmit={(event) => {
+    <form className={bare ? '' : 'rounded-2xl border border-white/10 bg-[#10192b] p-4'} onSubmit={(event) => {
       event.preventDefault();
       onSubmit({ type: 'substitution', side, playerId, relatedPlayerId, detail: 'tactical', clientKey: crypto.randomUUID() });
     }}>
-      <h2 className="font-black">Substitution</h2>
+      {!bare && <h2 className="font-black">Substitution</h2>}
       <div className="mt-3 grid gap-2">
         <Select label="Team" value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={[{ id: 'home', label: 'Home' }, { id: 'away', label: 'Away' }]} />
         <Select label="Off" value={playerId} onChange={setPlayerId} options={[{ id: '', label: 'Choose' }, ...outgoing]} />
@@ -711,7 +767,7 @@ function SubForm({ matchId, disabled, onSubmit }: { matchId: string; disabled: b
   );
 }
 
-function OtherForm({ matchId, period, disabled, onSubmit }: { matchId: string; period?: string; disabled: boolean; onSubmit: (body: Record<string, unknown>) => void }) {
+function OtherForm({ matchId, period, disabled, onSubmit, bare = false }: { matchId: string; period?: string; disabled: boolean; onSubmit: (body: Record<string, unknown>) => void; bare?: boolean }) {
   const [type, setType] = useState('foul');
   const [side, setSide] = useState<'home' | 'away'>('home');
   const [detail, setDetail] = useState('');
@@ -722,13 +778,13 @@ function OtherForm({ matchId, period, disabled, onSubmit }: { matchId: string; p
   const takers = [...pitch.entries()].filter(([, row]) => row.teamId === teamId && !row.dismissed).map(([id]) => ({ id, label: playerName(id) }));
   const [playerId, setPlayerId] = useState('');
   return (
-    <form className="rounded-2xl border border-white/10 bg-[#10192b] p-4" onSubmit={(event) => {
+    <form className={bare ? '' : 'rounded-2xl border border-white/10 bg-[#10192b] p-4'} onSubmit={(event) => {
       event.preventDefault();
       if (type === 'added_time') onSubmit({ type, addedMinute: Number(detail), clientKey: crypto.randomUUID() });
       else if (type === 'penalty_kick') onSubmit({ type, side, playerId, scored, clientKey: crypto.randomUUID() });
       else onSubmit({ type, side, detail, playerId: playerId || undefined, clientKey: crypto.randomUUID() });
     }}>
-      <h2 className="font-black">Other event</h2>
+      {!bare && <h2 className="font-black">Other event</h2>}
       <div className="mt-3 grid gap-2">
         <Select label="Event" value={type} onChange={setType} options={['foul', 'free_kick', 'corner', 'offside', 'save', 'injury', 'penalty_awarded', 'penalty_missed', 'penalty_saved', 'var', 'added_time', 'note', 'penalty_kick'].map((id) => ({ id, label: id.replaceAll('_', ' ') }))} />
         {type !== 'added_time' && <Select label="Team" value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={[{ id: 'home', label: 'Home' }, { id: 'away', label: 'Away' }]} />}
@@ -746,13 +802,13 @@ function OtherForm({ matchId, period, disabled, onSubmit }: { matchId: string; p
   );
 }
 
-function ManualStats({ matchId, disabled, onSave }: { matchId: string; disabled: boolean; onSave: (body: Record<string, unknown>) => void }) {
+function ManualStats({ matchId, disabled, onSave, bare = false }: { matchId: string; disabled: boolean; onSave: (body: Record<string, unknown>) => void; bare?: boolean }) {
   const [metric, setMetric] = useState('corners');
   const [side, setSide] = useState('home');
   const [value, setValue] = useState('');
   return (
-    <form className="mt-4 rounded-2xl border border-white/10 bg-[#10192b] p-4" onSubmit={(event) => { event.preventDefault(); onSave({ metric, side, value: Number(value) }); }}>
-      <h2 className="font-black">Manual team statistic</h2>
+    <form className={bare ? '' : 'mt-4 rounded-2xl border border-white/10 bg-[#10192b] p-4'} onSubmit={(event) => { event.preventDefault(); onSave({ metric, side, value: Number(value) }); }}>
+      {!bare && <h2 className="font-black">Manual team statistic</h2>}
       <p className="mt-1 text-xs text-white/40">Only numbers an official enters are stored. Possession and shots are never invented.</p>
       <div className="mt-3 grid gap-2 sm:grid-cols-4">
         <Select label="Stat" value={metric} onChange={setMetric} options={['possession', 'shots', 'shots_on_target', 'shots_off_target', 'blocked_shots', 'corners', 'fouls', 'offsides', 'saves', 'passes', 'pass_accuracy'].map((id) => ({ id, label: id.replaceAll('_', ' ') }))} />

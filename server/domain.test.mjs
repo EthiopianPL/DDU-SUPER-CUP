@@ -217,6 +217,12 @@ test('match events, permissions, clock, and standings stay consistent', async ()
     const ended = await call(`/api/matches/${matchId}/clock`, { method: 'POST', cookie: admin, body: { action: 'full_time', version } });
     assert.equal(ended.data.snapshot.matches.find((match) => match.id === matchId).confirmed, false);
     assert.equal(groupPoints(ended.data.snapshot.matches, 'software-engineering'), before);
+    const lockedEdit = await call(`/api/matches/${matchId}/events`, {
+      method: 'POST',
+      cookie: admin,
+      body: { type: 'goal', side: 'home', playerId: homeAssist.playerId, goalType: 'open_play', clientKey: 'after-ft', version: ended.data.snapshot.matches.find((match) => match.id === matchId).version },
+    });
+    assert.equal(lockedEdit.status, 400);
     version = ended.data.snapshot.matches.find((match) => match.id === matchId).version;
     const confirmed = await call(`/api/matches/${matchId}/clock`, { method: 'POST', cookie: admin, body: { action: 'confirm', version } });
     assert.equal(confirmed.status, 200, confirmed.data.error);
