@@ -1,0 +1,151 @@
+CREATE TABLE IF NOT EXISTS users (
+  id VARCHAR(64) PRIMARY KEY,
+  username VARCHAR(64) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  role VARCHAR(32) NOT NULL,
+  created_at BIGINT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS sessions (
+  token VARCHAR(128) PRIMARY KEY,
+  user_id VARCHAR(64) NOT NULL,
+  expires_at BIGINT NOT NULL,
+  CONSTRAINT fk_sessions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS competitions (
+  id VARCHAR(64) PRIMARY KEY,
+  name VARCHAR(160) NOT NULL,
+  kind VARCHAR(32) NOT NULL,
+  rules_json MEDIUMTEXT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS teams (
+  id VARCHAR(128) PRIMARY KEY,
+  name VARCHAR(160) NOT NULL,
+  short_name VARCHAR(16) NOT NULL,
+  college VARCHAR(160) NOT NULL,
+  group_id VARCHAR(8) NOT NULL,
+  color VARCHAR(16) NOT NULL,
+  pitch VARCHAR(160) NOT NULL,
+  coach VARCHAR(160) NOT NULL DEFAULT '',
+  crest_url VARCHAR(255) NOT NULL DEFAULT '',
+  status VARCHAR(32) NOT NULL DEFAULT 'active'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS players (
+  id VARCHAR(160) PRIMARY KEY,
+  team_id VARCHAR(128) NOT NULL,
+  name VARCHAR(160) NOT NULL,
+  position VARCHAR(8) NOT NULL,
+  number INT NOT NULL,
+  nationality VARCHAR(80) NOT NULL DEFAULT '',
+  registered TINYINT NOT NULL DEFAULT 1,
+  active TINYINT NOT NULL DEFAULT 1,
+  photo_url VARCHAR(255) NOT NULL DEFAULT '',
+  CONSTRAINT fk_players_team FOREIGN KEY (team_id) REFERENCES teams(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS matches (
+  id VARCHAR(64) PRIMARY KEY,
+  competition_id VARCHAR(64) NOT NULL,
+  group_id VARCHAR(8) NOT NULL,
+  matchday INT NOT NULL,
+  home_id VARCHAR(128) NOT NULL,
+  away_id VARCHAR(128) NOT NULL,
+  venue VARCHAR(160) NOT NULL,
+  kickoff_date VARCHAR(10) NOT NULL,
+  kickoff_time VARCHAR(5) NOT NULL,
+  status VARCHAR(32) NOT NULL,
+  period VARCHAR(32) NOT NULL,
+  elapsed_ms BIGINT NOT NULL DEFAULT 0,
+  running_since BIGINT NULL,
+  added_ms BIGINT NOT NULL DEFAULT 0,
+  half_ms BIGINT NOT NULL,
+  regulation_ms BIGINT NOT NULL,
+  et_half_ms BIGINT NOT NULL,
+  allow_extra TINYINT NOT NULL DEFAULT 0,
+  home_score INT NOT NULL DEFAULT 0,
+  away_score INT NOT NULL DEFAULT 0,
+  pens_home INT NULL,
+  pens_away INT NULL,
+  confirmed TINYINT NOT NULL DEFAULT 0,
+  referee VARCHAR(160) NOT NULL DEFAULT '',
+  assistant1 VARCHAR(160) NOT NULL DEFAULT '',
+  assistant2 VARCHAR(160) NOT NULL DEFAULT '',
+  formation_home VARCHAR(16) NOT NULL DEFAULT '4-2-3-1',
+  formation_away VARCHAR(16) NOT NULL DEFAULT '4-2-3-1',
+  version INT NOT NULL DEFAULT 1,
+  updated_at BIGINT NOT NULL,
+  CONSTRAINT fk_matches_home FOREIGN KEY (home_id) REFERENCES teams(id),
+  CONSTRAINT fk_matches_away FOREIGN KEY (away_id) REFERENCES teams(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS match_squad (
+  match_id VARCHAR(64) NOT NULL,
+  team_id VARCHAR(128) NOT NULL,
+  player_id VARCHAR(160) NOT NULL,
+  role VARCHAR(16) NOT NULL,
+  sort_index INT NOT NULL,
+  PRIMARY KEY (match_id, player_id),
+  CONSTRAINT fk_squad_match FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE,
+  CONSTRAINT fk_squad_player FOREIGN KEY (player_id) REFERENCES players(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS match_events (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  match_id VARCHAR(64) NOT NULL,
+  client_key VARCHAR(80) NULL UNIQUE,
+  type VARCHAR(32) NOT NULL,
+  team_id VARCHAR(128) NULL,
+  credited_team_id VARCHAR(128) NULL,
+  player_id VARCHAR(160) NULL,
+  assist_id VARCHAR(160) NULL,
+  related_player_id VARCHAR(160) NULL,
+  minute INT NOT NULL,
+  added_minute INT NOT NULL DEFAULT 0,
+  period VARCHAR(32) NOT NULL,
+  goal_type VARCHAR(32) NULL,
+  card_type VARCHAR(32) NULL,
+  detail VARCHAR(500) NOT NULL DEFAULT '',
+  counts_for_score TINYINT NOT NULL DEFAULT 0,
+  shootout TINYINT NOT NULL DEFAULT 0,
+  scored TINYINT NULL,
+  voided TINYINT NOT NULL DEFAULT 0,
+  void_reason VARCHAR(500) NOT NULL DEFAULT '',
+  created_by VARCHAR(64) NULL,
+  created_at BIGINT NOT NULL,
+  CONSTRAINT fk_events_match FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS manual_stats (
+  match_id VARCHAR(64) NOT NULL,
+  team_id VARCHAR(128) NOT NULL,
+  metric VARCHAR(64) NOT NULL,
+  value DOUBLE NOT NULL,
+  PRIMARY KEY (match_id, team_id, metric),
+  CONSTRAINT fk_stats_match FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS news (
+  id VARCHAR(128) PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  category VARCHAR(80) NOT NULL,
+  time_label VARCHAR(80) NOT NULL,
+  summary TEXT NOT NULL,
+  body MEDIUMTEXT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS audit_log (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  actor_id VARCHAR(64) NULL,
+  actor_name VARCHAR(64) NOT NULL,
+  action VARCHAR(64) NOT NULL,
+  entity VARCHAR(64) NOT NULL,
+  entity_id VARCHAR(64) NOT NULL,
+  before_json MEDIUMTEXT NULL,
+  after_json MEDIUMTEXT NULL,
+  created_at BIGINT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_events_match ON match_events (match_id, voided, type);

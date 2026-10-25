@@ -181,7 +181,8 @@ function onPitch(db, match, playerId, teamId, beforeId = null) {
 
 export function seedDatabase(db, source, password) {
   const existing = db.prepare('SELECT COUNT(*) AS total FROM users').get();
-  if (existing.total > 0) return false;
+  if (Number(existing.total) > 0) return false;
+  if (db.dialect === 'mysql') return seedAccount(db, password);
 
   transaction(db, () => {
     const now = Date.now();
@@ -288,6 +289,27 @@ export function seedDatabase(db, source, password) {
     const insertNews = db.prepare('INSERT INTO news (id, title, category, time_label, summary, body) VALUES (?, ?, ?, ?, ?, ?)');
     for (const article of source.news) insertNews.run(article.id, article.title, article.category, article.time, article.summary, article.body);
     audit(db, { id: 'user-admin', username: 'system' }, 'seed', 'competition', 'super-cup', null, { matches: source.fixtures.length });
+  });
+  return true;
+}
+
+function seedAccount(db, password) {
+  transaction(db, () => {
+    const now = Date.now();
+    db.prepare('INSERT INTO users (id, username, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)').run(
+      'user-admin',
+      'admin',
+      hashPassword(password),
+      'super_admin',
+      now,
+    );
+    db.prepare('INSERT INTO competitions (id, name, kind, rules_json) VALUES (?, ?, ?, ?)').run(
+      'super-cup',
+      'Dire Dawa University Super Cup',
+      'groups',
+      JSON.stringify(DEFAULT_RULES),
+    );
+    audit(db, { id: 'user-admin', username: 'system' }, 'seed', 'competition', 'super-cup', null, { teams: 0, matches: 0 });
   });
   return true;
 }
@@ -1012,8 +1034,12 @@ export function saveManualStat(db, actor, matchId, input) {
     assertNotFinished(match);
     if (match.confirmed && !can(actor, 'match.correct')) throw new RuleError('This result is confirmed and locked.');
     const teamId = sideTeam(match, input.side);
-    db.prepare(`INSERT INTO manual_stats (match_id, team_id, metric, value) VALUES (?, ?, ?, ?)
-      ON CONFLICT(match_id, team_id, metric) DO UPDATE SET value = excluded.value`).run(matchId, teamId, metric, value);
+    const upsert = db.dialect === 'mysql'
+      ? `INSERT INTO manual_stats (match_id, team_id, metric, value) VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE value = VALUES(value)`
+      : `INSERT INTO manual_stats (match_id, team_id, metric, value) VALUES (?, ?, ?, ?)
+         ON CONFLICT(match_id, team_id, metric) DO UPDATE SET value = excluded.value`;
+    db.prepare(upsert).run(matchId, teamId, metric, value);
     audit(db, actor, 'stat.manual', 'match', matchId, null, { teamId, metric, value });
     return { ok: true };
   });

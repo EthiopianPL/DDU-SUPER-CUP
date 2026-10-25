@@ -2,7 +2,7 @@
 
 Department football league. Six groups, four departments in each group.
 
-The public site and the match desk read from one server. Scores, cards, substitutions, and the clock are stored in SQLite and checked in a transaction. Standings use confirmed full-time results only.
+The public site and the match desk read from one server. Scores, cards, substitutions, and the clock are stored in MySQL and checked in a transaction. Standings use confirmed full-time results only.
 
 ## Running the code
 
@@ -14,4 +14,6 @@ Run `npm test` to check goals, cards, substitutions, permissions, and standings.
 
 Run `npm run build` and then `npm start` to serve the built site and the API together.
 
-The desk signs in as `admin`. Set `ADMIN_PASSWORD` on the server if the default password should not be used. The database file is `data/supercup.db`.
+The desk signs in as `admin`. Set `ADMIN_PASSWORD` on the server if the default password should not be used.
+
+The match database is MySQL. Copy `.env.example` to `.env` and set `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USER`, and `MYSQL_PASSWORD`. The server creates the tables on startup and adds the desk account when the database is empty. Tests still use a temporary SQLite file through `DDU_DB`.
