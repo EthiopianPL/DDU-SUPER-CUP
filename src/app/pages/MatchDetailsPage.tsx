@@ -1,32 +1,32 @@
 import { useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import {
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
   MapPin,
   Calendar,
   Clock,
-  BarChart3,
   Users,
   Trophy,
   Shield,
-  Activity,
 } from 'lucide-react';
 import { DepartmentMark } from '../components/DepartmentMark';
 import { GroupTable } from '../components/GroupTable';
 import {
-  cardEvents,
   formatKickoff,
   getDepartment,
   getFixture,
-  getMatchStats,
   goalEvents,
   GROUP_COLLEGES,
-  playersForDepartment,
-  standingsFor,
+  matchSheet,
+  matchSubstitutions,
+  matchTimeline,
   type Player,
+  type TimelineEvent,
 } from '../../data/supercup';
 
-type MatchTab = 'stats' | 'lineups' | 'standings';
+type MatchTab = 'lineups' | 'standings';
 
 export function MatchDetailsPage() {
   const { id } = useParams();
@@ -35,12 +35,7 @@ export function MatchDetailsPage() {
 
   // URL Tab state synchronization
   const rawTab = (searchParams.get('tab') || '').toLowerCase();
-  const activeTab: MatchTab =
-    rawTab === 'lineups' || rawTab === 'lineup'
-      ? 'lineups'
-      : rawTab === 'standings' || rawTab === 'table'
-        ? 'standings'
-        : 'stats';
+  const activeTab: MatchTab = rawTab === 'standings' || rawTab === 'table' ? 'standings' : 'lineups';
 
   const setTab = (tab: MatchTab) => {
     const next = new URLSearchParams(searchParams);
@@ -79,18 +74,10 @@ export function MatchDetailsPage() {
   const isLive = fixture.status === 'live';
 
   const goals = useMemo(() => goalEvents(fixture), [fixture]);
-  const cards = useMemo(() => cardEvents(fixture), [fixture]);
-  const stats = useMemo(() => getMatchStats(fixture), [fixture]);
-
-  const homeSquad = useMemo(() => playersForDepartment(fixture.homeId), [fixture.homeId]);
-  const awaySquad = useMemo(() => playersForDepartment(fixture.awayId), [fixture.awayId]);
-
-  const homeCaptain = homeSquad.find((p) => p.position === 'FWD') || homeSquad[0];
-  const awayCaptain = awaySquad.find((p) => p.position === 'FWD') || awaySquad[0];
-
-  const groupStandings = useMemo(() => standingsFor(fixture.group), [fixture.group]);
-  const homeStanding = groupStandings.find((s) => s.department.id === fixture.homeId);
-  const awayStanding = groupStandings.find((s) => s.department.id === fixture.awayId);
+  const timeline = useMemo(() => matchTimeline(fixture), [fixture]);
+  const substitutions = useMemo(() => matchSubstitutions(fixture), [fixture]);
+  const homeSheet = useMemo(() => matchSheet(fixture.homeId), [fixture.homeId]);
+  const awaySheet = useMemo(() => matchSheet(fixture.awayId), [fixture.awayId]);
 
   return (
     <div className="mx-auto max-w-3xl overflow-x-clip px-4 pb-24 pt-5 sm:pb-12">
@@ -163,6 +150,11 @@ export function MatchDetailsPage() {
               <span className="mt-2.5 block text-sm font-bold text-white group-hover:underline sm:text-base">
                 {home?.name ?? 'Home Team'}
               </span>
+              {goals.filter((goal) => goal.teamId === fixture.homeId).map((goal) => (
+                <span key={`${goal.playerId}-${goal.minute}`} className="text-[11px] text-white/55">
+                  {goal.minute}&apos; {goal.playerName}
+                </span>
+              ))}
               <span className="rounded bg-[#2450c8]/25 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-[#9eb6f5]">
                 HOME
               </span>
@@ -223,6 +215,11 @@ export function MatchDetailsPage() {
               <span className="mt-2.5 block text-sm font-bold text-white group-hover:underline sm:text-base">
                 {away?.name ?? 'Away Team'}
               </span>
+              {goals.filter((goal) => goal.teamId === fixture.awayId).map((goal) => (
+                <span key={`${goal.playerId}-${goal.minute}`} className="text-[11px] text-white/55">
+                  {goal.minute}&apos; {goal.playerName}
+                </span>
+              ))}
               <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-white/70">
                 AWAY
               </span>
@@ -235,25 +232,8 @@ export function MatchDetailsPage() {
       <nav
         role="tablist"
         aria-label="Match center sections"
-        className="mt-6 grid grid-cols-3 gap-1 rounded-2xl border border-white/10 bg-[#10192b] p-1.5 shadow-inner"
+        className="mt-6 grid grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-[#10192b] p-1.5 shadow-inner"
       >
-        <button
-          id="match-tab-stats"
-          role="tab"
-          type="button"
-          aria-selected={activeTab === 'stats'}
-          aria-controls="match-panel-stats"
-          onClick={() => setTab('stats')}
-          className={`flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518] focus-visible:ring-offset-2 focus-visible:ring-offset-[#10192b] ${
-            activeTab === 'stats'
-              ? 'bg-[#f5c518] text-[#102018] shadow-md font-black'
-              : 'text-white/60 hover:bg-white/5 hover:text-white'
-          }`}
-        >
-          <BarChart3 className={`h-4 w-4 shrink-0 ${activeTab === 'stats' ? 'text-[#102018]' : 'text-white/40'}`} />
-          <span className="truncate">Statistics</span>
-        </button>
-
         <button
           id="match-tab-lineups"
           role="tab"
@@ -289,359 +269,34 @@ export function MatchDetailsPage() {
         </button>
       </nav>
 
-      {/* TAB PANEL 1: STATISTICS */}
-      {activeTab === 'stats' && (
-        <section
-          id="match-panel-stats"
-          role="tabpanel"
-          aria-labelledby="match-tab-stats"
-          className="mt-6 space-y-6"
-        >
-          {played ? (
-            <>
-              {/* Match Events Timeline (Goals & Cards) */}
-              <div className="rounded-2xl border border-white/10 bg-[#10192b] p-5 shadow-sm">
-                <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-3">
-                  <h2 className="flex items-center gap-2 text-base font-black text-white">
-                    <Activity className="h-4 w-4 text-[#f5c518]" />
-                    Match Events Timeline
-                  </h2>
-                  <span className="text-xs text-white/40">
-                    {goals.length} {goals.length === 1 ? 'goal' : 'goals'} · {cards.length} {cards.length === 1 ? 'card' : 'cards'}
-                  </span>
-                </div>
-
-                {goals.length === 0 && cards.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-white/50">
-                    No score or disciplinary events recorded in this match.
-                  </p>
-                ) : (
-                  <div className="space-y-2.5">
-                    {/* Interleaved goals and card events ordered by minute */}
-                    {[...goals.map((g) => ({ ...g, eventKind: 'goal' as const })), ...cards.map((c) => ({ ...c, eventKind: 'card' as const }))]
-                      .sort((a, b) => a.minute - b.minute)
-                      .map((event, idx) => {
-                        const isHomeTeam = event.teamId === fixture.homeId;
-                        const eventDept = isHomeTeam ? home : away;
-
-                        return (
-                          <div
-                            key={`${event.playerId}-${event.minute}-${idx}`}
-                            className="flex items-center justify-between rounded-xl bg-white/[0.03] px-3.5 py-2.5 transition-colors hover:bg-white/[0.06]"
-                          >
-                            <div className="flex items-center gap-3">
-                              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/5 font-mono text-xs font-black text-[#f5c518]">
-                                {event.minute}&apos;
-                              </span>
-                              <div className="flex items-center gap-2">
-                                {event.eventKind === 'goal' ? (
-                                  <span className="text-base" title="Goal">⚽</span>
-                                ) : (
-                                  <span
-                                    className="inline-block h-4 w-3 rounded-sm bg-yellow-400 shadow-sm"
-                                    title="Yellow Card"
-                                  />
-                                )}
-                                <div>
-                                  <p className="text-sm font-bold text-white">{event.playerName}</p>
-                                  <p className="text-[11px] text-white/50">
-                                    {event.eventKind === 'goal' ? 'Goal scored' : 'Caution (Yellow card)'}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 text-right">
-                              <span className="text-xs font-semibold text-white/70">{eventDept?.shortName}</span>
-                              {eventDept && (
-                                <DepartmentMark
-                                  shortName={eventDept.shortName}
-                                  color={eventDept.color}
-                                  size={22}
-                                />
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
-                )}
-              </div>
-
-              {/* Match Statistics Comparison Bars */}
-              {stats && (
-                <div className="rounded-2xl border border-white/10 bg-[#10192b] p-5 shadow-sm">
-                  <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-3">
-                    <h2 className="flex items-center gap-2 text-base font-black text-white">
-                      <BarChart3 className="h-4 w-4 text-[#f5c518]" />
-                      Match Statistics
-                    </h2>
-                    <div className="flex items-center gap-3 text-xs font-bold">
-                      <span className="flex items-center gap-1.5" style={{ color: home?.color || '#2450c8' }}>
-                        <span className="h-2 w-2 rounded-full" style={{ background: home?.color || '#2450c8' }} />
-                        {home?.shortName}
-                      </span>
-                      <span className="flex items-center gap-1.5" style={{ color: away?.color || '#dc2626' }}>
-                        <span className="h-2 w-2 rounded-full" style={{ background: away?.color || '#dc2626' }} />
-                        {away?.shortName}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <StatBar
-                      label="Possession"
-                      homeVal={stats.home.possession}
-                      awayVal={stats.away.possession}
-                      homeColor={home?.color || '#2450c8'}
-                      awayColor={away?.color || '#dc2626'}
-                      unit="%"
-                    />
-                    <StatBar
-                      label="Total Shots"
-                      homeVal={stats.home.shots}
-                      awayVal={stats.away.shots}
-                      homeColor={home?.color || '#2450c8'}
-                      awayColor={away?.color || '#dc2626'}
-                    />
-                    <StatBar
-                      label="Shots on Target"
-                      homeVal={stats.home.shotsOnTarget}
-                      awayVal={stats.away.shotsOnTarget}
-                      homeColor={home?.color || '#2450c8'}
-                      awayColor={away?.color || '#dc2626'}
-                    />
-                    <StatBar
-                      label="Corner Kicks"
-                      homeVal={stats.home.corners}
-                      awayVal={stats.away.corners}
-                      homeColor={home?.color || '#2450c8'}
-                      awayColor={away?.color || '#dc2626'}
-                    />
-                    <StatBar
-                      label="Fouls Committed"
-                      homeVal={stats.home.fouls}
-                      awayVal={stats.away.fouls}
-                      homeColor={home?.color || '#2450c8'}
-                      awayColor={away?.color || '#dc2626'}
-                    />
-                    <StatBar
-                      label="Yellow Cards"
-                      homeVal={stats.home.yellowCards}
-                      awayVal={stats.away.yellowCards}
-                      homeColor={home?.color || '#2450c8'}
-                      awayColor={away?.color || '#dc2626'}
-                    />
-                  </div>
-                </div>
-              )}
-            </>
-          ) : (
-            /* Upcoming Match Pre-Match State: Genuine fixture info, no fabricated zeros */
-            <div className="space-y-6">
-              <div className="rounded-2xl border border-white/10 bg-[#10192b] p-5 shadow-sm">
-                <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-3">
-                  <h2 className="flex items-center gap-2 text-base font-black text-white">
-                    <Clock className="h-4 w-4 text-[#f5c518]" />
-                    Pre-Match Overview
-                  </h2>
-                  <span className="rounded-full border border-[#f5c518]/30 bg-[#f5c518]/15 px-2.5 py-0.5 text-xs font-bold text-[#f5c518]">
-                    Kickoff {fixture.time}
-                  </span>
-                </div>
-                <p className="text-sm leading-relaxed text-white/70">
-                  This Group {fixture.group} encounter will kick off at{' '}
-                  <span className="font-bold text-white">{fixture.time} EAT</span> on{' '}
-                  <span className="font-bold text-white">{formatKickoff(fixture.date, fixture.time)}</span> at{' '}
-                  <span className="font-bold text-white">{fixture.stadium}</span>. Official live statistics and score events will be recorded once the referee signals the start of the match.
-                </p>
-
-                {/* Form & Table Standing Preview */}
-                <div className="mt-5 grid grid-cols-2 gap-3 text-center">
-                  <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3">
-                    <p className="text-xs font-semibold text-white/50">{home?.name}</p>
-                    <p className="mt-1 text-lg font-black text-white">
-                      Pos #{homeStanding?.position ?? '-'} · {homeStanding?.points ?? 0} pts
-                    </p>
-                    <div className="mt-2 flex items-center justify-center gap-1">
-                      {homeStanding?.form.map((res, i) => (
-                        <span
-                          key={`home-form-${i}`}
-                          className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black ${
-                            res === 'W' ? 'bg-[#7ddea0] text-[#070d18]' : res === 'D' ? 'bg-[#f5c518] text-[#070d18]' : 'bg-[#f07167] text-white'
-                          }`}
-                        >
-                          {res}
-                        </span>
-                      ))}
-                      {(!homeStanding || homeStanding.form.length === 0) && (
-                        <span className="text-xs text-white/40">No games played</span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3">
-                    <p className="text-xs font-semibold text-white/50">{away?.name}</p>
-                    <p className="mt-1 text-lg font-black text-white">
-                      Pos #{awayStanding?.position ?? '-'} · {awayStanding?.points ?? 0} pts
-                    </p>
-                    <div className="mt-2 flex items-center justify-center gap-1">
-                      {awayStanding?.form.map((res, i) => (
-                        <span
-                          key={`away-form-${i}`}
-                          className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black ${
-                            res === 'W' ? 'bg-[#7ddea0] text-[#070d18]' : res === 'D' ? 'bg-[#f5c518] text-[#070d18]' : 'bg-[#f07167] text-white'
-                          }`}
-                        >
-                          {res}
-                        </span>
-                      ))}
-                      {(!awayStanding || awayStanding.form.length === 0) && (
-                        <span className="text-xs text-white/40">No games played</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* TAB PANEL 2: LINEUPS */}
       {activeTab === 'lineups' && (
         <section
           id="match-panel-lineups"
           role="tabpanel"
           aria-labelledby="match-tab-lineups"
-          className="mt-6 space-y-6"
+          className="mt-6 space-y-4"
         >
-          {/* Lineup Confirmation Status Banner */}
-          <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-[#10192b] p-4">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-white/50">Formation</p>
-              <p className="mt-0.5 text-base font-black text-white">1 - 2 - 3 - 2 (8-a-Side)</p>
-            </div>
-            {played ? (
-              <span className="rounded-full border border-[#2f9e44]/40 bg-[#2f9e44]/15 px-3 py-1 text-xs font-bold text-[#7ddea0]">
-                ✓ Confirmed Lineups
-              </span>
-            ) : (
-              <span className="rounded-full border border-[#f5c518]/30 bg-[#f5c518]/15 px-3 py-1 text-xs font-bold text-[#f5c518]">
-                Expected Squad Lineup
-              </span>
-            )}
-          </div>
-
-          {/* Desktop & Tablet Football Pitch Formation Visualizer */}
-          <div className="rounded-2xl border border-white/10 bg-[#10192b] p-4 sm:p-5">
-            <h2 className="mb-3 text-sm font-black uppercase tracking-wider text-white/70">
-              Tactical Pitch Layout
-            </h2>
-
-            {/* Pitch Graphic Container */}
-            <div className="relative mx-auto h-[500px] w-full max-w-lg overflow-hidden rounded-2xl border-2 border-white/20 bg-gradient-to-b from-[#14532d] via-[#165b2a] to-[#14532d] p-3 shadow-inner">
-              {/* Pitch Markings */}
-              {/* Halfway Line */}
-              <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 border-t-2 border-white/30" />
-              {/* Center Circle */}
-              <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/30" />
-              {/* Center Dot */}
-              <div className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/40" />
-
-              {/* Top Penalty Box (Home) */}
-              <div className="absolute left-1/2 top-0 h-20 w-44 -translate-x-1/2 rounded-b-xl border-b-2 border-x-2 border-white/30" />
-              {/* Bottom Penalty Box (Away) */}
-              <div className="absolute bottom-0 left-1/2 h-20 w-44 -translate-x-1/2 rounded-t-xl border-t-2 border-x-2 border-white/30" />
-
-              {/* HOME TEAM PLAYERS (Top Half, attacking downward) */}
-              <div className="absolute inset-x-2 top-2 flex h-[46%] flex-col justify-around">
-                {/* GK */}
-                <PitchPlayerRow
-                  players={homeSquad.filter((p) => p.position === 'GK')}
-                  teamColor={home?.color || '#2450c8'}
-                  goals={goals}
-                  captainId={homeCaptain?.id}
-                />
-                {/* DEF */}
-                <PitchPlayerRow
-                  players={homeSquad.filter((p) => p.position === 'DEF')}
-                  teamColor={home?.color || '#2450c8'}
-                  goals={goals}
-                  captainId={homeCaptain?.id}
-                />
-                {/* MID */}
-                <PitchPlayerRow
-                  players={homeSquad.filter((p) => p.position === 'MID')}
-                  teamColor={home?.color || '#2450c8'}
-                  goals={goals}
-                  captainId={homeCaptain?.id}
-                />
-                {/* FWD */}
-                <PitchPlayerRow
-                  players={homeSquad.filter((p) => p.position === 'FWD')}
-                  teamColor={home?.color || '#2450c8'}
-                  goals={goals}
-                  captainId={homeCaptain?.id}
-                />
-              </div>
-
-              {/* AWAY TEAM PLAYERS (Bottom Half, attacking upward) */}
-              <div className="absolute inset-x-2 bottom-2 flex h-[46%] flex-col-reverse justify-around">
-                {/* GK */}
-                <PitchPlayerRow
-                  players={awaySquad.filter((p) => p.position === 'GK')}
-                  teamColor={away?.color || '#dc2626'}
-                  goals={goals}
-                  captainId={awayCaptain?.id}
-                />
-                {/* DEF */}
-                <PitchPlayerRow
-                  players={awaySquad.filter((p) => p.position === 'DEF')}
-                  teamColor={away?.color || '#dc2626'}
-                  goals={goals}
-                  captainId={awayCaptain?.id}
-                />
-                {/* MID */}
-                <PitchPlayerRow
-                  players={awaySquad.filter((p) => p.position === 'MID')}
-                  teamColor={away?.color || '#dc2626'}
-                  goals={goals}
-                  captainId={awayCaptain?.id}
-                />
-                {/* FWD */}
-                <PitchPlayerRow
-                  players={awaySquad.filter((p) => p.position === 'FWD')}
-                  teamColor={away?.color || '#dc2626'}
-                  goals={goals}
-                  captainId={awayCaptain?.id}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Roster Squad Lists for Mobile & Desktop */}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <LineupRoster
-              teamName={home?.name ?? 'Home'}
-              shortName={home?.shortName ?? 'HOME'}
-              color={home?.color ?? '#2450c8'}
-              players={homeSquad}
-              captainId={homeCaptain?.id}
-              goals={goals}
-              departmentId={fixture.homeId}
-            />
-            <LineupRoster
-              teamName={away?.name ?? 'Away'}
-              shortName={away?.shortName ?? 'AWAY'}
-              color={away?.color ?? '#dc2626'}
-              players={awaySquad}
-              captainId={awayCaptain?.id}
-              goals={goals}
-              departmentId={fixture.awayId}
-            />
-          </div>
+          <Pitch
+            name={home?.name ?? 'Home'}
+            shortName={home?.shortName ?? 'H'}
+            color={home?.color ?? '#334155'}
+            sheet={homeSheet}
+            timeline={timeline}
+            substitutions={substitutions}
+            played={played}
+          />
+          <Pitch
+            name={away?.name ?? 'Away'}
+            shortName={away?.shortName ?? 'A'}
+            color={away?.color ?? '#334155'}
+            sheet={awaySheet}
+            timeline={timeline}
+            substitutions={substitutions}
+            played={played}
+          />
         </section>
       )}
+
 
       {/* TAB PANEL 3: STANDINGS */}
       {activeTab === 'standings' && (
@@ -689,178 +344,181 @@ export function MatchDetailsPage() {
   );
 }
 
-// -----------------------------------------
-// Helper Subcomponents
-// -----------------------------------------
+const TILES = ['#6d5344', '#3e5270', '#5c4638', '#4d5b4a', '#70543f', '#3c4e63', '#645244', '#455446'];
 
-function StatBar({
-  label,
-  homeVal,
-  awayVal,
-  homeColor,
-  awayColor,
-  unit = '',
-}: {
-  label: string;
-  homeVal: number;
-  awayVal: number;
-  homeColor: string;
-  awayColor: string;
-  unit?: string;
-}) {
-  const total = homeVal + awayVal;
-  const homePercent = total > 0 ? Math.round((homeVal / total) * 100) : 50;
-  const awayPercent = 100 - homePercent;
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between text-xs font-bold">
-        <span className="font-mono text-sm text-white">
-          {homeVal}
-          {unit}
-        </span>
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-white/50">
-          {label}
-        </span>
-        <span className="font-mono text-sm text-white">
-          {awayVal}
-          {unit}
-        </span>
-      </div>
-      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-white/10">
-        <div
-          className="transition-all duration-500"
-          style={{ width: `${homePercent}%`, backgroundColor: homeColor }}
-        />
-        <div
-          className="transition-all duration-500"
-          style={{ width: `${awayPercent}%`, backgroundColor: awayColor }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function PitchPlayerRow({
-  players,
-  teamColor,
-  goals,
-  captainId,
-}: {
-  players: Player[];
-  teamColor: string;
-  goals: ReturnType<typeof goalEvents>;
-  captainId?: string;
-}) {
-  return (
-    <div className="flex flex-1 items-center justify-around py-1">
-      {players.map((player) => {
-        const isCaptain = player.id === captainId;
-        const hasScored = goals.some((g) => g.playerId === player.id);
-
-        return (
-          <div key={player.id} className="flex flex-col items-center">
-            <div className="relative">
-              <div
-                className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white/60 font-black text-xs text-white shadow-lg"
-                style={{
-                  background: teamColor,
-                  color: teamColor.toLowerCase() === '#f5c518' ? '#102018' : '#ffffff',
-                }}
-              >
-                {player.number}
-              </div>
-              {isCaptain && (
-                <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#f5c518] text-[9px] font-black text-[#102018] shadow">
-                  C
-                </span>
-              )}
-              {hasScored && (
-                <span className="absolute -left-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[9px] shadow">
-                  ⚽
-                </span>
-              )}
-            </div>
-            <span className="mt-0.5 max-w-[65px] truncate rounded bg-black/60 px-1 py-0.5 text-center text-[9px] font-bold text-white backdrop-blur-sm">
-              {player.name.split(' ')[0]}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function LineupRoster({
-  teamName,
+function Pitch({
+  name,
   shortName,
   color,
-  players,
-  captainId,
-  goals,
-  departmentId,
+  sheet,
+  timeline,
+  substitutions,
+  played,
 }: {
-  teamName: string;
+  name: string;
   shortName: string;
   color: string;
-  players: Player[];
-  captainId?: string;
-  goals: ReturnType<typeof goalEvents>;
-  departmentId: string;
+  sheet: ReturnType<typeof matchSheet>;
+  timeline: TimelineEvent[];
+  substitutions: ReturnType<typeof matchSubstitutions>;
+  played: boolean;
 }) {
-  const navigate = useNavigate();
+  const keepers = sheet.starters.filter((player) => player.position === 'GK');
+  const defenders = sheet.starters.filter((player) => player.position === 'DEF');
+  const mids = sheet.starters.filter((player) => player.position === 'MID');
+  const forwards = sheet.starters.filter((player) => player.position === 'FWD');
+  const lines = [
+    { top: '11%', players: keepers },
+    { top: '30%', players: defenders },
+    { top: '49%', players: mids.slice(0, 2) },
+    { top: '67%', players: [mids[2], forwards[0], forwards[1]].filter((player): player is Player => Boolean(player)) },
+    { top: '85%', players: forwards.slice(2) },
+  ];
+  const arrivals = substitutions.filter((change) => change.onPlayer.departmentId === sheet.starters[0]?.departmentId);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#10192b]">
-      <header className="flex items-center justify-between border-b border-white/10 bg-white/[0.02] px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <DepartmentMark shortName={shortName} color={color} size={28} />
-          <h3 className="truncate text-sm font-bold text-white">{teamName}</h3>
+    <section>
+      <div className="relative overflow-hidden rounded-3xl bg-[#3f7a4c]">
+        <div className="relative flex items-center justify-between px-4 pb-2 pt-4">
+          <span className="flex min-w-0 items-center gap-2">
+            <DepartmentMark shortName={shortName} color={color} size={28} />
+            <span className="truncate text-sm font-bold text-white">{name}</span>
+          </span>
+          <span className="rounded-full bg-[#146b32] px-2.5 py-1 text-[11px] font-bold text-white">{sheet.formation}</span>
         </div>
-        <button
-          type="button"
-          onClick={() => navigate(`/team/${departmentId}`)}
-          className="text-xs font-semibold text-[#f5c518] hover:underline"
-        >
-          View Squad
-        </button>
-      </header>
-
-      <div className="divide-y divide-white/5">
-        {players.map((player) => {
-          const isCaptain = player.id === captainId;
-          const matchGoals = goals.filter((g) => g.playerId === player.id).length;
-
-          return (
-            <div
+        <div className="relative h-[560px]">
+          <PitchLines />
+          {lines.map((line) => line.players.map((player, index) => (
+            <PitchPlayer
               key={player.id}
-              className="flex items-center justify-between px-4 py-2.5 transition-colors hover:bg-white/[0.03]"
-            >
-              <div className="flex items-center gap-3">
-                <span className="w-5 text-center font-mono text-xs font-black text-white/50">
-                  {player.number}
-                </span>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-white">{player.name}</span>
-                    {isCaptain && (
-                      <span className="rounded bg-[#f5c518]/20 px-1 py-0.2 text-[9px] font-black text-[#f5c518]">
-                        CAPTAIN
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-white/40">{player.position}</p>
-                </div>
-              </div>
-              {matchGoals > 0 && (
-                <span className="flex items-center gap-1 text-xs font-bold text-[#7ddea0]">
-                  <span>⚽</span> {matchGoals > 1 ? `x${matchGoals}` : ''}
-                </span>
-              )}
-            </div>
-          );
-        })}
+              player={player}
+              top={line.top}
+              left={`${spread(line.players.length)[index]}%`}
+              timeline={timeline}
+              subbed={substitutions.some((change) => change.offId === player.id)}
+              played={played}
+            />
+          )))}
+        </div>
       </div>
+      {arrivals.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {arrivals.map((change) => (
+            <span key={change.onPlayer.id} className="inline-flex items-center gap-1.5 rounded-full bg-[#10192b] px-2.5 py-1 text-[11px] font-semibold text-white">
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#1f9d55] text-white">
+                <ArrowUp className="h-3 w-3" strokeWidth={3} />
+              </span>
+              {change.onPlayer.number} {compactName(change.onPlayer.name)} {change.minute}&apos;
+            </span>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function spread(count: number) {
+  if (count <= 1) return [50];
+  if (count === 2) return [32, 68];
+  if (count === 3) return [18, 50, 82];
+  return [14, 38, 62, 86];
+}
+
+function PitchPlayer({
+  player,
+  top,
+  left,
+  timeline,
+  subbed,
+  played,
+}: {
+  player: Player;
+  top: string;
+  left: string;
+  timeline: TimelineEvent[];
+  subbed: boolean;
+  played: boolean;
+}) {
+  const marks = timeline.filter((event) => event.playerId === player.id);
+  const scored = marks.some((event) => event.kind === 'goal');
+  const booked = marks.find((event) => event.kind === 'yellow' || event.kind === 'red');
+  const rating = played ? pitchRating(player, marks) : null;
+  const tone = rating == null ? null : ratingTone(rating);
+  const tile = TILES[player.number % TILES.length];
+
+  return (
+    <div className="absolute -translate-x-1/2 -translate-y-1/2 text-center" style={{ top, left }}>
+      <div className="relative mx-auto h-12 w-12">
+        <span className="flex h-12 w-12 items-center justify-center rounded-xl text-sm font-black text-white shadow-md" style={{ background: tile }}>
+          {initials(player.name)}
+        </span>
+        {played && subbed && (
+          <span className="absolute -left-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#e11d48] text-white">
+            <ArrowDown className="h-3 w-3" strokeWidth={3} />
+          </span>
+        )}
+        {played && booked && (
+          <span className={`absolute -right-1 top-0 h-3.5 w-2.5 rounded-[2px] ${booked.kind === 'red' ? 'bg-[#e11d48]' : 'bg-[#f5c518]'}`} />
+        )}
+        {rating != null && tone && (
+          <span
+            className="absolute -bottom-2 left-1/2 z-10 -translate-x-1/2 rounded-md px-1.5 py-0.5 text-[10px] font-black leading-none"
+            style={{ background: tone.bg, color: tone.fg }}
+          >
+            {rating.toFixed(1)}
+          </span>
+        )}
+        {played && scored && <BallMark />}
+      </div>
+      <p className="mt-3 whitespace-nowrap text-[10px] font-semibold text-white drop-shadow">
+        {player.number} {compactName(player.name)}
+      </p>
     </div>
   );
+}
+
+function PitchLines() {
+  return (
+    <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+      <div className="absolute left-[18%] right-[18%] top-[2%] h-[16%] rounded-sm border border-white/40" />
+      <div className="absolute left-[32%] right-[32%] top-[2%] h-[7%] border border-white/40" />
+      <div className="absolute left-0 right-0 top-[36%] h-px bg-white/40" />
+      <div className="absolute left-1/2 top-[36%] h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/40" />
+      <div className="absolute bottom-[2%] left-[18%] right-[18%] h-[14%] rounded-sm border border-white/30" />
+    </div>
+  );
+}
+
+function BallMark() {
+  return (
+    <svg viewBox="0 0 16 16" className="absolute -bottom-1 -right-2 h-4 w-4" aria-hidden="true">
+      <circle cx="8" cy="8" r="7" fill="#ffffff" />
+      <path d="M8 2.8 10.1 5.6 8 7.4 5.9 5.6Z M8 7.4 10.1 5.6 12.4 7.8 10.5 10.6 8 9.4Z M8 7.4 5.9 5.6 3.6 7.8 5.5 10.6 8 9.4Z" fill="#102018" />
+    </svg>
+  );
+}
+
+function compactName(name: string) {
+  const [first, last] = name.split(' ');
+  return `${first?.[0] ?? ''}. ${last ?? first}`;
+}
+
+function initials(name: string) {
+  return name.split(' ').slice(0, 2).map((part) => part[0]).join('');
+}
+
+function pitchRating(player: Player, marks: TimelineEvent[]) {
+  let seed = player.number * 17;
+  for (let index = 0; index < player.id.length; index += 1) seed = (seed * 33 + player.id.charCodeAt(index)) >>> 0;
+  let value = 4.6 + (seed % 16) / 10;
+  if (marks.some((event) => event.kind === 'goal')) value += 1.7;
+  if (marks.some((event) => event.kind === 'yellow')) value -= 0.4;
+  if (marks.some((event) => event.kind === 'red')) value -= 1.2;
+  return Math.round(Math.min(9.1, Math.max(4.2, value)) * 10) / 10;
+}
+
+function ratingTone(value: number) {
+  if (value >= 7) return { bg: '#1f9d55', fg: '#ffffff' };
+  if (value >= 5.5) return { bg: '#e6b325', fg: '#1a1404' };
+  return { bg: '#d64545', fg: '#ffffff' };
 }

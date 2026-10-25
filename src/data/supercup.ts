@@ -370,112 +370,165 @@ export function formatKickoff(date: string, time: string) {
   return value.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-export interface TeamStats {
-  possession: number;
-  shots: number;
-  shotsOnTarget: number;
-  corners: number;
-  fouls: number;
-  yellowCards: number;
-  redCards: number;
-}
-
-export interface MatchStats {
-  home: TeamStats;
-  away: TeamStats;
-}
-
-export interface MatchCardEvent {
+export interface TimelineEvent {
   minute: number;
   teamId: string;
   playerId: string;
   playerName: string;
-  type: 'yellow' | 'red';
+  kind: 'goal' | 'yellow' | 'red';
+  assistName?: string;
 }
 
-export function getMatchStats(fixture: Fixture): MatchStats | undefined {
-  if (fixture.status === 'upcoming' || fixture.homeScore == null || fixture.awayScore == null) {
-    return undefined;
+export interface MatchSheet {
+  formation: string;
+  starters: Player[];
+  bench: Player[];
+}
+
+export interface Substitution {
+  minute: number;
+  teamId: string;
+  offId: string;
+  onPlayer: Player;
+}
+
+function hashString(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function fillerPlayer(departmentId: string, slot: number, position: Player['position'], number: number, taken: Set<string>): Player {
+  const departmentIndex = Math.max(0, departments.findIndex((department) => department.id === departmentId));
+  let seed = 480 + departmentIndex * 17 + slot * 3;
+  let name = `${FIRST_NAMES[seed % FIRST_NAMES.length]} ${LAST_NAMES[seed % LAST_NAMES.length]}`;
+
+  for (let attempt = 0; taken.has(name) && attempt < 40; attempt += 1) {
+    seed += 5;
+    name = `${FIRST_NAMES[seed % FIRST_NAMES.length]} ${LAST_NAMES[(seed + attempt) % LAST_NAMES.length]}`;
   }
 
-  const homeScore = fixture.homeScore;
-  const awayScore = fixture.awayScore;
-  const isLive = fixture.status === 'live';
-  const progressRatio = isLive && fixture.minute ? Math.min(fixture.minute / 90, 1) : 1;
-
-  const scoreDiff = homeScore - awayScore;
-  const homePossession = Math.min(Math.max(50 + scoreDiff * 3 + (fixture.matchday % 2 === 0 ? 2 : -2), 38), 65);
-  const awayPossession = 100 - homePossession;
-
-  const baseHomeShots = Math.round((homeScore * 3 + 5 + (fixture.homeId.length % 3)) * progressRatio);
-  const baseAwayShots = Math.round((awayScore * 3 + 4 + (fixture.awayId.length % 3)) * progressRatio);
-
-  const homeOnTarget = Math.max(homeScore, Math.round(baseHomeShots * 0.45));
-  const awayOnTarget = Math.max(awayScore, Math.round(baseAwayShots * 0.42));
-
-  const homeCorners = Math.max(1, Math.round((3 + homeScore + (fixture.matchday % 3)) * progressRatio));
-  const awayCorners = Math.max(1, Math.round((2 + awayScore + (fixture.group.charCodeAt(0) % 3)) * progressRatio));
-
-  const homeFouls = Math.max(2, Math.round((7 + (fixture.homeId.length % 4)) * progressRatio));
-  const awayFouls = Math.max(2, Math.round((8 + (fixture.awayId.length % 4)) * progressRatio));
-
-  const homeYellow = scoreDiff < 0 ? 2 : 1;
-  const awayYellow = scoreDiff > 0 ? 2 : 1;
-
+  taken.add(name);
   return {
-    home: {
-      possession: homePossession,
-      shots: Math.max(baseHomeShots, homeOnTarget),
-      shotsOnTarget: homeOnTarget,
-      corners: homeCorners,
-      fouls: homeFouls,
-      yellowCards: homeYellow,
-      redCards: 0,
-    },
-    away: {
-      possession: awayPossession,
-      shots: Math.max(baseAwayShots, awayOnTarget),
-      shotsOnTarget: awayOnTarget,
-      corners: awayCorners,
-      fouls: awayFouls,
-      yellowCards: awayYellow,
-      redCards: 0,
-    },
+    id: `${departmentId}-x${slot}`,
+    name,
+    position,
+    number,
+    departmentId,
+    goals: 0,
+    assists: 0,
   };
 }
 
-export function cardEvents(fixture: Fixture): MatchCardEvent[] {
-  if (fixture.status === 'upcoming') return [];
+export function matchSheet(departmentId: string): MatchSheet {
+  const squad = playersForDepartment(departmentId);
+  const taken = new Set(squad.map((player) => player.name));
+  const starters = [
+    ...squad.filter((player) => player.position === 'GK'),
+    ...squad.filter((player) => player.position === 'DEF'),
+    fillerPlayer(departmentId, 0, 'DEF', 3, taken),
+    fillerPlayer(departmentId, 1, 'DEF', 6, taken),
+    ...squad.filter((player) => player.position === 'MID'),
+    ...squad.filter((player) => player.position === 'FWD'),
+    fillerPlayer(departmentId, 2, 'FWD', 7, taken),
+  ];
 
-  const events: MatchCardEvent[] = [];
-  const latestMinute = fixture.status === 'live' && fixture.minute != null ? fixture.minute : 90;
-
-  const homePlayers = playersForDepartment(fixture.homeId);
-  const awayPlayers = playersForDepartment(fixture.awayId);
-
-  const homeDefender = homePlayers.find((p) => p.position === 'DEF') || homePlayers[1];
-  const awayMidfielder = awayPlayers.find((p) => p.position === 'MID') || awayPlayers[3];
-
-  if (homeDefender && 38 <= latestMinute) {
-    events.push({
-      minute: 38,
-      teamId: fixture.homeId,
-      playerId: homeDefender.id,
-      playerName: homeDefender.name,
-      type: 'yellow',
-    });
-  }
-
-  if (awayMidfielder && 71 <= latestMinute) {
-    events.push({
-      minute: 71,
-      teamId: fixture.awayId,
-      playerId: awayMidfielder.id,
-      playerName: awayMidfielder.name,
-      type: 'yellow',
-    });
-  }
-
-  return events;
+  return {
+    formation: '4-2-3-1',
+    starters,
+    bench: [
+      fillerPlayer(departmentId, 3, 'GK', 12, taken),
+      fillerPlayer(departmentId, 4, 'DEF', 14, taken),
+      fillerPlayer(departmentId, 5, 'MID', 15, taken),
+      fillerPlayer(departmentId, 6, 'MID', 16, taken),
+      fillerPlayer(departmentId, 7, 'FWD', 17, taken),
+    ],
+  };
 }
 
+export function matchTimeline(fixture: Fixture): TimelineEvent[] {
+  if (fixture.status === 'upcoming') return [];
+
+  const limit = fixture.status === 'live' && fixture.minute != null ? fixture.minute : 90;
+  const events: TimelineEvent[] = goalEvents(fixture).map((goal) => {
+    const mids = matchSheet(goal.teamId).starters.filter((player) => player.position === 'MID' && player.id !== goal.playerId);
+    const assist = mids[hashString(`${fixture.id}:${goal.playerId}`) % Math.max(mids.length, 1)];
+    return {
+      ...goal,
+      kind: 'goal' as const,
+      assistName: assist?.name,
+    };
+  });
+
+  [fixture.homeId, fixture.awayId].forEach((teamId) => {
+    const pool = matchSheet(teamId).starters.filter((player) => player.position !== 'GK');
+    const seed = hashString(`${fixture.id}:${teamId}:cards`);
+    const used = new Set<string>();
+    const yellowCount = 1 + (seed % 3);
+
+    for (let index = 0; index < yellowCount; index += 1) {
+      const player = pool[(seed + index * 5) % pool.length];
+      if (!player || used.has(player.id)) continue;
+      used.add(player.id);
+      const minute = 14 + ((seed >> (index * 4)) % 68);
+      if (minute > limit) continue;
+      events.push({
+        minute,
+        teamId,
+        playerId: player.id,
+        playerName: player.name,
+        kind: 'yellow',
+      });
+    }
+
+    if (seed % 13 === 0) {
+      const player = pool.find((item) => !used.has(item.id)) ?? pool[0];
+      const minute = Math.min(78, 55 + (seed % 20));
+      if (player && minute <= limit) {
+        events.push({
+          minute,
+          teamId,
+          playerId: player.id,
+          playerName: player.name,
+          kind: 'red',
+        });
+      }
+    }
+  });
+
+  return events
+    .filter((event) => event.minute <= limit)
+    .sort((a, b) => a.minute - b.minute || a.playerName.localeCompare(b.playerName));
+}
+
+export function matchSubstitutions(fixture: Fixture): Substitution[] {
+  if (fixture.status === 'upcoming') return [];
+
+  const limit = fixture.status === 'live' && fixture.minute != null ? fixture.minute : 90;
+  const changes: Substitution[] = [];
+
+  [fixture.homeId, fixture.awayId].forEach((teamId) => {
+    const sheet = matchSheet(teamId);
+    const scorers = new Set(goalEvents(fixture).filter((goal) => goal.teamId === teamId).map((goal) => goal.playerId));
+    const pool = sheet.starters.filter((player) => player.position !== 'GK' && !scorers.has(player.id));
+    const seed = hashString(`${fixture.id}:${teamId}:subs`);
+    const planned = limit >= 80 ? 3 : limit >= 60 ? 1 : 0;
+    const minutes = [57 + (seed % 5), 69 + ((seed >> 2) % 6), 79 + ((seed >> 4) % 6)];
+    const used = new Set<string>();
+
+    for (let index = 0; index < planned; index += 1) {
+      const minute = minutes[index];
+      const off = pool[index];
+      const onPlayer = sheet.bench.find((player) => !used.has(player.id) && player.position === off?.position)
+        ?? sheet.bench.find((player) => !used.has(player.id) && player.position !== 'GK');
+      if (!off || !onPlayer || minute > limit) continue;
+      used.add(onPlayer.id);
+      changes.push({ minute, teamId, offId: off.id, onPlayer });
+    }
+  });
+
+  return changes;
+}
