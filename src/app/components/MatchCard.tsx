@@ -111,6 +111,11 @@ export function MatchCard({
     navigate(`/match/${id}`);
   };
 
+  const handleTeamClick = (e: React.MouseEvent | React.KeyboardEvent, teamId: string | number) => {
+    e.stopPropagation();
+    navigate(`/team/${teamId}`);
+  };
+
   // Get the current display time for live matches
   const liveDisplay = status === 'live' ? formatTime() : null;
   const progressPercentage = status === 'live' ? getProgressPercentage() : 0;
@@ -126,7 +131,8 @@ export function MatchCard({
       }}
       role="button"
       tabIndex={0}
-      className="rounded-xl overflow-hidden transition-all hover:scale-[1.02] cursor-pointer group"
+      aria-label={`Match details: ${homeTeam.name} vs ${awayTeam.name}`}
+      className="rounded-xl overflow-hidden transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518] focus-visible:ring-offset-2 focus-visible:ring-offset-[#070d18]"
       style={{
         background: '#10192b',
         border: status === 'live' ? '1px solid #e11d48' : '1px solid rgba(255, 255, 255, 0.08)',
@@ -157,9 +163,20 @@ export function MatchCard({
         <div className="flex items-center justify-between gap-4">
           {/* Home Team */}
           <div className="flex-1 text-right">
-            <div className="flex items-center justify-end gap-3 mb-3">
-              <span className="text-white font-bold text-sm sm:text-base leading-tight">{homeTeam.name}</span>
-              <div className="w-12 h-12 rounded-full overflow-hidden bg-white/10 flex items-center justify-center shadow-md">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={(e) => handleTeamClick(e, homeTeam.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  handleTeamClick(e, homeTeam.id);
+                }
+              }}
+              className="inline-flex items-center justify-end gap-3 mb-3 hover:opacity-80 transition-opacity"
+              aria-label={`View ${homeTeam.name} squad details`}
+            >
+              <span className="text-white font-bold text-sm sm:text-base leading-tight hover:underline">{homeTeam.name}</span>
+              <div className="w-12 h-12 rounded-full overflow-hidden bg-white/10 flex items-center justify-center shadow-md shrink-0">
                 {homeTeam.logo_url && !homeImageError ? (
                   <img
                     src={homeTeam.logo_url}
@@ -199,8 +216,19 @@ export function MatchCard({
 
           {/* Away Team */}
           <div className="flex-1 text-left">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-12 h-12 rounded-full overflow-hidden bg-white/10 flex items-center justify-center shadow-md">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={(e) => handleTeamClick(e, awayTeam.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  handleTeamClick(e, awayTeam.id);
+                }
+              }}
+              className="inline-flex items-center gap-3 mb-3 hover:opacity-80 transition-opacity"
+              aria-label={`View ${awayTeam.name} squad details`}
+            >
+              <div className="w-12 h-12 rounded-full overflow-hidden bg-white/10 flex items-center justify-center shadow-md shrink-0">
                 {awayTeam.logo_url && !awayImageError ? (
                   <img
                     src={awayTeam.logo_url}
@@ -217,7 +245,7 @@ export function MatchCard({
                   </div>
                 )}
               </div>
-              <span className="text-white font-bold text-sm sm:text-base leading-tight">{awayTeam.name}</span>
+              <span className="text-white font-bold text-sm sm:text-base leading-tight hover:underline">{awayTeam.name}</span>
             </div>
             {(status === 'live' || status === 'finished') && (
               <div className="text-3xl sm:text-4xl font-black text-white">

@@ -1,11 +1,24 @@
-import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
-import { ArrowDown, ArrowLeft, ArrowUp, MapPin } from 'lucide-react';
+import { useMemo } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowUp,
+  MapPin,
+  Calendar,
+  Clock,
+  Users,
+  Trophy,
+  Shield,
+} from 'lucide-react';
 import { DepartmentMark } from '../components/DepartmentMark';
+import { GroupTable } from '../components/GroupTable';
 import {
   formatKickoff,
   getDepartment,
   getFixture,
+  goalEvents,
+  GROUP_COLLEGES,
   matchSheet,
   matchSubstitutions,
   matchTimeline,
@@ -13,24 +26,44 @@ import {
   type TimelineEvent,
 } from '../../data/supercup';
 
-type DetailTab = 'summary' | 'lineups';
-
-const TABS: { id: DetailTab; label: string }[] = [
-  { id: 'summary', label: 'Summary' },
-  { id: 'lineups', label: 'Lineups' },
-];
+type MatchTab = 'lineups' | 'standings';
 
 export function MatchDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<DetailTab>('summary');
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // URL Tab state synchronization
+  const rawTab = (searchParams.get('tab') || '').toLowerCase();
+  const activeTab: MatchTab = rawTab === 'standings' || rawTab === 'table' ? 'standings' : 'lineups';
+
+  const setTab = (tab: MatchTab) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', tab);
+    setSearchParams(next);
+  };
+
   const fixture = id ? getFixture(id) : undefined;
 
+  // Unknown match ID handling
   if (!fixture) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-16 text-center">
-        <p className="text-white/60">Match not found.</p>
-        <button type="button" onClick={() => navigate('/matches')} className="mt-4 text-[#f5c518]">Back to matches</button>
+      <div className="mx-auto max-w-3xl px-4 py-20 text-center">
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-[#10192b] text-white/40">
+          <Shield className="h-8 w-8" />
+        </div>
+        <h1 className="text-2xl font-black text-white">Match Not Found</h1>
+        <p className="mt-2 text-sm text-white/60">
+          The requested fixture ID ({id || 'none'}) does not exist in the DDU Super Cup schedule.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate('/matches')}
+          className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#f5c518] px-5 py-2.5 text-sm font-bold text-[#102018] shadow-md transition-all hover:bg-[#e5b512]"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Matches
+        </button>
       </div>
     );
   }
@@ -38,223 +71,275 @@ export function MatchDetailsPage() {
   const home = getDepartment(fixture.homeId);
   const away = getDepartment(fixture.awayId);
   const played = fixture.status !== 'upcoming';
-  const timeline = matchTimeline(fixture);
-  const substitutions = matchSubstitutions(fixture);
-  const homeSheet = matchSheet(fixture.homeId);
-  const awaySheet = matchSheet(fixture.awayId);
-  const homeGoals = timeline.filter((event) => event.kind === 'goal' && event.teamId === fixture.homeId);
-  const awayGoals = timeline.filter((event) => event.kind === 'goal' && event.teamId === fixture.awayId);
+  const isLive = fixture.status === 'live';
+
+  const goals = useMemo(() => goalEvents(fixture), [fixture]);
+  const timeline = useMemo(() => matchTimeline(fixture), [fixture]);
+  const substitutions = useMemo(() => matchSubstitutions(fixture), [fixture]);
+  const homeSheet = useMemo(() => matchSheet(fixture.homeId), [fixture.homeId]);
+  const awaySheet = useMemo(() => matchSheet(fixture.awayId), [fixture.awayId]);
 
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-24 pt-5">
-      <button type="button" onClick={() => navigate('/matches')} className="mb-4 flex items-center gap-2 text-sm text-white/60">
+    <div className="mx-auto max-w-3xl overflow-x-clip px-4 pb-24 pt-5 sm:pb-12">
+      {/* Back button */}
+      <button
+        type="button"
+        onClick={() => navigate('/matches')}
+        className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-white/60 transition-colors hover:text-white"
+        aria-label="Back to matches list"
+      >
         <ArrowLeft className="h-4 w-4" />
-        Matches
+        Back to Matches
       </button>
 
-      <section className="overflow-hidden rounded-3xl border border-white/10 bg-[#10192b]">
-        <div className="px-5 pb-5 pt-5">
-          <p className="text-center text-[11px] font-semibold tracking-[0.16em] text-[#f5c518]">
-            GROUP {fixture.group} · MATCHDAY {fixture.matchday}
-          </p>
-          <p className="mt-1 text-center text-sm text-white/50">
-            {formatKickoff(fixture.date, fixture.time)} · {fixture.time}
-            {fixture.status === 'live' && fixture.minute != null ? ` · ${fixture.minute}'` : ''}
-            {fixture.status === 'finished' ? ' · Full time' : ''}
-          </p>
+      {/* Broadcast Match Header Card */}
+      <section
+        className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#10192b] p-5 shadow-xl sm:p-7"
+        aria-label="Match header"
+      >
+        {/* Subtle background team accent glows */}
+        <div
+          className="pointer-events-none absolute -left-12 -top-12 h-44 w-44 rounded-full opacity-15 blur-3xl"
+          style={{ background: home?.color || '#2450c8' }}
+        />
+        <div
+          className="pointer-events-none absolute -right-12 -top-12 h-44 w-44 rounded-full opacity-15 blur-3xl"
+          style={{ background: away?.color || '#dc2626' }}
+        />
 
-          <div className="mt-6 grid grid-cols-[1fr_auto_1fr] items-start gap-3">
-            <TeamSide
-              name={home?.name ?? 'Home'}
-              shortName={home?.shortName ?? '?'}
-              color={home?.color ?? '#334155'}
-              goals={homeGoals}
-              align="right"
-              onClick={() => home && navigate(`/team/${home.id}`)}
-            />
-            <div className="pt-3 text-center">
-              {played ? (
-                <p className="text-4xl font-black text-white">
-                  {fixture.homeScore} <span className="text-white/30">-</span> {fixture.awayScore}
-                </p>
-              ) : (
-                <p className="text-sm font-black tracking-[0.2em] text-white/40">VS</p>
-              )}
-              <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-white/40">{fixture.status}</p>
-            </div>
-            <TeamSide
-              name={away?.name ?? 'Away'}
-              shortName={away?.shortName ?? '?'}
-              color={away?.color ?? '#334155'}
-              goals={awayGoals}
-              align="left"
-              onClick={() => away && navigate(`/team/${away.id}`)}
-            />
+        {/* Competition Stage & Kickoff Details */}
+        <div className="relative border-b border-white/10 pb-4 text-center">
+          <p className="text-[11px] font-bold tracking-[0.2em] text-[#f5c518]">
+            DIRE DAWA UNIVERSITY SUPER CUP
+          </p>
+          <p className="mt-1 text-xs font-semibold text-white/70">
+            GROUP {fixture.group} · MATCHDAY {fixture.matchday} · {GROUP_COLLEGES[fixture.group]}
+          </p>
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-white/50">
+            <span className="flex items-center gap-1">
+              <Calendar className="h-3.5 w-3.5 text-white/40" />
+              {formatKickoff(fixture.date, fixture.time)}
+            </span>
+            <span className="flex items-center gap-1">
+              <Clock className="h-3.5 w-3.5 text-white/40" />
+              {fixture.time}
+            </span>
+            <span className="flex items-center gap-1">
+              <MapPin className="h-3.5 w-3.5 text-white/40" />
+              {fixture.stadium}
+            </span>
           </div>
-
-          <p className="mt-5 flex items-center justify-center gap-1 text-sm text-white/50">
-            <MapPin className="h-4 w-4" />
-            {fixture.stadium}
-          </p>
         </div>
 
-        <div className="grid grid-cols-2 border-t border-white/10">
-          {TABS.map((item) => (
+        {/* Teams and Scoreboard Grid */}
+        <div className="relative mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-6">
+          {/* Home Team */}
+          <div className="text-center sm:text-right">
             <button
-              key={item.id}
               type="button"
-              onClick={() => setTab(item.id)}
-              className={`py-3 text-sm font-bold ${tab === item.id ? 'text-[#f5c518] shadow-[inset_0_-2px_0_#f5c518]' : 'text-white/45'}`}
+              onClick={() => home && navigate(`/team/${home.id}`)}
+              className="group mx-auto flex flex-col items-center sm:ml-auto sm:mr-0 sm:items-end"
             >
-              {item.label}
+              <div className="transition-transform group-hover:scale-105">
+                <DepartmentMark
+                  shortName={home?.shortName ?? '?'}
+                  color={home?.color ?? '#2450c8'}
+                  size={56}
+                />
+              </div>
+              <span className="mt-2.5 block text-sm font-bold text-white group-hover:underline sm:text-base">
+                {home?.name ?? 'Home Team'}
+              </span>
+              {goals.filter((goal) => goal.teamId === fixture.homeId).map((goal) => (
+                <span key={`${goal.playerId}-${goal.minute}`} className="text-[11px] text-white/55">
+                  {goal.minute}&apos; {goal.playerName}
+                </span>
+              ))}
+              <span className="rounded bg-[#2450c8]/25 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-[#9eb6f5]">
+                HOME
+              </span>
             </button>
-          ))}
+          </div>
+
+          {/* Center Score & Status Display */}
+          <div className="flex flex-col items-center justify-center px-2">
+            {isLive ? (
+              <div className="text-center">
+                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-red-500/40 bg-red-500/20 px-3 py-1">
+                  <div className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+                  <span className="text-xs font-black tracking-wide text-red-500">LIVE</span>
+                  <span className="font-mono text-xs font-bold text-red-400">{fixture.minute}&apos;</span>
+                </div>
+                <div className="text-4xl font-black tracking-tight text-white sm:text-5xl">
+                  {fixture.homeScore} <span className="text-white/30">-</span> {fixture.awayScore}
+                </div>
+                <p className="mt-1 text-[11px] font-semibold text-white/50">2nd Half In Progress</p>
+              </div>
+            ) : played ? (
+              <div className="text-center">
+                <span className="mb-2 inline-block rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-white/60">
+                  Full Time
+                </span>
+                <div className="text-4xl font-black tracking-tight text-white sm:text-5xl">
+                  {fixture.homeScore} <span className="text-white/30">-</span> {fixture.awayScore}
+                </div>
+                <p className="mt-1 text-[11px] font-semibold text-white/40">Final Result</p>
+              </div>
+            ) : (
+              <div className="text-center">
+                <span className="mb-2 inline-block rounded-full border border-[#f5c518]/30 bg-[#f5c518]/15 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-[#f5c518]">
+                  Upcoming
+                </span>
+                <div className="text-2xl font-black tracking-widest text-white/40 sm:text-3xl">
+                  VS
+                </div>
+                <p className="mt-1 font-mono text-sm font-bold text-[#f5c518]">{fixture.time} EAT</p>
+              </div>
+            )}
+          </div>
+
+          {/* Away Team */}
+          <div className="text-center sm:text-left">
+            <button
+              type="button"
+              onClick={() => away && navigate(`/team/${away.id}`)}
+              className="group mx-auto flex flex-col items-center sm:ml-0 sm:mr-auto sm:items-start"
+            >
+              <div className="transition-transform group-hover:scale-105">
+                <DepartmentMark
+                  shortName={away?.shortName ?? '?'}
+                  color={away?.color ?? '#dc2626'}
+                  size={56}
+                />
+              </div>
+              <span className="mt-2.5 block text-sm font-bold text-white group-hover:underline sm:text-base">
+                {away?.name ?? 'Away Team'}
+              </span>
+              {goals.filter((goal) => goal.teamId === fixture.awayId).map((goal) => (
+                <span key={`${goal.playerId}-${goal.minute}`} className="text-[11px] text-white/55">
+                  {goal.minute}&apos; {goal.playerName}
+                </span>
+              ))}
+              <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-white/70">
+                AWAY
+              </span>
+            </button>
+          </div>
         </div>
       </section>
 
-      {tab === 'summary' && (
-        <Summary timeline={timeline} homeId={fixture.homeId} kickoff={fixture.time} played={played} />
+      {/* Match Center Segmented Navigation Tabs */}
+      <nav
+        role="tablist"
+        aria-label="Match center sections"
+        className="mt-6 grid grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-[#10192b] p-1.5 shadow-inner"
+      >
+        <button
+          id="match-tab-lineups"
+          role="tab"
+          type="button"
+          aria-selected={activeTab === 'lineups'}
+          aria-controls="match-panel-lineups"
+          onClick={() => setTab('lineups')}
+          className={`flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518] focus-visible:ring-offset-2 focus-visible:ring-offset-[#10192b] ${
+            activeTab === 'lineups'
+              ? 'bg-[#f5c518] text-[#102018] shadow-md font-black'
+              : 'text-white/60 hover:bg-white/5 hover:text-white'
+          }`}
+        >
+          <Users className={`h-4 w-4 shrink-0 ${activeTab === 'lineups' ? 'text-[#102018]' : 'text-white/40'}`} />
+          <span className="truncate">Lineups</span>
+        </button>
+
+        <button
+          id="match-tab-standings"
+          role="tab"
+          type="button"
+          aria-selected={activeTab === 'standings'}
+          aria-controls="match-panel-standings"
+          onClick={() => setTab('standings')}
+          className={`flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518] focus-visible:ring-offset-2 focus-visible:ring-offset-[#10192b] ${
+            activeTab === 'standings'
+              ? 'bg-[#f5c518] text-[#102018] shadow-md font-black'
+              : 'text-white/60 hover:bg-white/5 hover:text-white'
+          }`}
+        >
+          <Trophy className={`h-4 w-4 shrink-0 ${activeTab === 'standings' ? 'text-[#102018]' : 'text-white/40'}`} />
+          <span className="truncate">Standings</span>
+        </button>
+      </nav>
+
+      {activeTab === 'lineups' && (
+        <section
+          id="match-panel-lineups"
+          role="tabpanel"
+          aria-labelledby="match-tab-lineups"
+          className="mt-6 space-y-4"
+        >
+          <Pitch
+            name={home?.name ?? 'Home'}
+            shortName={home?.shortName ?? 'H'}
+            color={home?.color ?? '#334155'}
+            sheet={homeSheet}
+            timeline={timeline}
+            substitutions={substitutions}
+            played={played}
+          />
+          <Pitch
+            name={away?.name ?? 'Away'}
+            shortName={away?.shortName ?? 'A'}
+            color={away?.color ?? '#334155'}
+            sheet={awaySheet}
+            timeline={timeline}
+            substitutions={substitutions}
+            played={played}
+          />
+        </section>
       )}
-      {tab === 'lineups' && (
-        <Lineups
-          homeName={home?.name ?? 'Home'}
-          awayName={away?.name ?? 'Away'}
-          homeShort={home?.shortName ?? 'H'}
-          awayShort={away?.shortName ?? 'A'}
-          homeColor={home?.color ?? '#334155'}
-          awayColor={away?.color ?? '#334155'}
-          homeSheet={homeSheet}
-          awaySheet={awaySheet}
-          timeline={timeline}
-          substitutions={substitutions}
-          played={played}
-        />
-      )}
-    </div>
-  );
-}
 
-function TeamSide({
-  name,
-  shortName,
-  color,
-  goals,
-  align,
-  onClick,
-}: {
-  name: string;
-  shortName: string;
-  color: string;
-  goals: TimelineEvent[];
-  align: 'left' | 'right';
-  onClick: () => void;
-}) {
-  return (
-    <button type="button" onClick={onClick} className={`flex flex-col gap-2 ${align === 'right' ? 'items-end text-right' : 'items-start text-left'}`}>
-      <DepartmentMark shortName={shortName} color={color} size={52} />
-      <span className="text-sm font-bold text-white">{name}</span>
-      {goals.map((goal) => (
-        <span key={`${goal.playerId}-${goal.minute}`} className="text-[11px] text-white/55">
-          {goal.minute}&apos; {goal.playerName}
-        </span>
-      ))}
-    </button>
-  );
-}
 
-function Summary({
-  timeline,
-  homeId,
-  kickoff,
-  played,
-}: {
-  timeline: TimelineEvent[];
-  homeId: string;
-  kickoff: string;
-  played: boolean;
-}) {
-  if (!played) {
-    return <p className="mt-6 rounded-2xl border border-white/10 bg-[#10192b] px-4 py-8 text-center text-sm text-white/50">Kickoff is {kickoff}. Lineups are posted.</p>;
-  }
-
-  if (timeline.length === 0) {
-    return <p className="mt-6 rounded-2xl border border-white/10 bg-[#10192b] px-4 py-8 text-center text-sm text-white/50">No goals or cards yet.</p>;
-  }
-
-  return (
-    <section className="relative mt-6 rounded-2xl border border-white/10 bg-[#10192b] px-3 py-2">
-      <div className="absolute bottom-4 left-1/2 top-4 w-px bg-white/10" />
-      {timeline.map((event) => {
-        const home = event.teamId === homeId;
-        return (
-          <div key={`${event.kind}-${event.playerId}-${event.minute}`} className="relative grid grid-cols-2 py-2">
-            <div className={home ? 'pr-4 text-right' : ''} >
-              {home && <EventLine event={event} align="right" />}
+      {/* TAB PANEL 3: STANDINGS */}
+      {activeTab === 'standings' && (
+        <section
+          id="match-panel-standings"
+          role="tabpanel"
+          aria-labelledby="match-tab-standings"
+          className="mt-6 space-y-6"
+        >
+          <div>
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-black text-white">
+                  Group {fixture.group} Standings
+                </h2>
+                <p className="mt-0.5 text-xs text-white/50">{GROUP_COLLEGES[fixture.group]}</p>
+              </div>
+              <span className="rounded-full border border-[#2f9e44]/30 bg-[#2f9e44]/15 px-2.5 py-1 text-[11px] font-bold text-[#7ddea0]">
+                Top 2 Advance
+              </span>
             </div>
-            <div className={home ? '' : 'pl-4'}>
-              {!home && <EventLine event={event} align="left" />}
-            </div>
+
+            {/* Standings Table with Home and Away teams highlighted */}
+            <GroupTable
+              group={fixture.group}
+              highlightTeamIds={[fixture.homeId, fixture.awayId]}
+              homeTeamId={fixture.homeId}
+              awayTeamId={fixture.awayId}
+            />
           </div>
-        );
-      })}
-    </section>
-  );
-}
 
-function EventLine({ event, align }: { event: TimelineEvent; align: 'left' | 'right' }) {
-  const marker = <EventMark kind={event.kind} />;
-  return (
-    <div className={`flex items-center gap-2 ${align === 'right' ? 'justify-end' : ''}`}>
-      {align === 'left' && marker}
-      <span>
-        <span className="block text-sm font-semibold text-white">
-          {event.playerName} <span className="font-mono text-xs text-[#f5c518]">{event.minute}&apos;</span>
-        </span>
-        {event.kind === 'goal' && event.assistName && (
-          <span className="block text-[11px] text-white/40">Assist {event.assistName}</span>
-        )}
-      </span>
-      {align === 'right' && marker}
-    </div>
-  );
-}
-
-function EventMark({ kind }: { kind: TimelineEvent['kind'] }) {
-  if (kind === 'goal') {
-    return <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#f5c518] text-[10px] font-black text-[#102018]">G</span>;
-  }
-  return <span className={`inline-block h-4 w-3 rounded-[2px] ${kind === 'red' ? 'bg-[#e11d48]' : 'bg-[#f5c518]'}`} />;
-}
-
-function Lineups({
-  homeName,
-  awayName,
-  homeShort,
-  awayShort,
-  homeColor,
-  awayColor,
-  homeSheet,
-  awaySheet,
-  timeline,
-  substitutions,
-  played,
-}: {
-  homeName: string;
-  awayName: string;
-  homeShort: string;
-  awayShort: string;
-  homeColor: string;
-  awayColor: string;
-  homeSheet: ReturnType<typeof matchSheet>;
-  awaySheet: ReturnType<typeof matchSheet>;
-  timeline: TimelineEvent[];
-  substitutions: ReturnType<typeof matchSubstitutions>;
-  played: boolean;
-}) {
-  return (
-    <div className="mt-6 space-y-4">
-      <Pitch name={homeName} shortName={homeShort} color={homeColor} sheet={homeSheet} timeline={timeline} substitutions={substitutions} played={played} />
-      <Pitch name={awayName} shortName={awayShort} color={awayColor} sheet={awaySheet} timeline={timeline} substitutions={substitutions} played={played} />
+          {/* Live Contextual Impact Note */}
+          <div className="rounded-2xl border border-white/10 bg-[#10192b] p-4 text-xs leading-relaxed text-white/70">
+            <p className="font-bold text-white">
+              Match Impact on Group {fixture.group}
+            </p>
+            <p className="mt-1">
+              Teams highlighted with <span className="font-bold text-[#9eb6f5]">[HOME]</span> and{' '}
+              <span className="font-bold text-white">[AWAY]</span> show the current standings impact. Positions 1 & 2 qualify directly for the knockout stage following the conclusion of Matchday 3 on October 31.
+            </p>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
@@ -362,7 +447,7 @@ function PitchPlayer({
   const tile = TILES[player.number % TILES.length];
 
   return (
-    <div className="absolute w-[76px] -translate-x-1/2 -translate-y-1/2 text-center" style={{ top, left }}>
+    <div className="absolute -translate-x-1/2 -translate-y-1/2 text-center" style={{ top, left }}>
       <div className="relative mx-auto h-12 w-12">
         <span className="flex h-12 w-12 items-center justify-center rounded-xl text-sm font-black text-white shadow-md" style={{ background: tile }}>
           {initials(player.name)}
@@ -385,7 +470,7 @@ function PitchPlayer({
         )}
         {played && scored && <BallMark />}
       </div>
-      <p className="mt-3 truncate text-[10px] font-semibold text-white drop-shadow">
+      <p className="mt-3 whitespace-nowrap text-[10px] font-semibold text-white drop-shadow">
         {player.number} {compactName(player.name)}
       </p>
     </div>
