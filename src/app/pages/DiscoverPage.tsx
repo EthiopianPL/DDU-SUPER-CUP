@@ -16,6 +16,7 @@ import {
   sortFixturesByPriority,
   type GroupId,
 } from '../../data/supercup';
+import { useLeagueVersion } from '../../data/live';
 
 export type DiscoverTab = 'groups' | 'teams' | 'stats';
 
@@ -55,6 +56,7 @@ export function DiscoverPage() {
 
   // State for Stats tab (goals vs assists)
   const [statCategory, setStatCategory] = useState<'goals' | 'assists'>('goals');
+  const version = useLeagueVersion();
 
   // Groups data sorted by smart priority: LIVE -> UPCOMING -> FINISHED
   const groupFixtures = useMemo(
@@ -72,11 +74,11 @@ export function DiscoverPage() {
       const matchesGroup = departmentGroupFilter === 'ALL' || dept.group === departmentGroupFilter;
       return matchesSearch && matchesGroup;
     });
-  }, [normalizedQuery, departmentGroupFilter]);
+  }, [normalizedQuery, departmentGroupFilter, version]);
 
   // Tournament statistics data
-  const topScorersList = useMemo(() => topScorers(10), []);
-  const topAssistsList = useMemo(() => topAssists(10), []);
+  const topScorersList = useMemo(() => topScorers(10), [version]);
+  const topAssistsList = useMemo(() => topAssists(10), [version]);
   const activeStatsList = statCategory === 'goals' ? topScorersList : topAssistsList;
   const statLeader = activeStatsList[0];
 
@@ -90,7 +92,7 @@ export function DiscoverPage() {
       totalGoals,
       avgGoals,
     };
-  }, []);
+  }, [version]);
 
   return (
     <div className="mx-auto max-w-3xl overflow-x-clip px-4 pb-24 pt-3 sm:pb-12 sm:pt-5">

@@ -3,17 +3,19 @@ import { useNavigate } from 'react-router';
 import { Search } from 'lucide-react';
 import { DepartmentMark } from '../components/DepartmentMark';
 import { GROUPS, GROUP_COLLEGES, departments } from '../../data/supercup';
+import { useLeagueVersion } from '../../data/live';
 
 export function TeamsPage() {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const query = searchTerm.trim().toLowerCase();
+  const version = useLeagueVersion();
 
   const filtered = useMemo(
     () => departments.filter((department) =>
       `${department.name} ${department.shortName} ${department.college}`.toLowerCase().includes(query),
     ),
-    [query],
+    [query, version],
   );
 
   return (

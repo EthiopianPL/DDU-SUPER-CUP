@@ -8,6 +8,7 @@ export function GroupsPage() {
   const [params, setParams] = useSearchParams();
   const requested = params.get('group')?.toUpperCase() ?? 'A';
   const group = (GROUPS as string[]).includes(requested) ? (requested as GroupId) : 'A';
+  const version = useLeagueVersion();
 
   const groupFixtures = useMemo(
     () => sortFixturesByPriority(fixtures.filter((fixture) => fixture.group === group)),
@@ -25,7 +26,7 @@ export function GroupsPage() {
             className={`rounded-full px-4 py-2 text-sm font-bold ${
               item === group ? 'bg-[#f5c518] text-[#102018]' : 'bg-white/5 text-white/70'
             }`}
-          >
+          
             Group {item}
           </button>
         ))}
