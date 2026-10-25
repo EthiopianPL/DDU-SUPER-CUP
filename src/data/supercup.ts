@@ -379,17 +379,17 @@ export interface TimelineEvent {
   assistName?: string;
 }
 
-export interface MatchStat {
-  label: string;
-  home: number;
-  away: number;
-  percent?: boolean;
-}
-
 export interface MatchSheet {
   formation: string;
   starters: Player[];
   bench: Player[];
+}
+
+export interface Substitution {
+  minute: number;
+  teamId: string;
+  offId: string;
+  onPlayer: Player;
 }
 
 function hashString(value: string) {
@@ -437,7 +437,7 @@ export function matchSheet(departmentId: string): MatchSheet {
   ];
 
   return {
-    formation: '4-3-3',
+    formation: '4-2-3-1',
     starters,
     bench: [
       fillerPlayer(departmentId, 3, 'GK', 12, taken),
@@ -504,25 +504,31 @@ export function matchTimeline(fixture: Fixture): TimelineEvent[] {
     .sort((a, b) => a.minute - b.minute || a.playerName.localeCompare(b.playerName));
 }
 
-export function matchStatRows(fixture: Fixture, timeline: TimelineEvent[]): MatchStat[] | null {
-  if (fixture.status === 'upcoming' || fixture.homeScore == null || fixture.awayScore == null) return null;
+export function matchSubstitutions(fixture: Fixture): Substitution[] {
+  if (fixture.status === 'upcoming') return [];
 
-  const seed = hashString(fixture.id);
-  const difference = fixture.homeScore - fixture.awayScore;
-  const homePossession = Math.min(68, Math.max(32, 50 + difference * 6 + ((seed % 9) - 4)));
-  const homeShots = fixture.homeScore + 4 + (seed % 6);
-  const awayShots = fixture.awayScore + 3 + ((seed >> 3) % 6);
-  const count = (teamId: string, kind: TimelineEvent['kind']) => timeline.filter((event) => event.teamId === teamId && event.kind === kind).length;
+  const limit = fixture.status === 'live' && fixture.minute != null ? fixture.minute : 90;
+  const changes: Substitution[] = [];
 
-  return [
-    { label: 'Possession', home: homePossession, away: 100 - homePossession, percent: true },
-    { label: 'Shots', home: homeShots, away: awayShots },
-    { label: 'Shots on target', home: Math.min(homeShots, fixture.homeScore + 1 + (seed % 3)), away: Math.min(awayShots, fixture.awayScore + 1 + ((seed >> 2) % 3)) },
-    { label: 'Corners', home: 2 + (seed % 6), away: 1 + ((seed >> 5) % 6) },
-    { label: 'Fouls', home: 7 + (seed % 8), away: 6 + ((seed >> 4) % 8) },
-    { label: 'Yellow cards', home: count(fixture.homeId, 'yellow'), away: count(fixture.awayId, 'yellow') },
-    { label: 'Red cards', home: count(fixture.homeId, 'red'), away: count(fixture.awayId, 'red') },
-    { label: 'Passes', home: 310 + (seed % 160), away: 290 + ((seed >> 6) % 170) },
-    { label: 'Pass accuracy', home: 74 + (seed % 14), away: 72 + ((seed >> 2) % 16), percent: true },
-  ];
+  [fixture.homeId, fixture.awayId].forEach((teamId) => {
+    const sheet = matchSheet(teamId);
+    const scorers = new Set(goalEvents(fixture).filter((goal) => goal.teamId === teamId).map((goal) => goal.playerId));
+    const pool = sheet.starters.filter((player) => player.position !== 'GK' && !scorers.has(player.id));
+    const seed = hashString(`${fixture.id}:${teamId}:subs`);
+    const planned = limit >= 80 ? 3 : limit >= 60 ? 1 : 0;
+    const minutes = [57 + (seed % 5), 69 + ((seed >> 2) % 6), 79 + ((seed >> 4) % 6)];
+    const used = new Set<string>();
+
+    for (let index = 0; index < planned; index += 1) {
+      const minute = minutes[index];
+      const off = pool[index];
+      const onPlayer = sheet.bench.find((player) => !used.has(player.id) && player.position === off?.position)
+        ?? sheet.bench.find((player) => !used.has(player.id) && player.position !== 'GK');
+      if (!off || !onPlayer || minute > limit) continue;
+      used.add(onPlayer.id);
+      changes.push({ minute, teamId, offId: off.id, onPlayer });
+    }
+  });
+
+  return changes;
 }
