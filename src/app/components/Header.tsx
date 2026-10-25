@@ -39,6 +39,13 @@ export function Header() {
     <header className="sticky top-0 z-50 border-b border-white/10 bg-[#070d18]/90 backdrop-blur-md">
       <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
         <BrandLockup size="sm" onClick={() => navigate('/')} />
+        <button
+          type="button"
+          onClick={() => navigate('/admin')}
+          className="rounded-xl px-2.5 py-1.5 text-xs font-bold text-[#f5c518] sm:hidden"
+        >
+          Admin
+        </button>
         <nav className="hidden sm:flex items-center gap-1.5" aria-label="Desktop primary navigation">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -60,6 +67,15 @@ export function Header() {
               </button>
             );
           })}
+          <button
+            type="button"
+            onClick={() => navigate('/admin')}
+            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold ${
+              location.pathname.startsWith('/admin') ? 'bg-[#f5c518] text-[#102018]' : 'text-[#f5c518]'
+            }`}
+          >
+            Admin
+          </button>
         </nav>
       </div>
     </header>
