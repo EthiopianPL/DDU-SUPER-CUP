@@ -2,4 +2,4 @@ This Figma Make file includes components from [shadcn/ui](https://ui.shadcn.com/
 
 This Figma Make file includes photos from [Unsplash](https://unsplash.com) used under [license](https://unsplash.com/license).
 
-Dire Dawa University seal in `public/brand/ddu-logo.png` is [Dire-Dawa University-removebg.png](https://commons.wikimedia.org/wiki/File:Dire-Dawa_University-removebg.png) by Lawfulbanana, licensed [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+Dire Dawa University seal in `public/brand/ddu-logo.png` is the university seal from [File:Dire Dawa University.png](https://en.wikipedia.org/wiki/File:Dire_Dawa_University.png).
