@@ -518,11 +518,11 @@ function PitchPlayer({
             {rating.toFixed(1)}
           </span>
         )}
-      </div>
-      <p className="mt-2.5 flex items-center justify-center gap-1 whitespace-nowrap text-[10px] font-semibold text-white drop-shadow">
-        <span>{player.number} {compactName(player.name)}</span>
         {played && scored && <BallMark />}
         {played && assisted && <BootMark />}
+      </div>
+      <p className="mt-2.5 whitespace-nowrap text-[10px] font-semibold text-white drop-shadow">
+        {player.number} {compactName(player.name)}
       </p>
     </div>
   );
@@ -543,17 +543,20 @@ function PitchLines() {
 
 function BallMark() {
   return (
-    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" aria-label="Goal">
-      <circle cx="8" cy="8" r="7" fill="#ffffff" />
-      <path d="M8 2.6 10.2 5.5 8 7.2 5.8 5.5Z M8 7.2 10.2 5.5 12.6 7.8 10.6 10.8 8 9.5Z M8 7.2 5.8 5.5 3.4 7.8 5.4 10.8 8 9.5Z" fill="#102018" />
+    <svg viewBox="0 0 24 24" className="absolute -right-2.5 top-1/2 z-20 h-5 w-5 -translate-y-1/2 drop-shadow" aria-label="Goal">
+      <circle cx="12" cy="12" r="11" fill="#ffffff" />
+      <circle cx="12" cy="12" r="7.4" fill="#102018" />
+      <path fill="#ffffff" d="M12 6.2 13.8 8.6 12 9.8 10.2 8.6Z M12 9.8 13.8 8.6 15.8 10.4 14.2 12.8 12 11.6Z M12 9.8 10.2 8.6 8.2 10.4 9.8 12.8 12 11.6Z M9.8 12.8 12 11.6 14.2 12.8 13.4 15.2 10.6 15.2Z" />
     </svg>
   );
 }
 
 function BootMark() {
   return (
-    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" aria-label="Assist">
-      <path fill="#ffffff" d="M2.2 9.4c.3-2.6 1.8-4 3.6-4.1.3 1.2.2 2.6-.3 3.7h7.4c.8 0 1.3.5 1.3 1.2v.9c0 .4-.3.6-.7.6H3.6c-1.2 0-1.8-.7-1.4-2.3Z" />
+    <svg viewBox="0 0 24 24" className="absolute -left-2.5 top-1/2 z-20 h-5 w-5 -translate-y-1/2 drop-shadow" aria-label="Assist">
+      <circle cx="12" cy="12" r="11" fill="#ffffff" />
+      <path fill="#102018" d="M6.2 14.4c.4-2.8 1.8-4.4 3.6-4.6l.5-1.6h1.8v1.6h4.4c1 0 1.7.6 1.7 1.5v1.1H7.2c-.8 0-1.3-.4-1-1.1Z" />
+      <path fill="#102018" d="M6.4 15.6h11.2v1H6.4zM7.2 16.8h1.1v1.1H7.2zM9.6 16.8h1.1v1.1H9.6zM12 16.8h1.1v1.1H12zM14.4 16.8h1.1v1.1h-1.1z" />
     </svg>
   );
 }
