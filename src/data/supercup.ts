@@ -376,6 +376,7 @@ export interface TimelineEvent {
   playerId: string;
   playerName: string;
   kind: 'goal' | 'yellow' | 'red';
+  assistId?: string;
   assistName?: string;
 }
 
@@ -459,6 +460,7 @@ export function matchTimeline(fixture: Fixture): TimelineEvent[] {
     return {
       ...goal,
       kind: 'goal' as const,
+      assistId: assist?.id,
       assistName: assist?.name,
     };
   });
