@@ -1,8 +1,7 @@
-// src/app/components/MatchCard.tsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { MapPin } from 'lucide-react';
-import { formatKickoff, getDepartment, getFixture, goalEvents } from '../../data/supercup';
+import { formatKickoff, getFixture } from '../../data/supercup';
 
 interface Team {
   id: string | number;
@@ -12,7 +11,7 @@ interface Team {
   logo_url?: string;
 }
 
-interface MatchCardProps {
+export interface MatchCardProps {
   id: string;
   homeTeam: Team;
   awayTeam: Team;
@@ -25,6 +24,7 @@ interface MatchCardProps {
   matchMinute?: number;
   matchSecond?: number;
   injuryTime?: number;
+  variant?: 'card' | 'row';
 }
 
 export function MatchCard({
@@ -38,36 +38,26 @@ export function MatchCard({
   stadium,
   matchMinute = 0,
   matchSecond = 0,
-  injuryTime = 0
+  injuryTime = 0,
 }: MatchCardProps) {
   const navigate = useNavigate();
   const [currentMinute, setCurrentMinute] = useState(matchMinute);
-  const [currentSecond, setCurrentSecond] = useState(matchSecond);
-  const [currentHalf, setCurrentHalf] = useState<'first' | 'second'>(matchMinute < 45 ? 'first' : 'second');
-  const [homeImageError, setHomeImageError] = useState(false);
-  const [awayImageError, setAwayImageError] = useState(false);
+  const [, setCurrentSecond] = useState(matchSecond);
 
-  // Update when props change (realtime updates)
+  // Sync state if props change
   useEffect(() => {
     setCurrentMinute(matchMinute);
     setCurrentSecond(matchSecond);
-    setCurrentHalf(matchMinute < 45 ? 'first' : 'second');
   }, [matchMinute, matchSecond]);
 
-  // Local timer for smooth ticking on live matches
+  // Live match second ticker
   useEffect(() => {
     if (status !== 'live') return;
 
     const interval = setInterval(() => {
-      setCurrentSecond(prev => {
+      setCurrentSecond((prev) => {
         if (prev >= 59) {
-          setCurrentMinute(m => {
-            const newMinute = m + 1;
-            if (newMinute === 45) {
-              setCurrentHalf('second');
-            }
-            return newMinute;
-          });
+          setCurrentMinute((m) => m + 1);
           return 0;
         }
         return prev + 1;
@@ -77,51 +67,25 @@ export function MatchCard({
     return () => clearInterval(interval);
   }, [status]);
 
-  const formatTime = () => {
-    let displayMinute = currentMinute;
-    let displayExtra = '';
-
-    // Add injury time only after 45 minutes
-    if (currentMinute >= 45 && injuryTime > 0) {
-      displayExtra = ` +${injuryTime}`;
-    }
-
-    if (currentMinute >= 90) {
-      return 'FT';
-    }
-    if (currentMinute === 45) {
-      return `HT${displayExtra}`;
-    }
-
-    return `${displayMinute}:${currentSecond.toString().padStart(2, '0')}${displayExtra}`;
-  };
-
-  const getProgressPercentage = () => {
-    if (currentMinute >= 90) return 100;
-    return (currentMinute / 90) * 100;
-  };
-
   const fixture = getFixture(id);
-  const events = fixture ? goalEvents(fixture) : [];
-  const detailLine = fixture
-    ? `Group ${fixture.group} · Matchday ${fixture.matchday} · ${formatKickoff(fixture.date, fixture.time)} · ${fixture.time}`
-    : time;
+  const venue = stadium ?? fixture?.stadium ?? 'DDU Campus Pitch';
+  const kickoffTime = fixture?.time ?? time ?? '15:00';
+  const matchDate = fixture?.date ?? '';
 
   const handleClick = () => {
     navigate(`/match/${id}`);
   };
 
-  const handleTeamClick = (e: React.MouseEvent | React.KeyboardEvent, teamId: string | number) => {
-    e.stopPropagation();
-    navigate(`/team/${teamId}`);
-  };
+  const isLive = status === 'live';
+  const isFinished = status === 'finished';
+  const isUpcoming = status === 'upcoming';
 
-  // Get the current display time for live matches
-  const liveDisplay = status === 'live' ? formatTime() : null;
-  const progressPercentage = status === 'live' ? getProgressPercentage() : 0;
+  const formattedLiveTime = `${currentMinute}'${currentMinute >= 45 && injuryTime > 0 ? ` +${injuryTime}` : ''}`;
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={handleClick}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -129,165 +93,103 @@ export function MatchCard({
           handleClick();
         }
       }}
-      role="button"
-      tabIndex={0}
-      aria-label={`Match details: ${homeTeam.name} vs ${awayTeam.name}`}
-      className="rounded-xl overflow-hidden transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518] focus-visible:ring-offset-2 focus-visible:ring-offset-[#070d18]"
-      style={{
-        background: '#10192b',
-        border: status === 'live' ? '1px solid #e11d48' : '1px solid rgba(255, 255, 255, 0.08)',
-      }}
+      aria-label={`${isLive ? `Live match ${formattedLiveTime}` : isFinished ? 'Finished match' : 'Upcoming match'}: ${homeTeam.name} ${isUpcoming ? 'vs' : `${homeScore ?? 0} - ${awayScore ?? 0}`} ${awayTeam.name}. View match details.`}
+      className={`group relative overflow-hidden rounded-2xl border bg-[#121824] p-3.5 transition-all hover:border-white/20 hover:bg-[#161f30] active:scale-[0.99] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518] focus-visible:ring-offset-2 focus-visible:ring-offset-[#070d18] ${
+        isLive ? 'border-red-500/40 shadow-sm shadow-red-500/10' : 'border-white/[0.08] shadow-sm'
+      }`}
     >
-      {/* Status Bar */}
-      <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-white/10">
-        <p className="text-[11px] font-semibold text-white/70">{detailLine}</p>
-        <div className="flex shrink-0 items-center gap-2">
-          {status === 'live' && (
+      {/* Three Horizontally Arranged Zones: Left (Home) · Center (Score/Time) · Right (Away) */}
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4">
+        {/* Left Zone — Home Team */}
+        <div className="flex flex-col items-center justify-center text-center min-w-0">
+          {/* Circular Badge (40–48px) */}
+          <div
+            className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-full font-black text-xs sm:text-sm shadow-md transition-transform group-hover:scale-105"
+            style={{
+              background: homeTeam.color,
+              color: homeTeam.color.toLowerCase() === '#f5c518' ? '#102018' : '#ffffff',
+            }}
+          >
+            {homeTeam.short_name || homeTeam.name.charAt(0)}
+          </div>
+          {/* Department Name Centered Directly Below */}
+          <span
+            className="mt-2 block max-w-[110px] sm:max-w-[150px] truncate text-xs font-bold leading-tight text-white group-hover:text-[#f5c518] sm:text-sm transition-colors"
+            title={homeTeam.name}
+          >
+            {homeTeam.name}
+          </span>
+        </div>
+
+        {/* Center Zone — Match Details (Score / Kickoff Time / Status) */}
+        <div className="flex min-w-[85px] sm:min-w-[120px] shrink-0 flex-col items-center justify-center text-center">
+          {isLive || isFinished ? (
             <>
-              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-              <span className="text-red-500 text-xs font-semibold">LIVE</span>
-              <span className="text-red-400 text-xs font-mono">{liveDisplay}</span>
+              {/* Prominent Score in Tournament Gold Accent */}
+              <div className="flex items-center justify-center gap-1.5 font-mono text-2xl font-black tracking-tight text-[#f5c518] sm:text-3xl">
+                <span>{homeScore ?? 0}</span>
+                <span className="text-lg font-normal text-white/30 sm:text-xl">-</span>
+                <span>{awayScore ?? 0}</span>
+              </div>
+
+              {/* Status beneath score */}
+              {isLive ? (
+                <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-red-500/40 bg-red-500/15 px-2 py-0.5 text-[10px] font-black text-red-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                  LIVE {formattedLiveTime}
+                </span>
+              ) : (
+                <span className="mt-1 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/50">
+                  FT
+                </span>
+              )}
+            </>
+          ) : (
+            <>
+              {/* Prominent Kickoff Time */}
+              <span className="font-mono text-xl font-black text-white sm:text-2xl">
+                {kickoffTime}
+              </span>
+
+              {/* VS indicator and Match date/status beneath */}
+              <div className="mt-1 flex items-center justify-center gap-1">
+                <span className="rounded bg-[#f5c518]/15 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#f5c518]">
+                  VS
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#f5c518]">
+                  {matchDate ? formatKickoff(matchDate, kickoffTime) : 'Upcoming'}
+                </span>
+              </div>
             </>
           )}
-          {status === 'finished' && (
-            <span className="text-gray-400 text-xs font-semibold">FULL TIME</span>
-          )}
-          {status === 'upcoming' && (
-            <span className="text-[#9eb6f5] text-xs font-semibold">Kickoff</span>
-          )}
+        </div>
+
+        {/* Right Zone — Away Team */}
+        <div className="flex flex-col items-center justify-center text-center min-w-0">
+          {/* Circular Badge (40–48px) */}
+          <div
+            className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-full font-black text-xs sm:text-sm shadow-md transition-transform group-hover:scale-105"
+            style={{
+              background: awayTeam.color,
+              color: awayTeam.color.toLowerCase() === '#f5c518' ? '#102018' : '#ffffff',
+            }}
+          >
+            {awayTeam.short_name || awayTeam.name.charAt(0)}
+          </div>
+          {/* Department Name Centered Directly Below */}
+          <span
+            className="mt-2 block max-w-[110px] sm:max-w-[150px] truncate text-xs font-bold leading-tight text-white group-hover:text-[#f5c518] sm:text-sm transition-colors"
+            title={awayTeam.name}
+          >
+            {awayTeam.name}
+          </span>
         </div>
       </div>
 
-      {/* Match Content */}
-      <div className="p-4">
-        <div className="flex items-center justify-between gap-4">
-          {/* Home Team */}
-          <div className="flex-1 text-right">
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={(e) => handleTeamClick(e, homeTeam.id)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  handleTeamClick(e, homeTeam.id);
-                }
-              }}
-              className="inline-flex items-center justify-end gap-3 mb-3 hover:opacity-80 transition-opacity"
-              aria-label={`View ${homeTeam.name} squad details`}
-            >
-              <span className="text-white font-bold text-sm sm:text-base leading-tight hover:underline">{homeTeam.name}</span>
-              <div className="w-12 h-12 rounded-full overflow-hidden bg-white/10 flex items-center justify-center shadow-md shrink-0">
-                {homeTeam.logo_url && !homeImageError ? (
-                  <img
-                    src={homeTeam.logo_url}
-                    alt={homeTeam.name}
-                    className="w-full h-full object-cover"
-                    onError={() => setHomeImageError(true)}
-                  />
-                ) : (
-                  <div
-                    className="flex h-full w-full items-center justify-center px-0.5 text-center text-[10px] font-black leading-none text-white"
-                    style={{ background: homeTeam.color, color: homeTeam.color.toLowerCase() === '#f5c518' ? '#102018' : '#fff' }}
-                  >
-                    {homeTeam.short_name || homeTeam.name.charAt(0)}
-                  </div>
-                )}
-              </div>
-            </div>
-            {(status === 'live' || status === 'finished') && (
-              <div className="text-3xl sm:text-4xl font-black text-white">
-                {homeScore !== null && homeScore !== undefined ? homeScore : '-'}
-              </div>
-            )}
-          </div>
-
-          {/* VS Divider */}
-          <div className="text-center">
-            {status === 'live' ? (
-              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
-                <span className="text-red-500 text-xs font-bold">LIVE</span>
-              </div>
-            ) : status === 'finished' ? (
-              <div className="text-gray-500 font-bold text-sm">FT</div>
-            ) : (
-              <div className="text-gray-500 font-bold text-sm">VS</div>
-            )}
-          </div>
-
-          {/* Away Team */}
-          <div className="flex-1 text-left">
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={(e) => handleTeamClick(e, awayTeam.id)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  handleTeamClick(e, awayTeam.id);
-                }
-              }}
-              className="inline-flex items-center gap-3 mb-3 hover:opacity-80 transition-opacity"
-              aria-label={`View ${awayTeam.name} squad details`}
-            >
-              <div className="w-12 h-12 rounded-full overflow-hidden bg-white/10 flex items-center justify-center shadow-md shrink-0">
-                {awayTeam.logo_url && !awayImageError ? (
-                  <img
-                    src={awayTeam.logo_url}
-                    alt={awayTeam.name}
-                    className="w-full h-full object-cover"
-                    onError={() => setAwayImageError(true)}
-                  />
-                ) : (
-                  <div
-                    className="flex h-full w-full items-center justify-center px-0.5 text-center text-[10px] font-black leading-none"
-                    style={{ background: awayTeam.color, color: awayTeam.color.toLowerCase() === '#f5c518' ? '#102018' : '#fff' }}
-                  >
-                    {awayTeam.short_name || awayTeam.name.charAt(0)}
-                  </div>
-                )}
-              </div>
-              <span className="text-white font-bold text-sm sm:text-base leading-tight hover:underline">{awayTeam.name}</span>
-            </div>
-            {(status === 'live' || status === 'finished') && (
-              <div className="text-3xl sm:text-4xl font-black text-white">
-                {awayScore !== null && awayScore !== undefined ? awayScore : '-'}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Live Match Progress Bar */}
-        {(stadium || events.length > 0) && (
-          <div className="mt-4 space-y-2 border-t border-white/10 pt-3">
-            {stadium && (
-              <div className="flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-gray-500" />
-                <span className="text-xs text-gray-400">{stadium}</span>
-              </div>
-            )}
-            {events.map((event, index) => (
-              <p key={`${event.playerId}-${event.minute}-${index}`} className="text-xs text-white/70">
-                <span className="font-mono text-[#f5c518]">{event.minute}&apos;</span>{' '}
-                {event.playerName}
-                <span className="text-white/40"> · {getDepartment(event.teamId)?.shortName}</span>
-              </p>
-            ))}
-          </div>
-        )}
-
-        {status === 'live' && (
-          <div className="mt-4 pt-3 border-t border-white/10">
-            <div className="flex justify-between text-xs text-gray-400 mb-1">
-              <span>{currentHalf === 'first' ? '1st Half' : '2nd Half'}</span>
-              <span className="font-mono">{liveDisplay}</span>
-            </div>
-            <div className="w-full bg-gray-700 rounded-full h-1.5 overflow-hidden">
-              <div
-                className="bg-red-500 h-full rounded-full transition-all duration-1000 ease-linear"
-                style={{ width: `${progressPercentage}%` }}
-              />
-            </div>
-          </div>
-        )}
+      {/* Subtle Footer: Venue Information */}
+      <div className="mt-2.5 flex items-center justify-center border-t border-white/[0.04] pt-2 text-[10px] sm:text-[11px] text-white/40">
+        <MapPin className="mr-1 h-3 w-3 shrink-0 text-white/30" />
+        <span className="truncate">{venue}</span>
       </div>
     </div>
   );
