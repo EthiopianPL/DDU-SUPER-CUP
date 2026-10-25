@@ -277,19 +277,14 @@ export function MatchDetailsPage() {
           className="mt-6 space-y-4"
         >
           <Pitch
-            name={home?.name ?? 'Home'}
-            shortName={home?.shortName ?? 'H'}
-            color={home?.color ?? '#334155'}
-            sheet={homeSheet}
-            timeline={timeline}
-            substitutions={substitutions}
-            played={played}
-          />
-          <Pitch
-            name={away?.name ?? 'Away'}
-            shortName={away?.shortName ?? 'A'}
-            color={away?.color ?? '#334155'}
-            sheet={awaySheet}
+            homeName={home?.name ?? 'Home'}
+            awayName={away?.name ?? 'Away'}
+            homeShort={home?.shortName ?? 'H'}
+            awayShort={away?.shortName ?? 'A'}
+            homeColor={home?.color ?? '#334155'}
+            awayColor={away?.color ?? '#334155'}
+            homeSheet={homeSheet}
+            awaySheet={awaySheet}
             timeline={timeline}
             substitutions={substitutions}
             played={played}
@@ -347,50 +342,48 @@ export function MatchDetailsPage() {
 const TILES = ['#6d5344', '#3e5270', '#5c4638', '#4d5b4a', '#70543f', '#3c4e63', '#645244', '#455446'];
 
 function Pitch({
-  name,
-  shortName,
-  color,
-  sheet,
+  homeName,
+  awayName,
+  homeShort,
+  awayShort,
+  homeColor,
+  awayColor,
+  homeSheet,
+  awaySheet,
   timeline,
   substitutions,
   played,
 }: {
-  name: string;
-  shortName: string;
-  color: string;
-  sheet: ReturnType<typeof matchSheet>;
+  homeName: string;
+  awayName: string;
+  homeShort: string;
+  awayShort: string;
+  homeColor: string;
+  awayColor: string;
+  homeSheet: ReturnType<typeof matchSheet>;
+  awaySheet: ReturnType<typeof matchSheet>;
   timeline: TimelineEvent[];
   substitutions: ReturnType<typeof matchSubstitutions>;
   played: boolean;
 }) {
-  const keepers = sheet.starters.filter((player) => player.position === 'GK');
-  const defenders = sheet.starters.filter((player) => player.position === 'DEF');
-  const mids = sheet.starters.filter((player) => player.position === 'MID');
-  const forwards = sheet.starters.filter((player) => player.position === 'FWD');
-  const lines = [
-    { top: '11%', players: keepers },
-    { top: '30%', players: defenders },
-    { top: '49%', players: mids.slice(0, 2) },
-    { top: '67%', players: [mids[2], forwards[0], forwards[1]].filter((player): player is Player => Boolean(player)) },
-    { top: '85%', players: forwards.slice(2) },
-  ];
-  const arrivals = substitutions.filter((change) => change.onPlayer.departmentId === sheet.starters[0]?.departmentId);
+  const homeLines = formationLines(homeSheet).map((players, index) => ({
+    top: ['8%', '17%', '26%', '35%', '44%'][index],
+    players,
+  }));
+  const awayLines = [...formationLines(awaySheet)].reverse().map((players, index) => ({
+    top: ['56%', '65%', '74%', '83%', '92%'][index],
+    players: [...players].reverse(),
+  }));
 
   return (
     <section>
       <div className="relative overflow-hidden rounded-3xl bg-[#3f7a4c]">
-        <div className="relative flex items-center justify-between px-4 pb-2 pt-4">
-          <span className="flex min-w-0 items-center gap-2">
-            <DepartmentMark shortName={shortName} color={color} size={28} />
-            <span className="truncate text-sm font-bold text-white">{name}</span>
-          </span>
-          <span className="rounded-full bg-[#146b32] px-2.5 py-1 text-[11px] font-bold text-white">{sheet.formation}</span>
-        </div>
-        <div className="relative h-[560px]">
+        <TeamBar name={homeName} shortName={homeShort} color={homeColor} formation={homeSheet.formation} />
+        <div className="relative h-[760px]">
           <PitchLines />
-          {lines.map((line) => line.players.map((player, index) => (
+          {[...homeLines, ...awayLines].map((line) => line.players.map((player, index) => (
             <PitchPlayer
-              key={player.id}
+              key={`${line.top}-${player.id}`}
               player={player}
               top={line.top}
               left={`${spread(line.players.length)[index]}%`}
@@ -400,20 +393,76 @@ function Pitch({
             />
           )))}
         </div>
+        <TeamBar name={awayName} shortName={awayShort} color={awayColor} formation={awaySheet.formation} />
       </div>
-      {arrivals.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {arrivals.map((change) => (
-            <span key={change.onPlayer.id} className="inline-flex items-center gap-1.5 rounded-full bg-[#10192b] px-2.5 py-1 text-[11px] font-semibold text-white">
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#1f9d55] text-white">
-                <ArrowUp className="h-3 w-3" strokeWidth={3} />
-              </span>
-              {change.onPlayer.number} {compactName(change.onPlayer.name)} {change.minute}&apos;
-            </span>
-          ))}
-        </div>
-      )}
+      <SubList substitutions={substitutions} homeId={homeSheet.starters[0]?.departmentId} awayId={awaySheet.starters[0]?.departmentId} homeShort={homeShort} awayShort={awayShort} />
     </section>
+  );
+}
+
+function TeamBar({ name, shortName, color, formation }: { name: string; shortName: string; color: string; formation: string }) {
+  return (
+    <div className="relative flex items-center justify-between gap-3 px-4 py-3">
+      <span className="flex min-w-0 items-center gap-2">
+        <DepartmentMark shortName={shortName} color={color} size={28} />
+        <span className="truncate text-sm font-bold text-white">{name}</span>
+      </span>
+      <span className="shrink-0 rounded-full bg-[#146b32] px-2.5 py-1 text-[11px] font-bold text-white">{formation}</span>
+    </div>
+  );
+}
+
+function formationLines(sheet: ReturnType<typeof matchSheet>) {
+  const keepers = sheet.starters.filter((player) => player.position === 'GK');
+  const defenders = sheet.starters.filter((player) => player.position === 'DEF');
+  const mids = sheet.starters.filter((player) => player.position === 'MID');
+  const forwards = sheet.starters.filter((player) => player.position === 'FWD');
+  return [
+    keepers,
+    defenders,
+    mids.slice(0, 2),
+    [mids[2], forwards[0], forwards[1]].filter((player): player is Player => Boolean(player)),
+    forwards.slice(2),
+  ];
+}
+
+function SubList({
+  substitutions,
+  homeId,
+  awayId,
+  homeShort,
+  awayShort,
+}: {
+  substitutions: ReturnType<typeof matchSubstitutions>;
+  homeId?: string;
+  awayId?: string;
+  homeShort: string;
+  awayShort: string;
+}) {
+  const rows = [
+    { id: homeId, label: homeShort },
+    { id: awayId, label: awayShort },
+  ];
+  return (
+    <div className="mt-2 space-y-1.5">
+      {rows.map((row) => {
+        const arrivals = substitutions.filter((change) => change.onPlayer.departmentId === row.id);
+        if (arrivals.length === 0) return null;
+        return (
+          <div key={row.label} className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-bold tracking-wide text-white/35">{row.label}</span>
+            {arrivals.map((change) => (
+              <span key={change.onPlayer.id} className="inline-flex items-center gap-1.5 rounded-full bg-[#10192b] px-2.5 py-1 text-[11px] font-semibold text-white">
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#1f9d55] text-white">
+                  <ArrowUp className="h-3 w-3" strokeWidth={3} />
+                </span>
+                {change.onPlayer.number} {compactName(change.onPlayer.name)} {change.minute}&apos;
+              </span>
+            ))}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -441,6 +490,7 @@ function PitchPlayer({
 }) {
   const marks = timeline.filter((event) => event.playerId === player.id);
   const scored = marks.some((event) => event.kind === 'goal');
+  const assisted = timeline.some((event) => event.kind === 'goal' && event.assistId === player.id);
   const booked = marks.find((event) => event.kind === 'yellow' || event.kind === 'red');
   const rating = played ? pitchRating(player, marks) : null;
   const tone = rating == null ? null : ratingTone(rating);
@@ -448,8 +498,8 @@ function PitchPlayer({
 
   return (
     <div className="absolute -translate-x-1/2 -translate-y-1/2 text-center" style={{ top, left }}>
-      <div className="relative mx-auto h-12 w-12">
-        <span className="flex h-12 w-12 items-center justify-center rounded-xl text-sm font-black text-white shadow-md" style={{ background: tile }}>
+      <div className="relative mx-auto h-9 w-9">
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg text-[11px] font-black text-white shadow-md" style={{ background: tile }}>
           {initials(player.name)}
         </span>
         {played && subbed && (
@@ -468,10 +518,11 @@ function PitchPlayer({
             {rating.toFixed(1)}
           </span>
         )}
-        {played && scored && <BallMark />}
       </div>
-      <p className="mt-3 whitespace-nowrap text-[10px] font-semibold text-white drop-shadow">
-        {player.number} {compactName(player.name)}
+      <p className="mt-2.5 flex items-center justify-center gap-1 whitespace-nowrap text-[10px] font-semibold text-white drop-shadow">
+        <span>{player.number} {compactName(player.name)}</span>
+        {played && scored && <BallMark />}
+        {played && assisted && <BootMark />}
       </p>
     </div>
   );
@@ -480,20 +531,29 @@ function PitchPlayer({
 function PitchLines() {
   return (
     <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-      <div className="absolute left-[18%] right-[18%] top-[2%] h-[16%] rounded-sm border border-white/40" />
-      <div className="absolute left-[32%] right-[32%] top-[2%] h-[7%] border border-white/40" />
-      <div className="absolute left-0 right-0 top-[36%] h-px bg-white/40" />
-      <div className="absolute left-1/2 top-[36%] h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/40" />
-      <div className="absolute bottom-[2%] left-[18%] right-[18%] h-[14%] rounded-sm border border-white/30" />
+      <div className="absolute left-[20%] right-[20%] top-0 h-[14%] border-x border-b border-white/40" />
+      <div className="absolute left-[34%] right-[34%] top-0 h-[6%] border-x border-b border-white/40" />
+      <div className="absolute left-0 right-0 top-1/2 h-px bg-white/45" />
+      <div className="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/45" />
+      <div className="absolute bottom-0 left-[20%] right-[20%] h-[14%] border-x border-t border-white/40" />
+      <div className="absolute bottom-0 left-[34%] right-[34%] h-[6%] border-x border-t border-white/40" />
     </div>
   );
 }
 
 function BallMark() {
   return (
-    <svg viewBox="0 0 16 16" className="absolute -bottom-1 -right-2 h-4 w-4" aria-hidden="true">
+    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" aria-label="Goal">
       <circle cx="8" cy="8" r="7" fill="#ffffff" />
-      <path d="M8 2.8 10.1 5.6 8 7.4 5.9 5.6Z M8 7.4 10.1 5.6 12.4 7.8 10.5 10.6 8 9.4Z M8 7.4 5.9 5.6 3.6 7.8 5.5 10.6 8 9.4Z" fill="#102018" />
+      <path d="M8 2.6 10.2 5.5 8 7.2 5.8 5.5Z M8 7.2 10.2 5.5 12.6 7.8 10.6 10.8 8 9.5Z M8 7.2 5.8 5.5 3.4 7.8 5.4 10.8 8 9.5Z" fill="#102018" />
+    </svg>
+  );
+}
+
+function BootMark() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" aria-label="Assist">
+      <path fill="#ffffff" d="M2.2 9.4c.3-2.6 1.8-4 3.6-4.1.3 1.2.2 2.6-.3 3.7h7.4c.8 0 1.3.5 1.3 1.2v.9c0 .4-.3.6-.7.6H3.6c-1.2 0-1.8-.7-1.4-2.3Z" />
     </svg>
   );
 }
