@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import { GroupTable } from '../components/GroupTable';
 import { MatchCard } from '../components/MatchCard';
-import { GROUPS, cardTeam, fixtures, type GroupId } from '../../data/supercup';
+import { GROUPS, cardTeam, fixtures, sortFixturesByPriority, type GroupId } from '../../data/supercup';
 
 export function GroupsPage() {
   const [params, setParams] = useSearchParams();
@@ -10,16 +10,13 @@ export function GroupsPage() {
   const group = (GROUPS as string[]).includes(requested) ? (requested as GroupId) : 'A';
 
   const groupFixtures = useMemo(
-    () => fixtures.filter((fixture) => fixture.group === group),
+    () => sortFixturesByPriority(fixtures.filter((fixture) => fixture.group === group)),
     [group],
   );
 
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-24 pt-5">
-      <h1 className="text-3xl font-black text-white">Groups</h1>
-      <p className="mt-1 text-sm text-white/50">Four departments in each group. The top two advance.</p>
-
-      <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
+    <div className="mx-auto max-w-3xl px-4 pb-24 pt-3 sm:pt-5">
+      <div className="flex gap-2 overflow-x-auto pb-2">
         {GROUPS.map((item) => (
           <button
             key={item}

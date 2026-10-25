@@ -13,6 +13,7 @@ import {
   standingsFor,
   topAssists,
   topScorers,
+  sortFixturesByPriority,
   type GroupId,
 } from '../../data/supercup';
 
@@ -55,9 +56,9 @@ export function DiscoverPage() {
   // State for Stats tab (goals vs assists)
   const [statCategory, setStatCategory] = useState<'goals' | 'assists'>('goals');
 
-  // Groups data
+  // Groups data sorted by smart priority: LIVE -> UPCOMING -> FINISHED
   const groupFixtures = useMemo(
-    () => fixtures.filter((fixture) => fixture.group === selectedGroup),
+    () => sortFixturesByPriority(fixtures.filter((fixture) => fixture.group === selectedGroup)),
     [selectedGroup],
   );
 
@@ -92,32 +93,7 @@ export function DiscoverPage() {
   }, []);
 
   return (
-    <div className="mx-auto max-w-3xl overflow-x-clip px-4 pb-24 pt-5 sm:pb-12">
-      {/* Header Banner */}
-      <header className="mb-5">
-        <p className="text-[11px] font-semibold tracking-[0.2em] text-[#f5c518]">TOURNAMENT HUB</p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight text-white sm:text-4xl">Discover</h1>
-        <p className="mt-1.5 text-sm text-white/60">
-          Explore group standings, department rosters, and tournament leaderboards.
-        </p>
-
-        {/* Quick summary stats banner */}
-        <div className="mt-4 grid grid-cols-3 gap-2.5 text-center">
-          <div className="rounded-2xl border border-white/10 bg-[#10192b] px-2 py-3 shadow-sm">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-white/50 sm:text-[11px]">Groups</p>
-            <p className="mt-1 text-base font-black tracking-tight text-white sm:text-lg">{GROUPS.length} Groups</p>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-[#10192b] px-2 py-3 shadow-sm">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-white/50 sm:text-[11px]">Teams</p>
-            <p className="mt-1 text-base font-black tracking-tight text-[#f5c518] sm:text-lg">{departments.length} Depts</p>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-[#10192b] px-2 py-3 shadow-sm">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-white/50 sm:text-[11px]">Advancing</p>
-            <p className="mt-1 text-base font-black tracking-tight text-[#7ddea0] sm:text-lg">Top 2 Each</p>
-          </div>
-        </div>
-      </header>
-
+    <div className="mx-auto max-w-3xl overflow-x-clip px-4 pb-24 pt-3 sm:pb-12 sm:pt-5">
       {/* Segmented Control / Tabs: uses grid-cols-3 so it never has horizontal overflow on mobile */}
       <div
         role="tablist"
@@ -191,25 +167,14 @@ export function DiscoverPage() {
           id="panel-groups"
           role="tabpanel"
           aria-labelledby="tab-groups"
-          className="mt-6 space-y-6"
+          className="mt-4 space-y-5"
         >
-          <div>
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-black text-white">Groups & Standings</h2>
-                <p className="mt-0.5 text-xs text-white/50">Four departments per group. Top 2 advance.</p>
-              </div>
-              <span className="rounded-full border border-[#2f9e44]/30 bg-[#2f9e44]/15 px-2.5 py-1 text-[11px] font-bold text-[#7ddea0]">
-                Matchday 2 Live
-              </span>
-            </div>
-
-            {/* Group selector chips */}
-            <div
-              role="group"
-              aria-label="Filter standings by group"
-              className="mt-4 flex gap-2 overflow-x-auto pb-1 overscroll-x-contain"
-            >
+          {/* Group selector chips */}
+          <div
+            role="group"
+            aria-label="Filter standings by group"
+            className="flex gap-2 overflow-x-auto pb-1 overscroll-x-contain"
+          >
               {GROUPS.map((item) => {
                 const isCurrent = item === selectedGroup;
                 return (
@@ -229,7 +194,6 @@ export function DiscoverPage() {
                 );
               })}
             </div>
-          </div>
 
           {/* Group Standings Table */}
           <div>
@@ -274,13 +238,8 @@ export function DiscoverPage() {
           id="panel-teams"
           role="tabpanel"
           aria-labelledby="tab-teams"
-          className="mt-6 space-y-6"
+          className="mt-4 space-y-5"
         >
-          <div>
-            <h2 className="text-xl font-black text-white">Departments & Teams</h2>
-            <p className="mt-0.5 text-xs text-white/50">24 university departments competing in the Super Cup</p>
-          </div>
-
           {/* Search bar */}
           <div className="relative">
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
@@ -411,13 +370,8 @@ export function DiscoverPage() {
           id="panel-stats"
           role="tabpanel"
           aria-labelledby="tab-stats"
-          className="mt-6 space-y-6"
+          className="mt-4 space-y-5"
         >
-          <div>
-            <h2 className="text-xl font-black text-white">Tournament Statistics</h2>
-            <p className="mt-0.5 text-xs text-white/50">Leaderboards and player stats across all 6 groups</p>
-          </div>
-
           {/* Statistics summary analytics cards */}
           <div className="grid grid-cols-3 gap-2.5">
             <div className="rounded-2xl border border-white/10 bg-[#10192b] p-3 text-center">
