@@ -820,23 +820,104 @@ function ManualStats({ matchId, disabled, onSave, bare = false }: { matchId: str
   );
 }
 
+function Field({ label, value, onChange, placeholder, required, maxLength, inputMode }: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  required?: boolean;
+  maxLength?: number;
+  inputMode?: 'text' | 'numeric';
+}) {
+  return (
+    <label className="text-[11px] font-bold uppercase tracking-wide text-white/40">{label}
+      <input
+        className={inputClass}
+        value={value}
+        placeholder={placeholder}
+        required={required}
+        maxLength={maxLength}
+        inputMode={inputMode}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
+}
+
+function ChoiceRow({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
+  return (
+    <div>
+      <p className="text-[11px] font-bold uppercase tracking-wide text-white/40">{label}</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {options.map((option) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => onChange(option)}
+            className={`rounded-full px-3 py-1.5 text-xs font-black ${value === option ? 'bg-[#f5c518] text-[#102018]' : 'bg-white/5 text-white/70'}`}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PicturePicker({ preview, empty, round = false, required = false, inputKey, onFile }: {
+  preview: string;
+  empty: string;
+  round?: boolean;
+  required?: boolean;
+  inputKey?: number;
+  onFile: (file: File | null) => void;
+}) {
+  return (
+    <label className="flex shrink-0 cursor-pointer flex-col items-center gap-2">
+      <span className={`relative flex h-32 w-32 items-center justify-center overflow-hidden border border-dashed border-white/20 bg-[#0c1424] ${round ? 'rounded-full' : 'rounded-3xl'}`}>
+        {preview ? <img src={preview} alt="" className="h-full w-full object-cover" /> : <span className="px-4 text-center text-xs font-bold leading-snug text-white/45">{empty}</span>}
+        <input
+          key={inputKey}
+          className="sr-only"
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          required={required}
+          onChange={(event) => onFile(event.target.files?.[0] ?? null)}
+        />
+      </span>
+      <span className="text-[11px] font-bold text-white/40">{preview ? 'Change picture' : 'Choose a picture'}</span>
+    </label>
+  );
+}
+
 function TeamAdmin({ onMessage, onError }: { onMessage: (text: string) => void; onError: (text: string) => void }) {
   const [editing, setEditing] = useState<string | null>(null);
   const team = departments.find((item) => item.id === editing);
   return (
-    <div>
-      <h1 className="text-3xl font-black">Teams</h1>
+    <div className="mx-auto max-w-3xl">
+      <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">DEPARTMENTS</p>
+      <h1 className="mt-1 text-3xl font-black">Teams</h1>
       <TeamEditor
         key={team?.id ?? 'new'}
         initial={team}
-        onDone={onMessage}
+        onDone={(text) => {
+          onMessage(text);
+          if (!team) setEditing(null);
+        }}
         onError={onError}
+        onCancel={() => setEditing(null)}
       />
-      <ul className="mt-4 divide-y divide-white/5 rounded-2xl border border-white/10">
+      <ul className="mt-6 space-y-2">
         {departments.map((item) => (
-          <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-2">
-            <span className="flex items-center gap-2 text-sm font-bold"><DepartmentMark shortName={item.shortName} color={item.color} size={28} src={item.crestUrl || undefined} />{item.name}<span className="font-normal text-white/35">Group {item.group}</span></span>
-            <button type="button" onClick={() => setEditing(item.id)} className="text-xs font-bold text-[#f5c518]">Edit</button>
+          <li key={item.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#10192b] px-3 py-2.5">
+            <span className="flex min-w-0 items-center gap-3 text-sm font-bold">
+              <DepartmentMark shortName={item.shortName} color={item.color} size={36} src={item.crestUrl || undefined} />
+              <span className="min-w-0">
+                <span className="block truncate">{item.name}</span>
+                <span className="block text-xs font-semibold text-white/35">Group {item.group}{item.coach ? ` · ${item.coach}` : ''}</span>
+              </span>
+            </span>
+            <button type="button" onClick={() => setEditing(item.id)} className="shrink-0 rounded-full bg-white/5 px-3 py-1.5 text-xs font-bold text-[#f5c518]">Edit</button>
           </li>
         ))}
       </ul>
@@ -844,7 +925,7 @@ function TeamAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
   );
 }
 
-function TeamEditor({ initial, onDone, onError }: { initial?: (typeof departments)[number]; onDone: (text: string) => void; onError: (text: string) => void }) {
+function TeamEditor({ initial, onDone, onError, onCancel }: { initial?: (typeof departments)[number]; onDone: (text: string) => void; onError: (text: string) => void; onCancel: () => void }) {
   const [name, setName] = useState(initial?.name ?? '');
   const [shortName, setShortName] = useState(initial?.shortName ?? '');
   const [group, setGroup] = useState<GroupId>(initial?.group ?? 'A');
@@ -852,8 +933,16 @@ function TeamEditor({ initial, onDone, onError }: { initial?: (typeof department
   const [pitch, setPitch] = useState(initial?.pitch ?? '');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState(initial?.crestUrl ?? '');
+  const [logoKey, setLogoKey] = useState(0);
+  const chooseLogo = (next: File | null) => {
+    setFile(next);
+    setPreview((current) => {
+      if (current.startsWith('blob:')) URL.revokeObjectURL(current);
+      return next ? URL.createObjectURL(next) : (initial?.crestUrl ?? '');
+    });
+  };
   return (
-    <form className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-[#10192b] p-4 sm:grid-cols-2" onSubmit={async (event) => {
+    <form className="mt-5 rounded-3xl border border-white/10 bg-[#10192b] p-5" onSubmit={async (event) => {
       event.preventDefault();
       try {
         if (!initial && !file) throw new Error('A team logo is required.');
@@ -862,34 +951,43 @@ function TeamEditor({ initial, onDone, onError }: { initial?: (typeof department
           method: initial ? 'PATCH' : 'POST',
           body: { name, shortName, group, coach, pitch, college: initial?.college ?? '', color: initial?.color ?? '#2450c8', ...(image ? { image } : {}) },
         });
+        if (!initial) {
+          setName('');
+          setShortName('');
+          setCoach('');
+          setPitch('');
+          setFile(null);
+          setLogoKey((value) => value + 1);
+          setPreview((current) => {
+            if (current.startsWith('blob:')) URL.revokeObjectURL(current);
+            return '';
+          });
+        }
         onDone(initial ? 'Team updated.' : 'Team created.');
       } catch (reason) {
         onError(reason instanceof Error ? reason.message : 'Could not save the team.');
       }
     }}>
-      <label className="text-xs font-bold text-white/45">Name<input className={inputClass} value={name} onChange={(event) => setName(event.target.value)} required /></label>
-      <label className="text-xs font-bold text-white/45">Short name<input className={inputClass} value={shortName} onChange={(event) => setShortName(event.target.value)} required /></label>
-      <Select label="Group" value={group} onChange={(value) => setGroup(value as GroupId)} options={['A', 'B', 'C', 'D', 'E', 'F'].map((id) => ({ id, label: id }))} />
-      <label className="text-xs font-bold text-white/45">Coach<input className={inputClass} value={coach} onChange={(event) => setCoach(event.target.value)} /></label>
-      <label className="text-xs font-bold text-white/45 sm:col-span-2">Pitch<input className={inputClass} value={pitch} onChange={(event) => setPitch(event.target.value)} /></label>
-      <label className="text-xs font-bold text-white/45 sm:col-span-2">Logo{initial ? '' : ' (required)'}
-        <input
-          className="mt-1 block text-sm"
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          required={!initial}
-          onChange={(event) => {
-            const next = event.target.files?.[0] ?? null;
-            setFile(next);
-            setPreview((current) => {
-              if (current.startsWith('blob:')) URL.revokeObjectURL(current);
-              return next ? URL.createObjectURL(next) : (initial?.crestUrl ?? '');
-            });
-          }}
-        />
-      </label>
-      {preview && <img src={preview} alt="" className="h-16 w-16 rounded-xl object-cover" />}
-      <button type="submit" className="rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018] sm:col-span-2">{initial ? 'Save team' : 'Create team'}</button>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">{initial ? 'EDIT TEAM' : 'NEW TEAM'}</p>
+          <h2 className="mt-1 text-xl font-black">{initial ? initial.name : 'Add a department'}</h2>
+        </div>
+        {initial && <button type="button" onClick={onCancel} className="text-sm font-bold text-white/45">Cancel</button>}
+      </div>
+      <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:items-start">
+        <PicturePicker preview={preview} empty="Team logo" required={!initial} inputKey={logoKey} onFile={chooseLogo} />
+        <div className="grid flex-1 gap-3 sm:grid-cols-2">
+          <Field label="Department name" value={name} onChange={setName} placeholder="Computer Science" required />
+          <Field label="Short name" value={shortName} onChange={setShortName} placeholder="CS" required maxLength={8} />
+          <Field label="Coach" value={coach} onChange={setCoach} placeholder="Coach name" />
+          <Field label="Pitch" value={pitch} onChange={setPitch} placeholder="Campus pitch" />
+          <div className="sm:col-span-2">
+            <ChoiceRow label="Group" value={group} options={['A', 'B', 'C', 'D', 'E', 'F']} onChange={(value) => setGroup(value as GroupId)} />
+          </div>
+        </div>
+      </div>
+      <button type="submit" className="mt-5 w-full rounded-xl bg-[#f5c518] px-4 py-3 text-sm font-black text-[#102018] sm:w-auto">{initial ? 'Save team' : 'Create team'}</button>
     </form>
   );
 }
@@ -898,21 +996,30 @@ function PlayerAdmin({ onMessage, onError }: { onMessage: (text: string) => void
   const [teamId, setTeamId] = useState(departments[0]?.id ?? '');
   const [name, setName] = useState('');
   const [position, setPosition] = useState('MID');
-  const [number, setNumber] = useState('18');
+  const [number, setNumber] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState('');
   const [photoKey, setPhotoKey] = useState(0);
   const squad = players.filter((player) => player.departmentId === teamId && player.registered !== false);
+  const choosePhoto = (next: File | null) => {
+    setFile(next);
+    setPreview((current) => {
+      if (current.startsWith('blob:')) URL.revokeObjectURL(current);
+      return next ? URL.createObjectURL(next) : '';
+    });
+  };
   return (
-    <div>
-      <h1 className="text-3xl font-black">Players</h1>
-      <form className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-[#10192b] p-4 sm:grid-cols-2" onSubmit={async (event) => {
+    <div className="mx-auto max-w-3xl">
+      <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">SQUADS</p>
+      <h1 className="mt-1 text-3xl font-black">Players</h1>
+      <form className="mt-5 rounded-3xl border border-white/10 bg-[#10192b] p-5" onSubmit={async (event) => {
         event.preventDefault();
         try {
           if (!file) throw new Error('A player photo is required.');
           const image = await imagePayload(file);
           await desk('/api/players', { body: { name, teamId, position, number: Number(number), image } });
           setName('');
+          setNumber('');
           setFile(null);
           setPhotoKey((value) => value + 1);
           setPreview((current) => {
@@ -924,34 +1031,27 @@ function PlayerAdmin({ onMessage, onError }: { onMessage: (text: string) => void
           onError(reason instanceof Error ? reason.message : 'Could not save the player.');
         }
       }}>
-        <Select label="Team" value={teamId} onChange={setTeamId} options={departments.map((team) => ({ id: team.id, label: team.name }))} />
-        <label className="text-xs font-bold text-white/45">Name<input className={inputClass} value={name} onChange={(event) => setName(event.target.value)} required /></label>
-        <Select label="Position" value={position} onChange={setPosition} options={['GK', 'DEF', 'MID', 'FWD'].map((id) => ({ id, label: id }))} />
-        <label className="text-xs font-bold text-white/45">Number<input className={inputClass} value={number} onChange={(event) => setNumber(event.target.value)} required /></label>
-        <label className="text-xs font-bold text-white/45 sm:col-span-2">Photo (required)
-          <input
-            key={photoKey}
-            className="mt-1 block text-sm"
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            required
-            onChange={(event) => {
-              const next = event.target.files?.[0] ?? null;
-              setFile(next);
-              setPreview((current) => {
-                if (current.startsWith('blob:')) URL.revokeObjectURL(current);
-                return next ? URL.createObjectURL(next) : '';
-              });
-            }}
-          />
-        </label>
-        {preview && <img src={preview} alt="" className="h-16 w-16 rounded-full object-cover" />}
-        <button type="submit" className="rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018] sm:col-span-2">Add player</button>
+        <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">NEW PLAYER</p>
+        <h2 className="mt-1 text-xl font-black">Register a player</h2>
+        <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:items-start">
+          <PicturePicker preview={preview} empty="Player photo" round required inputKey={photoKey} onFile={choosePhoto} />
+          <div className="grid flex-1 gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <Select label="Team" value={teamId} onChange={setTeamId} options={departments.map((team) => ({ id: team.id, label: team.name }))} />
+            </div>
+            <Field label="Player name" value={name} onChange={setName} placeholder="Full name" required />
+            <Field label="Shirt number" value={number} onChange={setNumber} placeholder="10" required inputMode="numeric" />
+            <div className="sm:col-span-2">
+              <ChoiceRow label="Position" value={position} options={['GK', 'DEF', 'MID', 'FWD']} onChange={setPosition} />
+            </div>
+          </div>
+        </div>
+        <button type="submit" className="mt-5 w-full rounded-xl bg-[#f5c518] px-4 py-3 text-sm font-black text-[#102018] sm:w-auto">Add player</button>
       </form>
-      <ul className="mt-4 divide-y divide-white/5 rounded-2xl border border-white/10">
+      <ul className="mt-6 space-y-2">
         {squad.map((player) => (
-          <li key={player.id} className="flex items-center justify-between px-3 py-2 text-sm">
-            <span className="flex items-center gap-2"><Portrait name={player.name} src={player.photoUrl || undefined} size={32} />{player.number} {player.name} · {player.position}</span>
+          <li key={player.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#10192b] px-3 py-2.5 text-sm">
+            <span className="flex min-w-0 items-center gap-3"><Portrait name={player.name} src={player.photoUrl || undefined} size={40} /><span className="min-w-0"><span className="block truncate font-bold">{player.number} {player.name}</span><span className="block text-xs text-white/40">{player.position}</span></span></span>
             <span className="flex items-center gap-3 text-white/40">
               <span>{player.goals}G {player.assists}A {player.yellowCards ?? 0}Y {player.redCards ?? 0}R · {player.appearances ?? 0} apps</span>
               <select
@@ -1105,7 +1205,7 @@ function AuditList() {
 
 function Select({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: Array<{ id: string; label: string }> }) {
   return (
-    <label className="text-xs font-bold text-white/45">{label}
+    <label className="text-[11px] font-bold uppercase tracking-wide text-white/40">{label}
       <select className={inputClass} value={value} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => <option key={option.id || 'none'} value={option.id}>{option.label}</option>)}
       </select>
