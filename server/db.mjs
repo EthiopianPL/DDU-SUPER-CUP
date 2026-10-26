@@ -1,8 +1,9 @@
+import 'pg';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { MessageChannel, Worker, receiveMessageOnPort } from 'node:worker_threads';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const idle = new Int32Array(new SharedArrayBuffer(4));
@@ -29,10 +30,11 @@ export function databasePath() {
   return process.env.DDU_DB || join(root, 'data', 'supercup.db');
 }
 
-export function openDatabase(path = databasePath()) {
-  loadEnv();
-  const connectionString = (process.env.DATABASE_URL || process.env.SUPABASE_DB_URL || '').trim();
-  if (!process.env.DDU_DB && connectionString) return openPostgres(connectionString);
+function connectionString() {
+  return (process.env.DATABASE_URL || process.env.SUPABASE_DB_URL || '').trim();
+}
+
+function openSqlite(path) {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
   db.dialect = 'sqlite';
@@ -44,6 +46,19 @@ export function openDatabase(path = databasePath()) {
   }
   migrate(db);
   return db;
+}
+
+export function openDatabase(path = databasePath()) {
+  loadEnv();
+  if (!process.env.DDU_DB && connectionString()) return openPostgres(connectionString());
+  return openSqlite(path);
+}
+
+export async function openDatabaseAsync(path = databasePath()) {
+  loadEnv();
+  const url = connectionString();
+  if (!process.env.DDU_DB && url) return openPostgresAsync(url);
+  return openSqlite(path);
 }
 
 function migrate(db) {
@@ -183,17 +198,53 @@ function migrate(db) {
   `);
 }
 
-function openPostgres(connectionString) {
-  const worker = new Worker(new URL('./postgres-worker.mjs', import.meta.url), { execArgv: [] });
+function serverFile(name) {
+  const beside = fileURLToPath(new URL(`./${name}`, import.meta.url));
+  if (existsSync(beside)) return beside;
+  return join(process.cwd(), 'server', name);
+}
+
+function spawnWorker() {
+  const worker = new Worker(pathToFileURL(serverFile('postgres-worker.mjs')), { execArgv: [] });
   const { port1, port2 } = new MessageChannel();
   port1.start();
+  return { worker, port1, port2 };
+}
+
+function waitForStart(worker, port1, port2) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('The database worker did not start.')), 20000);
+    worker.once('error', (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    port1.once('message', (message) => {
+      clearTimeout(timer);
+      resolve(message);
+    });
+    worker.postMessage({ port: port2 }, [port2]);
+  });
+}
+
+function openPostgres(url) {
+  const { worker, port1, port2 } = spawnWorker();
   worker.on('error', (error) => {
     port1.postMessage({ ok: false, error: error.message });
   });
   worker.postMessage({ port: port2 }, [port2]);
   const ready = waitFor(port1);
   if (!ready.ok) throw new Error(ready.error || 'The database worker did not start.');
+  return finishPostgres(worker, port1, url);
+}
 
+async function openPostgresAsync(url) {
+  const { worker, port1, port2 } = spawnWorker();
+  const ready = await waitForStart(worker, port1, port2);
+  if (!ready.ok) throw new Error(ready.error || 'The database worker did not start.');
+  return finishPostgres(worker, port1, url);
+}
+
+function finishPostgres(worker, port1, url) {
   const call = (message) => {
     port1.postMessage(message);
     const payload = waitFor(port1);
@@ -205,7 +256,7 @@ function openPostgres(connectionString) {
     return payload;
   };
 
-  call({ op: 'connect', connectionString });
+  call({ op: 'connect', connectionString: url });
 
   const db = {
     dialect: 'postgres',
@@ -243,7 +294,7 @@ function openPostgres(connectionString) {
     },
   };
 
-  for (const statement of readFileSync(new URL('./schema.supabase.sql', import.meta.url), 'utf8').split(';')) {
+  for (const statement of readFileSync(serverFile('schema.supabase.sql'), 'utf8').split(';')) {
     const sql = statement.trim();
     if (!sql) continue;
     try {

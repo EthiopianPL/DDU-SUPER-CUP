@@ -4,6 +4,7 @@ import { parentPort } from 'node:worker_threads';
 pg.types.setTypeParser(20, (value) => Number(value));
 
 let client;
+let connectionString;
 
 function numbered(sql) {
   let index = 0;
@@ -16,16 +17,39 @@ function plain(row) {
   return out;
 }
 
+function makeClient(value) {
+  return new pg.Client({
+    connectionString: value,
+    ssl: value.includes('supabase.co') || value.includes('pooler.supabase.com')
+      ? { rejectUnauthorized: false }
+      : undefined,
+  });
+}
+
+async function connect(value) {
+  connectionString = value;
+  client = makeClient(value);
+  await client.connect();
+}
+
+function dropped(error) {
+  return error?.code === 'ECONNRESET' || /connection terminated|connection ended|server closed the connection|not queryable|Client has encountered a connection error/i.test(String(error?.message ?? ''));
+}
+
+async function runQuery(sql, params) {
+  try {
+    return await client.query(sql, params);
+  } catch (error) {
+    if (!dropped(error)) throw error;
+    try { await client.end(); } catch { /* The socket is already gone. */ }
+    await connect(connectionString);
+    return client.query(sql, params);
+  }
+}
+
 async function handle(message) {
   if (message.op === 'connect') {
-    const connectionString = message.connectionString;
-    client = new pg.Client({
-      connectionString,
-      ssl: connectionString.includes('supabase.co') || connectionString.includes('pooler.supabase.com')
-        ? { rejectUnauthorized: false }
-        : undefined,
-    });
-    await client.connect();
+    await connect(message.connectionString);
     return { ok: true };
   }
   if (message.op === 'query') {
@@ -33,7 +57,7 @@ async function handle(message) {
     if (/^\s*insert\s+into\s+(match_events|audit_log)\b/i.test(sql) && !/\breturning\b/i.test(sql)) {
       sql = `${sql.replace(/;\s*$/, '')} RETURNING id`;
     }
-    const result = await client.query(sql, message.params);
+    const result = await runQuery(sql, message.params);
     if (result.rows) {
       const rows = result.rows.map(plain);
       const inserted = rows[0]?.id;
