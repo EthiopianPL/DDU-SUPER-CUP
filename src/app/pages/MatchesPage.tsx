@@ -22,13 +22,6 @@ import {
 
 type StatusFilter = 'all' | 'live' | 'upcoming' | 'finished';
 
-const STATUSES: { id: StatusFilter; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'live', label: 'Live' },
-  { id: 'upcoming', label: 'Upcoming' },
-  { id: 'finished', label: 'Finished' },
-];
-
 export function MatchesPage() {
   const systemTodayStr = useMemo(() => getTournamentTodayString(), []);
 
