@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { desk, uploadImage } from '../../data/api';
+import { desk, imagePayload } from '../../data/api';
 import { useLeagueVersion } from '../../data/live';
 import { newsArticles } from '../../data/news';
 import { useMatchClock } from '../useMatchClock';
-import { DepartmentMark } from '../components/DepartmentMark';
+import { DepartmentMark, Portrait } from '../components/DepartmentMark';
 import {
   departments,
   fixtures,
@@ -421,11 +421,11 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
   );
 }
 
-function TeamBlock({ team, align = 'start' }: { team?: { shortName: string; name: string; color: string }; align?: 'start' | 'end' }) {
+function TeamBlock({ team, align = 'start' }: { team?: { shortName: string; name: string; color: string; crestUrl?: string }; align?: 'start' | 'end' }) {
   if (!team) return null;
   return (
     <div className={align === 'end' ? 'text-right' : ''}>
-      <DepartmentMark shortName={team.shortName} color={team.color} size={48} />
+      <DepartmentMark shortName={team.shortName} color={team.color} size={48} src={team.crestUrl || undefined} />
       <p className="mt-2 text-sm font-bold">{team.name}</p>
     </div>
   );
@@ -835,7 +835,7 @@ function TeamAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
       <ul className="mt-4 divide-y divide-white/5 rounded-2xl border border-white/10">
         {departments.map((item) => (
           <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-2">
-            <span className="flex items-center gap-2 text-sm font-bold"><DepartmentMark shortName={item.shortName} color={item.color} size={28} />{item.name}<span className="font-normal text-white/35">Group {item.group}</span></span>
+            <span className="flex items-center gap-2 text-sm font-bold"><DepartmentMark shortName={item.shortName} color={item.color} size={28} src={item.crestUrl || undefined} />{item.name}<span className="font-normal text-white/35">Group {item.group}</span></span>
             <button type="button" onClick={() => setEditing(item.id)} className="text-xs font-bold text-[#f5c518]">Edit</button>
           </li>
         ))}
@@ -850,35 +850,45 @@ function TeamEditor({ initial, onDone, onError }: { initial?: (typeof department
   const [group, setGroup] = useState<GroupId>(initial?.group ?? 'A');
   const [coach, setCoach] = useState(initial?.coach ?? '');
   const [pitch, setPitch] = useState(initial?.pitch ?? '');
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState(initial?.crestUrl ?? '');
   return (
     <form className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-[#10192b] p-4 sm:grid-cols-2" onSubmit={async (event) => {
       event.preventDefault();
       try {
-        await desk(initial ? `/api/teams/${initial.id}` : '/api/teams', { method: initial ? 'PATCH' : 'POST', body: { name, shortName, group, coach, pitch, college: initial?.college ?? '', color: initial?.color ?? '#2450c8' } });
+        if (!initial && !file) throw new Error('A team logo is required.');
+        const image = file ? await imagePayload(file) : undefined;
+        await desk(initial ? `/api/teams/${initial.id}` : '/api/teams', {
+          method: initial ? 'PATCH' : 'POST',
+          body: { name, shortName, group, coach, pitch, college: initial?.college ?? '', color: initial?.color ?? '#2450c8', ...(image ? { image } : {}) },
+        });
         onDone(initial ? 'Team updated.' : 'Team created.');
       } catch (reason) {
         onError(reason instanceof Error ? reason.message : 'Could not save the team.');
       }
     }}>
-      <label className="text-xs font-bold text-white/45">Name<input className={inputClass} value={name} onChange={(event) => setName(event.target.value)} /></label>
-      <label className="text-xs font-bold text-white/45">Short name<input className={inputClass} value={shortName} onChange={(event) => setShortName(event.target.value)} /></label>
+      <label className="text-xs font-bold text-white/45">Name<input className={inputClass} value={name} onChange={(event) => setName(event.target.value)} required /></label>
+      <label className="text-xs font-bold text-white/45">Short name<input className={inputClass} value={shortName} onChange={(event) => setShortName(event.target.value)} required /></label>
       <Select label="Group" value={group} onChange={(value) => setGroup(value as GroupId)} options={['A', 'B', 'C', 'D', 'E', 'F'].map((id) => ({ id, label: id }))} />
       <label className="text-xs font-bold text-white/45">Coach<input className={inputClass} value={coach} onChange={(event) => setCoach(event.target.value)} /></label>
       <label className="text-xs font-bold text-white/45 sm:col-span-2">Pitch<input className={inputClass} value={pitch} onChange={(event) => setPitch(event.target.value)} /></label>
-      {initial && (
-        <label className="text-xs font-bold text-white/45 sm:col-span-2">Crest
-          <input className="mt-1 block text-sm" type="file" accept="image/png,image/jpeg,image/webp" onChange={async (event) => {
-            const file = event.target.files?.[0];
-            if (!file) return;
-            try {
-              await uploadImage(`/api/teams/${initial.id}/image`, file);
-              onDone('Crest saved.');
-            } catch (reason) {
-              onError(reason instanceof Error ? reason.message : 'Could not upload the crest.');
-            }
-          }} />
-        </label>
-      )}
+      <label className="text-xs font-bold text-white/45 sm:col-span-2">Logo{initial ? '' : ' (required)'}
+        <input
+          className="mt-1 block text-sm"
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          required={!initial}
+          onChange={(event) => {
+            const next = event.target.files?.[0] ?? null;
+            setFile(next);
+            setPreview((current) => {
+              if (current.startsWith('blob:')) URL.revokeObjectURL(current);
+              return next ? URL.createObjectURL(next) : (initial?.crestUrl ?? '');
+            });
+          }}
+        />
+      </label>
+      {preview && <img src={preview} alt="" className="h-16 w-16 rounded-xl object-cover" />}
       <button type="submit" className="rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018] sm:col-span-2">{initial ? 'Save team' : 'Create team'}</button>
     </form>
   );
@@ -889,6 +899,9 @@ function PlayerAdmin({ onMessage, onError }: { onMessage: (text: string) => void
   const [name, setName] = useState('');
   const [position, setPosition] = useState('MID');
   const [number, setNumber] = useState('18');
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState('');
+  const [photoKey, setPhotoKey] = useState(0);
   const squad = players.filter((player) => player.departmentId === teamId && player.registered !== false);
   return (
     <div>
@@ -896,23 +909,49 @@ function PlayerAdmin({ onMessage, onError }: { onMessage: (text: string) => void
       <form className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-[#10192b] p-4 sm:grid-cols-2" onSubmit={async (event) => {
         event.preventDefault();
         try {
-          await desk('/api/players', { body: { name, teamId, position, number: Number(number) } });
+          if (!file) throw new Error('A player photo is required.');
+          const image = await imagePayload(file);
+          await desk('/api/players', { body: { name, teamId, position, number: Number(number), image } });
           setName('');
+          setFile(null);
+          setPhotoKey((value) => value + 1);
+          setPreview((current) => {
+            if (current.startsWith('blob:')) URL.revokeObjectURL(current);
+            return '';
+          });
           onMessage('Player registered.');
         } catch (reason) {
           onError(reason instanceof Error ? reason.message : 'Could not save the player.');
         }
       }}>
         <Select label="Team" value={teamId} onChange={setTeamId} options={departments.map((team) => ({ id: team.id, label: team.name }))} />
-        <label className="text-xs font-bold text-white/45">Name<input className={inputClass} value={name} onChange={(event) => setName(event.target.value)} /></label>
+        <label className="text-xs font-bold text-white/45">Name<input className={inputClass} value={name} onChange={(event) => setName(event.target.value)} required /></label>
         <Select label="Position" value={position} onChange={setPosition} options={['GK', 'DEF', 'MID', 'FWD'].map((id) => ({ id, label: id }))} />
-        <label className="text-xs font-bold text-white/45">Number<input className={inputClass} value={number} onChange={(event) => setNumber(event.target.value)} /></label>
+        <label className="text-xs font-bold text-white/45">Number<input className={inputClass} value={number} onChange={(event) => setNumber(event.target.value)} required /></label>
+        <label className="text-xs font-bold text-white/45 sm:col-span-2">Photo (required)
+          <input
+            key={photoKey}
+            className="mt-1 block text-sm"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            required
+            onChange={(event) => {
+              const next = event.target.files?.[0] ?? null;
+              setFile(next);
+              setPreview((current) => {
+                if (current.startsWith('blob:')) URL.revokeObjectURL(current);
+                return next ? URL.createObjectURL(next) : '';
+              });
+            }}
+          />
+        </label>
+        {preview && <img src={preview} alt="" className="h-16 w-16 rounded-full object-cover" />}
         <button type="submit" className="rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018] sm:col-span-2">Add player</button>
       </form>
       <ul className="mt-4 divide-y divide-white/5 rounded-2xl border border-white/10">
         {squad.map((player) => (
           <li key={player.id} className="flex items-center justify-between px-3 py-2 text-sm">
-            <span>{player.number} {player.name} · {player.position}</span>
+            <span className="flex items-center gap-2"><Portrait name={player.name} src={player.photoUrl || undefined} size={32} />{player.number} {player.name} · {player.position}</span>
             <span className="flex items-center gap-3 text-white/40">
               <span>{player.goals}G {player.assists}A {player.yellowCards ?? 0}Y {player.redCards ?? 0}R · {player.appearances ?? 0} apps</span>
               <select

@@ -1,7 +1,7 @@
 import { useNavigate, useParams } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
 import { MatchCard } from '../components/MatchCard';
-import { DepartmentMark } from '../components/DepartmentMark';
+import { DepartmentMark, Portrait } from '../components/DepartmentMark';
 import {
   cardTeam,
   fixturesForDepartment,
@@ -37,7 +37,7 @@ export function TeamDetailsPage() {
       </button>
 
       <div className="rounded-3xl border border-white/10 bg-[#10192b] p-5">
-        <DepartmentMark shortName={department.shortName} color={department.color} size={56} />
+        <DepartmentMark shortName={department.shortName} color={department.color} size={56} src={department.crestUrl || undefined} />
         <p className="mt-4 text-[11px] font-semibold tracking-[0.16em] text-[#f5c518]">GROUP {department.group}</p>
         <h1 className="mt-1 text-3xl font-black text-white">{department.name}</h1>
         <p className="mt-1 text-sm text-white/50">{department.college}</p>
@@ -84,6 +84,7 @@ export function TeamDetailsPage() {
         {squad.map((player) => (
           <div key={player.id} className="flex items-center justify-between border-b border-white/5 px-4 py-3 last:border-b-0">
             <div className="flex items-center gap-3">
+              <Portrait name={player.name} src={player.photoUrl || undefined} size={36} />
               <span className="w-6 text-sm font-black text-white/40">{player.number}</span>
               <div>
                 <p className="text-sm font-semibold text-white">{player.name}</p>

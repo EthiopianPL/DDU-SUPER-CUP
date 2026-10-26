@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { Trophy, Users, BarChart3, Search, X, Award, ChevronRight } from 'lucide-react';
 import { GroupTable } from '../components/GroupTable';
 import { MatchCard } from '../components/MatchCard';
-import { DepartmentMark } from '../components/DepartmentMark';
+import { DepartmentMark, Portrait } from '../components/DepartmentMark';
 import {
   GROUPS,
   GROUP_COLLEGES,
@@ -321,7 +321,7 @@ export function DiscoverPage() {
                           className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#10192b] p-3 text-left transition-all hover:border-white/20 hover:bg-white/[0.07]"
                         >
                           <div className="flex min-w-0 items-center gap-3">
-                            <DepartmentMark shortName={dept.shortName} color={dept.color} size={40} />
+                            <DepartmentMark shortName={dept.shortName} color={dept.color} size={40} src={dept.crestUrl || undefined} />
                             <div className="min-w-0">
                               <p className="truncate text-sm font-bold text-white">{dept.name}</p>
                               <p className="truncate text-xs text-white/40">{dept.pitch}</p>
@@ -436,12 +436,13 @@ export function DiscoverPage() {
                       {statCategory === 'goals' ? 'Golden Boot Leader' : 'Assist Leader'}
                     </span>
                   </div>
-                  <p className="text-lg font-black text-white">{statLeader.name}</p>
+                  <p className="flex items-center gap-2 text-lg font-black text-white"><Portrait name={statLeader.name} src={statLeader.photoUrl || undefined} size={28} />{statLeader.name}</p>
                   <div className="mt-0.5 flex items-center gap-2 text-xs text-white/50">
                     <DepartmentMark
                       shortName={statLeader.department.shortName}
                       color={statLeader.department.color}
                       size={18}
+                      src={statLeader.department.crestUrl || undefined}
                     />
                     <span>{statLeader.department.name} · {statLeader.position}</span>
                   </div>
@@ -488,13 +489,14 @@ export function DiscoverPage() {
                     {rank}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold text-white">{player.name}</p>
+                    <p className="flex items-center gap-2 truncate text-sm font-bold text-white"><Portrait name={player.name} src={player.photoUrl || undefined} size={24} />{player.name}</p>
                     <div className="mt-0.5 flex items-center gap-2 text-xs text-white/45">
                       {player.department && (
                         <DepartmentMark
                           shortName={player.department.shortName}
                           color={player.department.color}
                           size={18}
+                          src={player.department.crestUrl || undefined}
                         />
                       )}
                       <span className="truncate">{player.department?.name} · {player.position}</span>

@@ -104,6 +104,11 @@ function migrate(db) {
       active INTEGER NOT NULL DEFAULT 1,
       photo_url TEXT NOT NULL DEFAULT ''
     );
+    CREATE TABLE IF NOT EXISTS media (
+      id TEXT PRIMARY KEY,
+      content_type TEXT NOT NULL,
+      bytes BLOB NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS matches (
       id TEXT PRIMARY KEY,
       competition_id TEXT NOT NULL,

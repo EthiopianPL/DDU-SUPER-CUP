@@ -381,6 +381,7 @@ export function cardTeam(id: string) {
     name: department.name,
     short_name: department.shortName,
     color: department.color,
+    logo_url: department.crestUrl || undefined,
   };
 }
 

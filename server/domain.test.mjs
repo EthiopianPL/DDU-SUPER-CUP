@@ -235,6 +235,25 @@ test('match events, permissions, clock, and standings stay consistent', async ()
     assert.equal(hidden.status, 200);
     const outsider = await call('/api/users', { cookie: reader });
     assert.equal(outsider.status, 403);
+
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const missingLogo = await call('/api/teams', { method: 'POST', cookie: admin, body: { name: 'No Logo', shortName: 'NL', group: 'A' } });
+    assert.equal(missingLogo.status, 400);
+    const createdTeam = await call('/api/teams', { method: 'POST', cookie: admin, body: { name: 'Logo FC', shortName: 'LFC', group: 'F', image: { contentType: 'image/png', data: png } } });
+    assert.equal(createdTeam.status, 200, createdTeam.data.error);
+    const team = createdTeam.data.snapshot.teams.find((item) => item.shortName === 'LFC');
+    assert.ok(team.crestUrl.startsWith('/api/media/teams/'));
+    const picture = await fetch(`${base}${team.crestUrl}`);
+    assert.equal(picture.status, 200);
+    assert.equal(picture.headers.get('content-type'), 'image/png');
+    const missingPhoto = await call('/api/players', { method: 'POST', cookie: admin, body: { name: 'No Photo', teamId: team.id, position: 'MID', number: 7 } });
+    assert.equal(missingPhoto.status, 400);
+    const addedPlayer = await call('/api/players', { method: 'POST', cookie: admin, body: { name: 'Photo Kid', teamId: team.id, position: 'MID', number: 8, image: { contentType: 'image/png', data: png } } });
+    assert.equal(addedPlayer.status, 200, addedPlayer.data.error);
+    const player = addedPlayer.data.snapshot.players.find((item) => item.name === 'Photo Kid');
+    const face = await fetch(`${base}${player.photoUrl}`);
+    assert.equal(face.status, 200);
+    assert.equal(face.headers.get('content-type'), 'image/png');
   } finally {
     server.close();
   }

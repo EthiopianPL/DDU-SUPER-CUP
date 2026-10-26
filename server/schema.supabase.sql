@@ -149,3 +149,12 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_events_match ON match_events (match_id, voided, type);
+
+CREATE TABLE IF NOT EXISTS media (
+  id TEXT PRIMARY KEY,
+  content_type VARCHAR(40) NOT NULL,
+  bytes BYTEA NOT NULL
+);
+
+ALTER TABLE teams ALTER COLUMN crest_url TYPE TEXT;
+ALTER TABLE players ALTER COLUMN photo_url TYPE TEXT;

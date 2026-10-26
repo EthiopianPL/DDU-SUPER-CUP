@@ -87,7 +87,7 @@ export function GroupTable({
                   {row.position}
                 </span>
                 <span className="flex min-w-0 items-center gap-2.5">
-                  <DepartmentMark shortName={row.department.shortName} color={row.department.color} size={32} />
+                  <DepartmentMark shortName={row.department.shortName} color={row.department.color} size={32} src={row.department.crestUrl || undefined} />
                   <span className="flex min-w-0 items-center gap-1.5 truncate">
                     <span className="truncate text-sm font-bold tracking-tight text-white">{row.department.name}</span>
                     {isHome && (

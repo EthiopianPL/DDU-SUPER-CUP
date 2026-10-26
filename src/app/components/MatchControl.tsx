@@ -88,6 +88,7 @@ export function MatchControl({ id, onClose, onChange }: { id: string; onClose: (
           <TeamScore
             name={home.shortName}
             color={home.color}
+            src={home.crestUrl || undefined}
             score={fixture.homeScore ?? 0}
             disabled={!live}
             onAdd={() => run(() => adjustScore(id, 'home', 1))}
@@ -102,6 +103,7 @@ export function MatchControl({ id, onClose, onChange }: { id: string; onClose: (
           <TeamScore
             name={away.shortName}
             color={away.color}
+            src={away.crestUrl || undefined}
             score={fixture.awayScore ?? 0}
             disabled={!live}
             onAdd={() => run(() => adjustScore(id, 'away', 1))}
@@ -184,6 +186,7 @@ export function MatchControl({ id, onClose, onChange }: { id: string; onClose: (
 function TeamScore({
   name,
   color,
+  src,
   score,
   disabled,
   onAdd,
@@ -192,6 +195,7 @@ function TeamScore({
 }: {
   name: string;
   color: string;
+  src?: string;
   score: number;
   disabled: boolean;
   onAdd: () => void;
@@ -200,7 +204,7 @@ function TeamScore({
 }) {
   return (
     <div className={`flex flex-col gap-2 ${align === 'end' ? 'items-end' : 'items-start'}`}>
-      <DepartmentMark shortName={name} color={color} size={44} />
+      <DepartmentMark shortName={name} color={color} size={44} src={src} />
       <p className="text-3xl font-black tabular-nums text-white">{score}</p>
       <button
         type="button"

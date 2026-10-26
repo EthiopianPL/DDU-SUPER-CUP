@@ -46,7 +46,7 @@ export function TeamsPage() {
                     onClick={() => navigate(`/team/${department.id}`)}
                     className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[#10192b] px-3 py-3 text-left hover:bg-white/5"
                   >
-                    <DepartmentMark shortName={department.shortName} color={department.color} />
+                    <DepartmentMark shortName={department.shortName} color={department.color} src={department.crestUrl || undefined} />
                     <span className="min-w-0">
                       <span className="block truncate font-semibold text-white">{department.name}</span>
                       <span className="block truncate text-xs text-white/40">{department.pitch}</span>

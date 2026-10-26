@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { DepartmentMark } from '../components/DepartmentMark';
+import { DepartmentMark, Portrait } from '../components/DepartmentMark';
 import { topAssists, topScorers } from '../../data/supercup';
 
 type StatTab = 'goals' | 'assists';
@@ -39,10 +39,10 @@ export function StatisticsPage() {
           >
             <span className="w-6 text-sm font-black text-white/40">{index + 1}</span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate font-semibold text-white">{player.name}</span>
+              <span className="flex items-center gap-2 truncate font-semibold text-white"><Portrait name={player.name} src={player.photoUrl || undefined} size={28} />{player.name}</span>
               <span className="mt-1 flex items-center gap-2 text-xs text-white/45">
                 {player.department && (
-                  <DepartmentMark shortName={player.department.shortName} color={player.department.color} size={20} />
+                  <DepartmentMark shortName={player.department.shortName} color={player.department.color} size={20} src={player.department.crestUrl || undefined} />
                 )}
                 {player.department?.name} · {player.position}
               </span>

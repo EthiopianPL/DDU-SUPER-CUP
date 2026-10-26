@@ -70,7 +70,7 @@ export function HomePage() {
             <span className="text-[11px] font-semibold tracking-[0.16em] text-[#f5c518]">TOP SCORER</span>
             <span className="mt-1 block text-lg font-black text-white">{leader.name}</span>
             <span className="mt-1 flex items-center gap-2 text-xs text-white/50">
-              <DepartmentMark shortName={leader.department.shortName} color={leader.department.color} size={22} />
+              <DepartmentMark shortName={leader.department.shortName} color={leader.department.color} size={22} src={leader.department.crestUrl || undefined} />
               {leader.department.name}
             </span>
           </span>
