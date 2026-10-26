@@ -17,7 +17,11 @@ function loadEnv() {
     if (split < 1) continue;
     const key = trimmed.slice(0, split).trim();
     if (process.env[key] != null) continue;
-    process.env[key] = trimmed.slice(split + 1).trim();
+    let value = trimmed.slice(split + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    process.env[key] = value;
   }
 }
 
@@ -27,7 +31,8 @@ export function databasePath() {
 
 export function openDatabase(path = databasePath()) {
   loadEnv();
-  if (!process.env.DDU_DB && process.env.MYSQL_HOST) return openMysql();
+  const connectionString = (process.env.DATABASE_URL || process.env.SUPABASE_DB_URL || '').trim();
+  if (!process.env.DDU_DB && connectionString) return openPostgres(connectionString);
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
   db.dialect = 'sqlite';
@@ -178,8 +183,8 @@ function migrate(db) {
   `);
 }
 
-function openMysql() {
-  const worker = new Worker(new URL('./mysql-worker.mjs', import.meta.url), { execArgv: [] });
+function openPostgres(connectionString) {
+  const worker = new Worker(new URL('./postgres-worker.mjs', import.meta.url), { execArgv: [] });
   const { port1, port2 } = new MessageChannel();
   port1.start();
   worker.on('error', (error) => {
@@ -200,19 +205,12 @@ function openMysql() {
     return payload;
   };
 
-  call({
-    op: 'connect',
-    host: process.env.MYSQL_HOST,
-    port: Number(process.env.MYSQL_PORT || 3306),
-    user: process.env.MYSQL_USER,
-    password: process.env.MYSQL_PASSWORD || '',
-    database: process.env.MYSQL_DATABASE,
-  });
+  call({ op: 'connect', connectionString });
 
   const db = {
-    dialect: 'mysql',
+    dialect: 'postgres',
     exec(sql) {
-      const statement = String(sql).replace(/BEGIN IMMEDIATE/g, 'START TRANSACTION').trim();
+      const statement = String(sql).replace(/BEGIN IMMEDIATE/g, 'BEGIN').trim();
       if (!statement) return;
       call({ op: 'query', sql: statement, params: [] });
     },
@@ -245,20 +243,20 @@ function openMysql() {
     },
   };
 
-  for (const statement of readFileSync(new URL('./schema.mysql.sql', import.meta.url), 'utf8').split(';')) {
+  for (const statement of readFileSync(new URL('./schema.supabase.sql', import.meta.url), 'utf8').split(';')) {
     const sql = statement.trim();
     if (!sql) continue;
     try {
       db.exec(sql);
     } catch (error) {
-      if (error.code !== 'ER_DUP_KEYNAME') throw error;
+      if (error.code !== '42P07' && error.code !== '42710') throw error;
     }
   }
   return db;
 }
 
 function waitFor(port) {
-  const deadline = Date.now() + 15000;
+  const deadline = Date.now() + 30000;
   let received;
   while (!(received = receiveMessageOnPort(port))) {
     if (Date.now() > deadline) throw new Error('The database did not answer in time.');
