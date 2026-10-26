@@ -1,19 +1,18 @@
-import { openDatabase } from '../server/db.mjs';
+import { openDatabaseAsync } from '../server/db.mjs';
 import { handleRequest, prepareDatabase } from '../server/http.mjs';
 
 let pending;
 
 function database() {
   if (!pending) {
-    pending = Promise.resolve()
-      .then(() => {
-        const db = openDatabase();
-        return prepareDatabase(db).then(() => db);
-      })
-      .catch((error) => {
-        pending = undefined;
-        throw error;
-      });
+    pending = (async () => {
+      const db = await openDatabaseAsync();
+      await prepareDatabase(db);
+      return db;
+    })().catch((error) => {
+      pending = undefined;
+      throw error;
+    });
   }
   return pending;
 }
