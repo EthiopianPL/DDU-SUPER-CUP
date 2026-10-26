@@ -2,7 +2,7 @@
 
 Department football league. Six groups, four departments in each group.
 
-The public site and the match desk read from one server. Scores, cards, substitutions, and the clock are stored in MySQL and checked in a transaction. Standings use confirmed full-time results only.
+The public site and the match desk read from one server. Scores, cards, substitutions, and the clock are stored in Supabase Postgres and checked in a transaction. Standings use confirmed full-time results only.
 
 ## Running the code
 
@@ -16,4 +16,4 @@ Run `npm run build` and then `npm start` to serve the built site and the API tog
 
 The desk signs in as `admin`. Set `ADMIN_PASSWORD` on the server if the default password should not be used.
 
-The match database is MySQL. Copy `.env.example` to `.env` and set `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USER`, and `MYSQL_PASSWORD`. The server creates the tables on startup and adds the desk account when the database is empty. Tests still use a temporary SQLite file through `DDU_DB`.
+The match database is Supabase Postgres. In the Supabase project, open Connect and copy the Session pooler URI (port 5432). Put that URI in `.env` as `DATABASE_URL`, exactly as shown, so any special characters in the password stay encoded. The server creates the tables from `server/schema.supabase.sql` on startup and adds the desk account when the database is empty. Do not use the transaction pooler on port 6543. Tests still use a temporary SQLite file through `DDU_DB`.
