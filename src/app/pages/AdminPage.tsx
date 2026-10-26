@@ -1081,9 +1081,10 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
   const [summary, setSummary] = useState('');
   const [body, setBody] = useState('');
   return (
-    <div>
-      <h1 className="text-3xl font-black">News</h1>
-      <form className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-[#10192b] p-4" onSubmit={async (event) => {
+    <div className="mx-auto max-w-3xl">
+      <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">STORIES</p>
+      <h1 className="mt-1 text-3xl font-black">News</h1>
+      <form className="mt-5 rounded-3xl border border-white/10 bg-[#10192b] p-5" onSubmit={async (event) => {
         event.preventDefault();
         try {
           await desk('/api/news', { body: { title, summary, body, category: 'News', time: 'Today' } });
@@ -1093,16 +1094,25 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
           onError(reason instanceof Error ? reason.message : 'Could not publish the story.');
         }
       }}>
-        <label className="text-xs font-bold text-white/45">Title<input className={inputClass} value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-        <label className="text-xs font-bold text-white/45">Summary<input className={inputClass} value={summary} onChange={(event) => setSummary(event.target.value)} /></label>
-        <label className="text-xs font-bold text-white/45">Story<textarea className={inputClass} rows={4} value={body} onChange={(event) => setBody(event.target.value)} /></label>
-        <button type="submit" className="rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018]">Publish</button>
+        <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">NEW STORY</p>
+        <h2 className="mt-1 text-xl font-black">Publish a story</h2>
+        <div className="mt-5 grid gap-3">
+          <Field label="Title" value={title} onChange={setTitle} placeholder="Headline" required />
+          <Field label="Summary" value={summary} onChange={setSummary} placeholder="One line for the news list" required />
+          <label className="text-[11px] font-bold uppercase tracking-wide text-white/40">Story
+            <textarea className={inputClass} rows={6} value={body} placeholder="The full story" required onChange={(event) => setBody(event.target.value)} />
+          </label>
+        </div>
+        <button type="submit" className="mt-5 w-full rounded-xl bg-[#f5c518] px-4 py-3 text-sm font-black text-[#102018] sm:w-auto">Publish</button>
       </form>
-      <ul className="mt-4 space-y-2">
+      <ul className="mt-6 space-y-2">
         {newsArticles.map((article) => (
-          <li key={article.id} className="flex items-center justify-between rounded-xl border border-white/10 px-3 py-2 text-sm">
-            <span>{article.title}</span>
-            <button type="button" className="text-xs font-bold text-red-300" onClick={async () => {
+          <li key={article.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#10192b] px-3 py-2.5">
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-bold">{article.title}</span>
+              <span className="block text-xs font-semibold text-white/35">{article.category} · {article.time}</span>
+            </span>
+            <button type="button" className="shrink-0 rounded-full bg-white/5 px-3 py-1.5 text-xs font-bold text-red-300" onClick={async () => {
               try {
                 await desk(`/api/news/${article.id}`, { method: 'DELETE', body: {} });
                 onMessage('Story removed.');
@@ -1112,6 +1122,7 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
             }}>Delete</button>
           </li>
         ))}
+        {!newsArticles.length && <li className="rounded-2xl border border-white/10 px-3 py-6 text-sm text-white/40">No stories yet.</li>}
       </ul>
     </div>
   );
