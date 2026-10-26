@@ -3,7 +3,6 @@ import { createReadStream, existsSync, mkdirSync, mkdtempSync, writeFileSync } f
 import { extname, join, normalize } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import * as esbuild from 'esbuild';
 import { can, newToken, verifyPassword } from './auth.mjs';
 import { openDatabase } from './db.mjs';
 import {
@@ -34,9 +33,10 @@ import {
 } from './domain.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const uploads = join(root, 'data', 'uploads');
+const uploads = process.env.VERCEL ? join(tmpdir(), 'ddu-uploads') : join(root, 'data', 'uploads');
 const clients = new Set();
 const loginAttempts = new Map();
+let clockTimer = null;
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -61,22 +61,42 @@ export function pushClock(db) {
   if (payload.matches.length) broadcast(payload);
 }
 
-export function createApp(db) {
-  setNotifier(broadcast);
-  return createServer(async (request, response) => {
+function ensureClock(db) {
+  if (!process.env.VERCEL || clockTimer) return;
+  clockTimer = setInterval(() => {
+    if (!clients.size) return;
     try {
-      const url = new URL(request.url, 'http://127.0.0.1');
-      if (url.pathname === '/api/live') return serveEvents(request, response, db);
-      if (url.pathname.startsWith('/api/')) return await serveApi(request, response, db, url);
-      if (url.pathname.startsWith('/uploads/')) return serveUpload(response, url.pathname);
-      if (process.env.NODE_ENV === 'production') return serveStatic(response, url.pathname);
-      response.writeHead(404, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ error: 'Not found.' }));
+      pushClock(db);
     } catch (error) {
-      const status = error instanceof RuleError ? error.status : 500;
-      if (status === 500) console.error(error);
-      send(response, status, { error: status === 500 ? 'The server could not complete that.' : error.message });
+      console.error(error);
     }
+  }, 1000);
+}
+
+export async function handleRequest(db, request, response) {
+  setNotifier(broadcast);
+  try {
+    const url = new URL(request.url || '/', 'http://127.0.0.1');
+    if (url.pathname === '/api/live') {
+      serveEvents(request, response, db);
+      ensureClock(db);
+      return;
+    }
+    if (url.pathname.startsWith('/api/')) return await serveApi(request, response, db, url);
+    if (url.pathname.startsWith('/uploads/')) return serveUpload(response, url.pathname);
+    if (process.env.NODE_ENV === 'production' && !process.env.VERCEL) return serveStatic(response, url.pathname);
+    response.writeHead(404, { 'Content-Type': 'application/json' });
+    response.end(JSON.stringify({ error: 'Not found.' }));
+  } catch (error) {
+    const status = error instanceof RuleError ? error.status : 500;
+    if (status === 500) console.error(error);
+    if (!response.headersSent) send(response, status, { error: status === 500 ? 'The server could not complete that.' : error.message });
+  }
+}
+
+export function createApp(db) {
+  return createServer((request, response) => {
+    handleRequest(db, request, response);
   });
 }
 
@@ -188,14 +208,14 @@ async function login(request, response, db) {
   loginAttempts.delete(ip);
   const token = newToken();
   db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)').run(token, user.id, Date.now() + 12 * 60 * 60 * 1000);
-  response.setHeader('Set-Cookie', `ddu_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${12 * 60 * 60}`);
+  response.setHeader('Set-Cookie', sessionCookie(token, 12 * 60 * 60));
   send(response, 200, { user: publicUser(user) });
 }
 
 function logout(request, response, db) {
   const token = cookies(request).ddu_session;
   if (token) db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
-  response.setHeader('Set-Cookie', 'ddu_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
+  response.setHeader('Set-Cookie', sessionCookie('', 0));
   send(response, 200, { ok: true });
 }
 
@@ -206,6 +226,11 @@ function guardMutation(request, response) {
     return false;
   }
   return true;
+}
+
+function sessionCookie(token, maxAge) {
+  const secure = process.env.VERCEL ? '; Secure' : '';
+  return `ddu_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secure}`;
 }
 
 function cookies(request) {
@@ -296,6 +321,7 @@ function send(response, status, body) {
 }
 
 export async function loadLeagueSource() {
+  const esbuild = await import('esbuild');
   const dir = mkdtempSync(join(tmpdir(), 'ddu-seed-'));
   const outfile = join(dir, 'league.mjs');
   await esbuild.build({
@@ -308,12 +334,20 @@ export async function loadLeagueSource() {
   return import(pathToFileURL(outfile).href);
 }
 
-export function startServer(db = openDatabase(), port = Number(process.env.PORT || 8787)) {
-  const sourcePromise = loadLeagueSource().then((league) => {
-    seedDatabase(db, league, process.env.ADMIN_PASSWORD || 'supercup');
+export function prepareDatabase(db) {
+  const password = process.env.ADMIN_PASSWORD || 'supercup';
+  if (db.dialect === 'postgres') {
+    seedDatabase(db, null, password);
+    return Promise.resolve();
+  }
+  return loadLeagueSource().then((league) => {
+    seedDatabase(db, league, password);
   });
+}
+
+export function startServer(db = openDatabase(), port = Number(process.env.PORT || 8787)) {
   const server = createApp(db);
-  return sourcePromise.then(() => new Promise((resolve) => {
+  return prepareDatabase(db).then(() => new Promise((resolve) => {
     server.listen(port, '127.0.0.1', () => resolve({ server, db }));
   }));
 }

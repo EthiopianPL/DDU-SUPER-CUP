@@ -17,3 +17,5 @@ Run `npm run build` and then `npm start` to serve the built site and the API tog
 The desk signs in as `admin`. Set `ADMIN_PASSWORD` on the server if the default password should not be used.
 
 The match database is Supabase Postgres. In the Supabase project, open Connect and copy the Session pooler URI (port 5432). Put that URI in `.env` as `DATABASE_URL`, exactly as shown, so any special characters in the password stay encoded. The server creates the tables from `server/schema.supabase.sql` on startup and adds the desk account when the database is empty. Do not use the transaction pooler on port 6543. Tests still use a temporary SQLite file through `DDU_DB`.
+
+The Vercel site serves the pages and `/api` together. Add `DATABASE_URL` and `ADMIN_PASSWORD` in the Vercel project settings. The same values belong in the local `.env`.

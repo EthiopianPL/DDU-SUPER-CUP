@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { MessageChannel, Worker, receiveMessageOnPort } from 'node:worker_threads';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const idle = new Int32Array(new SharedArrayBuffer(4));
@@ -183,8 +183,14 @@ function migrate(db) {
   `);
 }
 
+function serverFile(name) {
+  const beside = fileURLToPath(new URL(`./${name}`, import.meta.url));
+  if (existsSync(beside)) return beside;
+  return join(process.cwd(), 'server', name);
+}
+
 function openPostgres(connectionString) {
-  const worker = new Worker(new URL('./postgres-worker.mjs', import.meta.url), { execArgv: [] });
+  const worker = new Worker(pathToFileURL(serverFile('postgres-worker.mjs')), { execArgv: [] });
   const { port1, port2 } = new MessageChannel();
   port1.start();
   worker.on('error', (error) => {
@@ -243,7 +249,7 @@ function openPostgres(connectionString) {
     },
   };
 
-  for (const statement of readFileSync(new URL('./schema.supabase.sql', import.meta.url), 'utf8').split(';')) {
+  for (const statement of readFileSync(serverFile('schema.supabase.sql'), 'utf8').split(';')) {
     const sql = statement.trim();
     if (!sql) continue;
     try {
