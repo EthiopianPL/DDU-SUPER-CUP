@@ -33,13 +33,13 @@ export function GroupTable({
       </header>
 
       <div className={compact ? '' : 'overflow-x-auto overscroll-x-contain pb-0.5'}>
-        <div className={compact ? '' : 'min-w-[480px]'}>
+        <div className={compact ? '' : 'min-w-[500px]'}>
           <div
             className="grid items-center gap-2 border-b border-white/10 bg-white/[0.03] px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white/75"
             style={{
               gridTemplateColumns: compact
                 ? '28px 1fr 32px 42px'
-                : '28px minmax(130px, 1fr) 32px 30px 30px 30px 36px 42px 76px',
+                : '28px minmax(130px, 1fr) 32px 30px 30px 30px 38px 42px 76px',
             }}
           >
             <span className="text-white/40">#</span>
