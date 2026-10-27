@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { desk, uploadImage } from '../../data/api';
+import { desk, imagePayload } from '../../data/api';
 import { useLeagueVersion } from '../../data/live';
 import { newsArticles } from '../../data/news';
 import { useMatchClock } from '../useMatchClock';
-import { DepartmentMark } from '../components/DepartmentMark';
+import { DepartmentMark, Portrait } from '../components/DepartmentMark';
 import {
   departments,
   fixtures,
@@ -18,6 +18,7 @@ import {
   squads,
   type GroupId,
 } from '../../data/supercup';
+import { STAGE_OPTIONS, stageLabel, tieCount, type Stage } from '../../data/knockout';
 
 type Role = 'super_admin' | 'match_admin' | 'competition_manager' | 'team_manager' | 'reader';
 type Section = 'overview' | 'matches' | 'teams' | 'players' | 'news' | 'users' | 'audit' | 'rules';
@@ -207,88 +208,173 @@ function MatchList({ version, onOpen, onMessage, onError }: { version: number; o
   void version;
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
-  const [creating, setCreating] = useState(false);
   const rows = fixtures.filter((fixture) => {
     const home = getDepartment(fixture.homeId);
     const away = getDepartment(fixture.awayId);
-    const text = `${home?.name} ${away?.name} ${fixture.stadium} ${fixture.group}`.toLowerCase();
+    const text = `${home?.name ?? ''} ${away?.name ?? ''} ${fixture.stadium} ${fixture.group} ${fixture.stage ?? ''}`.toLowerCase();
     const statusOk = status === 'all' || fixture.detail === status || fixture.status === status;
     return statusOk && text.includes(query.trim().toLowerCase());
   });
 
   return (
-    <div>
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-3xl font-black">Matches</h1>
-        <button type="button" onClick={() => setCreating((value) => !value)} className="rounded-xl bg-[#f5c518] px-3 py-2 text-sm font-black text-[#102018]">New match</button>
+    <div className="mx-auto max-w-3xl">
+      <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">FIXTURES</p>
+      <h1 className="mt-1 text-3xl font-black">Matches</h1>
+      <p className="mt-1 text-sm text-white/45">Nothing is placed on the calendar until you schedule it here.</p>
+      <MatchForm onDone={onMessage} onError={onError} />
+      <GroupRoundForm onDone={onMessage} onError={onError} />
+      <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+        <input className={`${inputClass} mt-0`} placeholder="Search teams or venue" value={query} onChange={(event) => setQuery(event.target.value)} />
+        <select className={`${inputClass} mt-0 sm:max-w-[180px]`} value={status} onChange={(event) => setStatus(event.target.value)}>
+          {['all', 'scheduled', 'live', 'halftime', 'finished', 'postponed', 'suspended', 'cancelled', 'abandoned'].map((item) => (
+            <option key={item} value={item}>{item}</option>
+          ))}
+        </select>
       </div>
-      {creating && <MatchForm onDone={(text) => { setCreating(false); onMessage(text); }} onError={onError} />}
-      <div className="mt-4 flex flex-wrap gap-2">
-        <input className={`${inputClass} mt-0 max-w-xs`} placeholder="Search teams or venue" value={query} onChange={(event) => setQuery(event.target.value)} />
-        {['all', 'scheduled', 'live', 'halftime', 'finished', 'postponed', 'suspended', 'cancelled', 'abandoned'].map((item) => (
-          <button key={item} type="button" onClick={() => setStatus(item)} className={`rounded-full px-3 py-1.5 text-xs font-bold ${status === item ? 'bg-white text-[#102018]' : 'bg-white/5 text-white/60'}`}>{item}</button>
-        ))}
-      </div>
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
-        <table className="min-w-[760px] w-full text-left text-sm">
-          <thead className="bg-white/[0.03] text-xs uppercase tracking-wide text-white/40">
-            <tr>
-              <th className="px-3 py-2">Fixture</th>
-              <th className="px-3 py-2">Kickoff</th>
-              <th className="px-3 py-2">Score</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Venue</th>
-              <th className="px-3 py-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((fixture) => (
-              <tr key={fixture.id} className="border-t border-white/5">
-                <td className="px-3 py-2 font-bold">{labelOf(fixture.homeId)} vs {labelOf(fixture.awayId)}<span className="mt-0.5 block text-xs font-normal text-white/35">Group {fixture.group} · MD{fixture.matchday}</span></td>
-                <td className="px-3 py-2 text-white/60">{fixture.date} {fixture.time}</td>
-                <td className="px-3 py-2 font-mono">{fixture.status === 'upcoming' ? '–' : `${fixture.homeScore}-${fixture.awayScore}`}</td>
-                <td className="px-3 py-2">{fixture.detail}{fixture.confirmed ? ' · confirmed' : ''}</td>
-                <td className="px-3 py-2 text-white/50">{fixture.stadium}</td>
-                <td className="px-3 py-2 text-right">
-                  <button type="button" onClick={() => onOpen(fixture.id)} className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold">Open</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {!rows.length && <p className="px-3 py-8 text-center text-sm text-white/40">No matches for this filter.</p>}
-      </div>
+      <ul className="mt-3 space-y-2">
+        {rows.map((fixture) => {
+          const knockout = fixture.stage && fixture.stage !== 'group';
+          return (
+            <li key={fixture.id}>
+              <button type="button" onClick={() => onOpen(fixture.id)} className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#10192b] px-3 py-3 text-left">
+                <span className="min-w-0">
+                  <span className="block text-[11px] font-bold uppercase tracking-wide text-[#f5c518]">
+                    {knockout ? `${stageLabel(fixture.stage)} · Tie ${fixture.slot}` : `Group ${fixture.group} · Matchday ${fixture.matchday}`}
+                  </span>
+                  <span className="mt-0.5 block truncate text-sm font-black">{labelOf(fixture.homeId)} vs {labelOf(fixture.awayId)}</span>
+                  <span className="block text-xs text-white/40">{fixture.date} {fixture.time} · {fixture.stadium}</span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <span className="block font-mono text-sm font-black">{fixture.status === 'upcoming' ? '–' : `${fixture.homeScore}-${fixture.awayScore}`}</span>
+                  <span className="text-[11px] font-bold text-white/40">{fixture.detail}{fixture.confirmed ? ' · confirmed' : ''}</span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {!rows.length && <p className="mt-4 rounded-2xl border border-white/10 px-3 py-8 text-center text-sm text-white/40">No matches yet. Schedule one above.</p>}
     </div>
   );
 }
 
 function MatchForm({ onDone, onError }: { onDone: (text: string) => void; onError: (text: string) => void }) {
-  const [homeId, setHomeId] = useState(departments[0]?.id ?? '');
-  const [awayId, setAwayId] = useState(departments[1]?.id ?? '');
+  const [stage, setStage] = useState<Stage>('group');
+  const [group, setGroup] = useState<GroupId>('A');
+  const [slot, setSlot] = useState('1');
+  const [matchday, setMatchday] = useState('1');
+  const pool = stage === 'group' ? departments.filter((team) => team.group === group) : departments;
+  const [homeId, setHomeId] = useState(pool[0]?.id ?? '');
+  const [awayId, setAwayId] = useState(pool[1]?.id ?? '');
   const [date, setDate] = useState('2026-11-07');
   const [time, setTime] = useState('15:00');
   const [venue, setVenue] = useState('DDU Main Pitch');
+  const [referee, setReferee] = useState('');
   const [allowExtra, setAllowExtra] = useState(false);
+  const home = pool.find((team) => team.id === homeId) ?? pool[0];
+  const awayOptions = pool.filter((team) => team.id !== home?.id);
+  const away = awayOptions.find((team) => team.id === awayId) ?? awayOptions[0];
+  const ties = tieCount(stage);
+
   return (
     <form
-      className="mt-4 grid gap-3 rounded-2xl border border-white/10 bg-[#10192b] p-4 sm:grid-cols-2"
+      className="mt-5 rounded-3xl border border-white/10 bg-[#10192b] p-5"
       onSubmit={async (event) => {
         event.preventDefault();
         try {
-          await desk('/api/matches', { body: { homeId, awayId, date, time, venue, allowExtra, matchday: 1 } });
+          if (!home || !away) throw new Error('Add two teams before scheduling a match.');
+          await desk('/api/matches', {
+            body: {
+              stage,
+              slot: stage === 'group' ? 0 : Math.min(Number(slot) || 1, ties),
+              matchday: Number(matchday) || 1,
+              homeId: home.id,
+              awayId: away.id,
+              date,
+              time,
+              venue,
+              referee,
+              allowExtra: stage === 'group' ? allowExtra : true,
+            },
+          });
           onDone('Match scheduled.');
         } catch (reason) {
           onError(reason instanceof Error ? reason.message : 'Could not schedule the match.');
         }
       }}
     >
-      <Select label="Home" value={homeId} onChange={setHomeId} options={departments.map((team) => ({ id: team.id, label: team.name }))} />
-      <Select label="Away" value={awayId} onChange={setAwayId} options={departments.map((team) => ({ id: team.id, label: team.name }))} />
-      <label className="text-xs font-bold text-white/50">Date<input className={inputClass} type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
-      <label className="text-xs font-bold text-white/50">Kickoff<input className={inputClass} type="time" value={time} onChange={(event) => setTime(event.target.value)} /></label>
-      <label className="text-xs font-bold text-white/50 sm:col-span-2">Venue<input className={inputClass} value={venue} onChange={(event) => setVenue(event.target.value)} /></label>
-      <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={allowExtra} onChange={(event) => setAllowExtra(event.target.checked)} /> Allow extra time and penalties</label>
-      <button type="submit" className="rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018] sm:col-span-2">Schedule</button>
+      <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">NEW MATCH</p>
+      <h2 className="mt-1 text-xl font-black">Schedule a fixture</h2>
+      <div className="mt-4 grid gap-4">
+        <ChoiceRow label="Round" value={stageLabel(stage)} options={STAGE_OPTIONS.map((item) => item.label)} onChange={(label) => {
+          const next = STAGE_OPTIONS.find((item) => item.label === label)?.id ?? 'group';
+          setStage(next);
+          if (next !== 'group') {
+            setAllowExtra(true);
+            if (Number(slot) > tieCount(next)) setSlot('1');
+          }
+        }} />
+        {stage === 'group' ? (
+          <ChoiceRow label="Group" value={group} options={['A', 'B', 'C', 'D', 'E', 'F']} onChange={(value) => setGroup(value as GroupId)} />
+        ) : (
+          <ChoiceRow label="Tie" value={String(Math.min(Number(slot) || 1, ties))} options={Array.from({ length: ties }, (_, index) => String(index + 1))} onChange={setSlot} />
+        )}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Select label="Home" value={home?.id ?? ''} onChange={setHomeId} options={pool.map((team) => ({ id: team.id, label: `${team.shortName} · ${team.name}` }))} />
+          <Select label="Away" value={away?.id ?? ''} onChange={setAwayId} options={awayOptions.map((team) => ({ id: team.id, label: `${team.shortName} · ${team.name}` }))} />
+          {stage === 'group' && <Field label="Matchday" value={matchday} onChange={setMatchday} placeholder="1" inputMode="numeric" />}
+          <label className="text-[11px] font-bold uppercase tracking-wide text-white/40">Date
+            <input className={inputClass} type="date" value={date} required onChange={(event) => setDate(event.target.value)} />
+          </label>
+          <label className="text-[11px] font-bold uppercase tracking-wide text-white/40">Kickoff
+            <input className={inputClass} type="time" value={time} required onChange={(event) => setTime(event.target.value)} />
+          </label>
+          <Field label="Venue" value={venue} onChange={setVenue} placeholder="Campus pitch" />
+          <Field label="Referee" value={referee} onChange={setReferee} placeholder="Optional" />
+        </div>
+        {stage === 'group' && (
+          <label className="flex items-center gap-2 text-sm text-white/70">
+            <input type="checkbox" checked={allowExtra} onChange={(event) => setAllowExtra(event.target.checked)} />
+            Allow extra time and penalties
+          </label>
+        )}
+        {stage !== 'group' && <p className="text-xs text-white/40">Knockout ties allow extra time and penalties. The winner fills the next round on Discover once the result is confirmed.</p>}
+      </div>
+      <button type="submit" className="mt-5 w-full rounded-xl bg-[#f5c518] px-4 py-3 text-sm font-black text-[#102018] sm:w-auto">Schedule match</button>
+    </form>
+  );
+}
+
+function GroupRoundForm({ onDone, onError }: { onDone: (text: string) => void; onError: (text: string) => void }) {
+  const [group, setGroup] = useState('ALL');
+  const [date, setDate] = useState('2026-11-07');
+  const [time, setTime] = useState('15:00');
+  return (
+    <form
+      className="mt-3 rounded-3xl border border-white/10 bg-[#10192b] p-5"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        try {
+          const data = await desk('/api/matches/round', { body: { group: group === 'ALL' ? '' : group, date, time } });
+          onDone(data.created ? `Scheduled ${data.created} group matches.` : 'Those group matches are already on the calendar.');
+        } catch (reason) {
+          onError(reason instanceof Error ? reason.message : 'Could not build the group fixtures.');
+        }
+      }}
+    >
+      <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">GROUP DRAW</p>
+      <h2 className="mt-1 text-xl font-black">Fill a group calendar</h2>
+      <p className="mt-1 text-sm text-white/45">Builds the missing round-robin only. Each matchday is one week apart. Scores stay blank until you play the match.</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <Select label="Group" value={group} onChange={setGroup} options={[{ id: 'ALL', label: 'All groups' }, ...['A', 'B', 'C', 'D', 'E', 'F'].map((id) => ({ id, label: `Group ${id}` }))]} />
+        <label className="text-[11px] font-bold uppercase tracking-wide text-white/40">First matchday
+          <input className={inputClass} type="date" value={date} onChange={(event) => setDate(event.target.value)} required />
+        </label>
+        <label className="text-[11px] font-bold uppercase tracking-wide text-white/40">Kickoff
+          <input className={inputClass} type="time" value={time} onChange={(event) => setTime(event.target.value)} required />
+        </label>
+      </div>
+      <button type="submit" className="mt-4 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-black">Schedule missing fixtures</button>
     </form>
   );
 }
@@ -340,7 +426,7 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
           </div>
           <TeamBlock team={away} align="end" />
         </div>
-        <p className="mt-3 text-center text-xs text-white/35">{fixture.stadium} · {fixture.date} {fixture.time}{fixture.referee ? ` · Ref ${fixture.referee}` : ''}{fixture.confirmed ? ' · Confirmed' : ''}</p>
+        <p className="mt-3 text-center text-xs text-white/35">{fixture.stage && fixture.stage !== 'group' ? `${stageLabel(fixture.stage)} · Tie ${fixture.slot}` : `Group ${fixture.group} · MD${fixture.matchday}`} · {fixture.stadium} · {fixture.date} {fixture.time}{fixture.referee ? ` · Ref ${fixture.referee}` : ''}{fixture.confirmed ? ' · Confirmed' : ''}</p>
         <div className="mt-4 flex flex-wrap gap-2">
           {finished && <p className="w-full text-sm text-white/50">This match is finished. The score, lineup, and events stay as recorded.</p>}
           {!finished && (fixture.detail === 'scheduled' || fixture.detail === 'postponed') ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'kickoff' })}>Kick off</Action> : null}
@@ -421,11 +507,11 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
   );
 }
 
-function TeamBlock({ team, align = 'start' }: { team?: { shortName: string; name: string; color: string }; align?: 'start' | 'end' }) {
+function TeamBlock({ team, align = 'start' }: { team?: { shortName: string; name: string; color: string; crestUrl?: string }; align?: 'start' | 'end' }) {
   if (!team) return null;
   return (
     <div className={align === 'end' ? 'text-right' : ''}>
-      <DepartmentMark shortName={team.shortName} color={team.color} size={48} />
+      <DepartmentMark shortName={team.shortName} color={team.color} size={48} src={team.crestUrl || undefined} />
       <p className="mt-2 text-sm font-bold">{team.name}</p>
     </div>
   );
@@ -820,23 +906,105 @@ function ManualStats({ matchId, disabled, onSave, bare = false }: { matchId: str
   );
 }
 
+function Field({ label, value, onChange, placeholder, required, maxLength, inputMode }: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  required?: boolean;
+  maxLength?: number;
+  inputMode?: 'text' | 'numeric';
+}) {
+  return (
+    <label className="text-[11px] font-bold uppercase tracking-wide text-white/40">{label}
+      <input
+        className={inputClass}
+        value={value}
+        placeholder={placeholder}
+        required={required}
+        maxLength={maxLength}
+        inputMode={inputMode}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
+}
+
+function ChoiceRow({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
+  return (
+    <div>
+      <p className="text-[11px] font-bold uppercase tracking-wide text-white/40">{label}</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {options.map((option) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => onChange(option)}
+            className={`rounded-full px-3 py-1.5 text-xs font-black ${value === option ? 'bg-[#f5c518] text-[#102018]' : 'bg-white/5 text-white/70'}`}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PicturePicker({ preview, empty, round = false, wide = false, required = false, inputKey, onFile }: {
+  preview: string;
+  empty: string;
+  round?: boolean;
+  wide?: boolean;
+  required?: boolean;
+  inputKey?: number;
+  onFile: (file: File | null) => void;
+}) {
+  return (
+    <label className={`flex shrink-0 cursor-pointer flex-col items-center gap-2 ${wide ? 'w-full' : ''}`}>
+      <span className={`relative flex items-center justify-center overflow-hidden border border-dashed border-white/20 bg-[#0c1424] ${wide ? 'h-44 w-full rounded-2xl' : 'h-32 w-32'} ${round ? 'rounded-full' : ''} ${wide || round ? '' : 'rounded-3xl'}`}>
+        {preview ? <img src={preview} alt="" className="h-full w-full object-cover" /> : <span className="px-4 text-center text-xs font-bold leading-snug text-white/45">{empty}</span>}
+        <input
+          key={inputKey}
+          className="sr-only"
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          required={required}
+          onChange={(event) => onFile(event.target.files?.[0] ?? null)}
+        />
+      </span>
+      <span className="text-[11px] font-bold text-white/40">{preview ? 'Change picture' : 'Choose a picture'}</span>
+    </label>
+  );
+}
+
 function TeamAdmin({ onMessage, onError }: { onMessage: (text: string) => void; onError: (text: string) => void }) {
   const [editing, setEditing] = useState<string | null>(null);
   const team = departments.find((item) => item.id === editing);
   return (
-    <div>
-      <h1 className="text-3xl font-black">Teams</h1>
+    <div className="mx-auto max-w-3xl">
+      <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">DEPARTMENTS</p>
+      <h1 className="mt-1 text-3xl font-black">Teams</h1>
       <TeamEditor
         key={team?.id ?? 'new'}
         initial={team}
-        onDone={onMessage}
+        onDone={(text) => {
+          onMessage(text);
+          if (!team) setEditing(null);
+        }}
         onError={onError}
+        onCancel={() => setEditing(null)}
       />
-      <ul className="mt-4 divide-y divide-white/5 rounded-2xl border border-white/10">
+      <ul className="mt-6 space-y-2">
         {departments.map((item) => (
-          <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-2">
-            <span className="flex items-center gap-2 text-sm font-bold"><DepartmentMark shortName={item.shortName} color={item.color} size={28} />{item.name}<span className="font-normal text-white/35">Group {item.group}</span></span>
-            <button type="button" onClick={() => setEditing(item.id)} className="text-xs font-bold text-[#f5c518]">Edit</button>
+          <li key={item.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#10192b] px-3 py-2.5">
+            <span className="flex min-w-0 items-center gap-3 text-sm font-bold">
+              <DepartmentMark shortName={item.shortName} color={item.color} size={36} src={item.crestUrl || undefined} />
+              <span className="min-w-0">
+                <span className="block truncate">{item.name}</span>
+                <span className="block text-xs font-semibold text-white/35">Group {item.group}{item.coach ? ` · ${item.coach}` : ''}</span>
+              </span>
+            </span>
+            <button type="button" onClick={() => setEditing(item.id)} className="shrink-0 rounded-full bg-white/5 px-3 py-1.5 text-xs font-bold text-[#f5c518]">Edit</button>
           </li>
         ))}
       </ul>
@@ -844,42 +1012,69 @@ function TeamAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
   );
 }
 
-function TeamEditor({ initial, onDone, onError }: { initial?: (typeof departments)[number]; onDone: (text: string) => void; onError: (text: string) => void }) {
+function TeamEditor({ initial, onDone, onError, onCancel }: { initial?: (typeof departments)[number]; onDone: (text: string) => void; onError: (text: string) => void; onCancel: () => void }) {
   const [name, setName] = useState(initial?.name ?? '');
   const [shortName, setShortName] = useState(initial?.shortName ?? '');
   const [group, setGroup] = useState<GroupId>(initial?.group ?? 'A');
   const [coach, setCoach] = useState(initial?.coach ?? '');
   const [pitch, setPitch] = useState(initial?.pitch ?? '');
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState(initial?.crestUrl ?? '');
+  const [logoKey, setLogoKey] = useState(0);
+  const chooseLogo = (next: File | null) => {
+    setFile(next);
+    setPreview((current) => {
+      if (current.startsWith('blob:')) URL.revokeObjectURL(current);
+      return next ? URL.createObjectURL(next) : (initial?.crestUrl ?? '');
+    });
+  };
   return (
-    <form className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-[#10192b] p-4 sm:grid-cols-2" onSubmit={async (event) => {
+    <form className="mt-5 rounded-3xl border border-white/10 bg-[#10192b] p-5" onSubmit={async (event) => {
       event.preventDefault();
       try {
-        await desk(initial ? `/api/teams/${initial.id}` : '/api/teams', { method: initial ? 'PATCH' : 'POST', body: { name, shortName, group, coach, pitch, college: initial?.college ?? '', color: initial?.color ?? '#2450c8' } });
+        if (!initial && !file) throw new Error('A team logo is required.');
+        const image = file ? await imagePayload(file) : undefined;
+        await desk(initial ? `/api/teams/${initial.id}` : '/api/teams', {
+          method: initial ? 'PATCH' : 'POST',
+          body: { name, shortName, group, coach, pitch, college: initial?.college ?? '', color: initial?.color ?? '#2450c8', ...(image ? { image } : {}) },
+        });
+        if (!initial) {
+          setName('');
+          setShortName('');
+          setCoach('');
+          setPitch('');
+          setFile(null);
+          setLogoKey((value) => value + 1);
+          setPreview((current) => {
+            if (current.startsWith('blob:')) URL.revokeObjectURL(current);
+            return '';
+          });
+        }
         onDone(initial ? 'Team updated.' : 'Team created.');
       } catch (reason) {
         onError(reason instanceof Error ? reason.message : 'Could not save the team.');
       }
     }}>
-      <label className="text-xs font-bold text-white/45">Name<input className={inputClass} value={name} onChange={(event) => setName(event.target.value)} /></label>
-      <label className="text-xs font-bold text-white/45">Short name<input className={inputClass} value={shortName} onChange={(event) => setShortName(event.target.value)} /></label>
-      <Select label="Group" value={group} onChange={(value) => setGroup(value as GroupId)} options={['A', 'B', 'C', 'D', 'E', 'F'].map((id) => ({ id, label: id }))} />
-      <label className="text-xs font-bold text-white/45">Coach<input className={inputClass} value={coach} onChange={(event) => setCoach(event.target.value)} /></label>
-      <label className="text-xs font-bold text-white/45 sm:col-span-2">Pitch<input className={inputClass} value={pitch} onChange={(event) => setPitch(event.target.value)} /></label>
-      {initial && (
-        <label className="text-xs font-bold text-white/45 sm:col-span-2">Crest
-          <input className="mt-1 block text-sm" type="file" accept="image/png,image/jpeg,image/webp" onChange={async (event) => {
-            const file = event.target.files?.[0];
-            if (!file) return;
-            try {
-              await uploadImage(`/api/teams/${initial.id}/image`, file);
-              onDone('Crest saved.');
-            } catch (reason) {
-              onError(reason instanceof Error ? reason.message : 'Could not upload the crest.');
-            }
-          }} />
-        </label>
-      )}
-      <button type="submit" className="rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018] sm:col-span-2">{initial ? 'Save team' : 'Create team'}</button>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">{initial ? 'EDIT TEAM' : 'NEW TEAM'}</p>
+          <h2 className="mt-1 text-xl font-black">{initial ? initial.name : 'Add a department'}</h2>
+        </div>
+        {initial && <button type="button" onClick={onCancel} className="text-sm font-bold text-white/45">Cancel</button>}
+      </div>
+      <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:items-start">
+        <PicturePicker preview={preview} empty="Team logo" required={!initial} inputKey={logoKey} onFile={chooseLogo} />
+        <div className="grid flex-1 gap-3 sm:grid-cols-2">
+          <Field label="Department name" value={name} onChange={setName} placeholder="Computer Science" required />
+          <Field label="Short name" value={shortName} onChange={setShortName} placeholder="CS" required maxLength={8} />
+          <Field label="Coach" value={coach} onChange={setCoach} placeholder="Coach name" />
+          <Field label="Pitch" value={pitch} onChange={setPitch} placeholder="Campus pitch" />
+          <div className="sm:col-span-2">
+            <ChoiceRow label="Group" value={group} options={['A', 'B', 'C', 'D', 'E', 'F']} onChange={(value) => setGroup(value as GroupId)} />
+          </div>
+        </div>
+      </div>
+      <button type="submit" className="mt-5 w-full rounded-xl bg-[#f5c518] px-4 py-3 text-sm font-black text-[#102018] sm:w-auto">{initial ? 'Save team' : 'Create team'}</button>
     </form>
   );
 }
@@ -888,31 +1083,62 @@ function PlayerAdmin({ onMessage, onError }: { onMessage: (text: string) => void
   const [teamId, setTeamId] = useState(departments[0]?.id ?? '');
   const [name, setName] = useState('');
   const [position, setPosition] = useState('MID');
-  const [number, setNumber] = useState('18');
+  const [number, setNumber] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState('');
+  const [photoKey, setPhotoKey] = useState(0);
   const squad = players.filter((player) => player.departmentId === teamId && player.registered !== false);
+  const choosePhoto = (next: File | null) => {
+    setFile(next);
+    setPreview((current) => {
+      if (current.startsWith('blob:')) URL.revokeObjectURL(current);
+      return next ? URL.createObjectURL(next) : '';
+    });
+  };
   return (
-    <div>
-      <h1 className="text-3xl font-black">Players</h1>
-      <form className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-[#10192b] p-4 sm:grid-cols-2" onSubmit={async (event) => {
+    <div className="mx-auto max-w-3xl">
+      <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">SQUADS</p>
+      <h1 className="mt-1 text-3xl font-black">Players</h1>
+      <form className="mt-5 rounded-3xl border border-white/10 bg-[#10192b] p-5" onSubmit={async (event) => {
         event.preventDefault();
         try {
-          await desk('/api/players', { body: { name, teamId, position, number: Number(number) } });
+          if (!file) throw new Error('A player photo is required.');
+          const image = await imagePayload(file);
+          await desk('/api/players', { body: { name, teamId, position, number: Number(number), image } });
           setName('');
+          setNumber('');
+          setFile(null);
+          setPhotoKey((value) => value + 1);
+          setPreview((current) => {
+            if (current.startsWith('blob:')) URL.revokeObjectURL(current);
+            return '';
+          });
           onMessage('Player registered.');
         } catch (reason) {
           onError(reason instanceof Error ? reason.message : 'Could not save the player.');
         }
       }}>
-        <Select label="Team" value={teamId} onChange={setTeamId} options={departments.map((team) => ({ id: team.id, label: team.name }))} />
-        <label className="text-xs font-bold text-white/45">Name<input className={inputClass} value={name} onChange={(event) => setName(event.target.value)} /></label>
-        <Select label="Position" value={position} onChange={setPosition} options={['GK', 'DEF', 'MID', 'FWD'].map((id) => ({ id, label: id }))} />
-        <label className="text-xs font-bold text-white/45">Number<input className={inputClass} value={number} onChange={(event) => setNumber(event.target.value)} /></label>
-        <button type="submit" className="rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018] sm:col-span-2">Add player</button>
+        <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">NEW PLAYER</p>
+        <h2 className="mt-1 text-xl font-black">Register a player</h2>
+        <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:items-start">
+          <PicturePicker preview={preview} empty="Player photo" round required inputKey={photoKey} onFile={choosePhoto} />
+          <div className="grid flex-1 gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <Select label="Team" value={teamId} onChange={setTeamId} options={departments.map((team) => ({ id: team.id, label: team.name }))} />
+            </div>
+            <Field label="Player name" value={name} onChange={setName} placeholder="Full name" required />
+            <Field label="Shirt number" value={number} onChange={setNumber} placeholder="10" required inputMode="numeric" />
+            <div className="sm:col-span-2">
+              <ChoiceRow label="Position" value={position} options={['GK', 'DEF', 'MID', 'FWD']} onChange={setPosition} />
+            </div>
+          </div>
+        </div>
+        <button type="submit" className="mt-5 w-full rounded-xl bg-[#f5c518] px-4 py-3 text-sm font-black text-[#102018] sm:w-auto">Add player</button>
       </form>
-      <ul className="mt-4 divide-y divide-white/5 rounded-2xl border border-white/10">
+      <ul className="mt-6 space-y-2">
         {squad.map((player) => (
-          <li key={player.id} className="flex items-center justify-between px-3 py-2 text-sm">
-            <span>{player.number} {player.name} · {player.position}</span>
+          <li key={player.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#10192b] px-3 py-2.5 text-sm">
+            <span className="flex min-w-0 items-center gap-3"><Portrait name={player.name} src={player.photoUrl || undefined} size={40} /><span className="min-w-0"><span className="block truncate font-bold">{player.number} {player.name}</span><span className="block text-xs text-white/40">{player.position}</span></span></span>
             <span className="flex items-center gap-3 text-white/40">
               <span>{player.goals}G {player.assists}A {player.yellowCards ?? 0}Y {player.redCards ?? 0}R · {player.appearances ?? 0} apps</span>
               <select
@@ -941,38 +1167,72 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
   const [body, setBody] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState('');
+  const [photoKey, setPhotoKey] = useState(0);
+  const choosePhoto = (next: File | null) => {
+    setFile(next);
+    setPreview((current) => {
+      if (current.startsWith('blob:')) URL.revokeObjectURL(current);
+      return next ? URL.createObjectURL(next) : '';
+    });
+  };
   return (
-    <div>
-      <h1 className="text-3xl font-black">News</h1>
-      <form className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-[#10192b] p-4" onSubmit={async (event) => {
+    <div className="mx-auto max-w-3xl">
+      <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">STORIES</p>
+      <h1 className="mt-1 text-3xl font-black">News</h1>
+      <form className="mt-5 rounded-3xl border border-white/10 bg-[#10192b] p-5" onSubmit={async (event) => {
         event.preventDefault();
         try {
-          await desk('/api/news', { body: { title, summary, body, category: 'News', time: 'Today' } });
-          setTitle(''); setSummary(''); setBody('');
+          const image = file ? await imagePayload(file) : undefined;
+          await desk('/api/news', { body: { title, summary, body, category: 'News', time: 'Today', ...(image ? { image } : {}) } });
+          setTitle('');
+          setSummary('');
+          setBody('');
+          setFile(null);
+          setPhotoKey((value) => value + 1);
+          setPreview((current) => {
+            if (current.startsWith('blob:')) URL.revokeObjectURL(current);
+            return '';
+          });
           onMessage('Story published.');
         } catch (reason) {
           onError(reason instanceof Error ? reason.message : 'Could not publish the story.');
         }
       }}>
-        <label className="text-xs font-bold text-white/45">Title<input className={inputClass} value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-        <label className="text-xs font-bold text-white/45">Summary<input className={inputClass} value={summary} onChange={(event) => setSummary(event.target.value)} /></label>
-        <label className="text-xs font-bold text-white/45">Story<textarea className={inputClass} rows={4} value={body} onChange={(event) => setBody(event.target.value)} /></label>
-        <button type="submit" className="rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018]">Publish</button>
+        <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">NEW STORY</p>
+        <h2 className="mt-1 text-xl font-black">Publish a story</h2>
+        <div className="mt-5 grid gap-3">
+          <PicturePicker preview={preview} empty="Story photo" wide inputKey={photoKey} onFile={choosePhoto} />
+          <Field label="Title" value={title} onChange={setTitle} placeholder="Headline" required />
+          <Field label="Summary" value={summary} onChange={setSummary} placeholder="One line for the news list" required />
+          <label className="text-[11px] font-bold uppercase tracking-wide text-white/40">Story
+            <textarea className={inputClass} rows={6} value={body} placeholder="The full story" required onChange={(event) => setBody(event.target.value)} />
+          </label>
+        </div>
+        <button type="submit" className="mt-5 w-full rounded-xl bg-[#f5c518] px-4 py-3 text-sm font-black text-[#102018] sm:w-auto">Publish</button>
       </form>
-      <ul className="mt-4 space-y-2">
+      <ul className="mt-6 space-y-2">
         {newsArticles.map((article) => (
-          <li key={article.id} className="flex items-center justify-between rounded-xl border border-white/10 px-3 py-2 text-sm">
-            <span>{article.title}</span>
-            <button type="button" className="text-xs font-bold text-red-300" onClick={async () => {
-              try {
-                await desk(`/api/news/${article.id}`, { method: 'DELETE', body: {} });
-                onMessage('Story removed.');
-              } catch (reason) {
-                onError(reason instanceof Error ? reason.message : 'Could not remove the story.');
-              }
-            }}>Delete</button>
+          <li key={article.id} className="overflow-hidden rounded-2xl border border-white/10 bg-[#10192b]">
+            {article.imageUrl && <img src={article.imageUrl} alt="" className="h-36 w-full object-cover" />}
+            <span className="flex items-center justify-between gap-3 px-3 py-2.5">
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-bold">{article.title}</span>
+                <span className="block text-xs font-semibold text-white/35">{article.category} · {article.time}</span>
+              </span>
+              <button type="button" className="shrink-0 rounded-full bg-white/5 px-3 py-1.5 text-xs font-bold text-red-300" onClick={async () => {
+                try {
+                  await desk(`/api/news/${article.id}`, { method: 'DELETE', body: {} });
+                  onMessage('Story removed.');
+                } catch (reason) {
+                  onError(reason instanceof Error ? reason.message : 'Could not remove the story.');
+                }
+              }}>Delete</button>
+            </span>
           </li>
         ))}
+        {!newsArticles.length && <li className="rounded-2xl border border-white/10 px-3 py-6 text-sm text-white/40">No stories yet.</li>}
       </ul>
     </div>
   );
@@ -1066,7 +1326,7 @@ function AuditList() {
 
 function Select({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: Array<{ id: string; label: string }> }) {
   return (
-    <label className="text-xs font-bold text-white/45">{label}
+    <label className="text-[11px] font-bold uppercase tracking-wide text-white/40">{label}
       <select className={inputClass} value={value} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => <option key={option.id || 'none'} value={option.id}>{option.label}</option>)}
       </select>

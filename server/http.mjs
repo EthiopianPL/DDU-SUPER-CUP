@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { createReadStream, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdtempSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -11,6 +11,7 @@ import {
   controlMatch,
   correctEvent,
   createMatch,
+  scheduleGroupFixtures,
   createUser,
   currentRevision,
   deleteNews,
@@ -24,6 +25,7 @@ import {
   saveNews,
   savePlayer,
   saveTeam,
+  setImage,
   seedDatabase,
   setNotifier,
   updateMatch,
@@ -82,6 +84,7 @@ export async function handleRequest(db, request, response) {
       ensureClock(db);
       return;
     }
+    if (request.method === 'GET' && url.pathname.startsWith('/api/media/')) return serveMedia(response, db, url.pathname);
     if (url.pathname.startsWith('/api/')) return await serveApi(request, response, db, url);
     if (url.pathname.startsWith('/uploads/')) return serveUpload(response, url.pathname);
     if (process.env.NODE_ENV === 'production' && !process.env.VERCEL) return serveStatic(response, url.pathname);
@@ -133,6 +136,7 @@ async function serveApi(request, response, db, url) {
   if (request.method === 'POST' && path === '/api/teams') return mutate(response, db, () => saveTeam(db, must(actor), body));
   if (request.method === 'POST' && path === '/api/players') return mutate(response, db, () => savePlayer(db, must(actor), body));
   if (request.method === 'POST' && path === '/api/news') return mutate(response, db, () => saveNews(db, must(actor), body));
+  if (request.method === 'POST' && path === '/api/matches/round') return mutate(response, db, () => scheduleGroupFixtures(db, must(actor), body));
   if (request.method === 'POST' && path === '/api/matches') return mutate(response, db, () => createMatch(db, must(actor), body));
 
   if (one && request.method === 'PATCH' && one[1] === 'teams') return mutate(response, db, () => saveTeam(db, must(actor), body, decodeURIComponent(one[2])));
@@ -262,20 +266,26 @@ function uploadImage(request, response, db, actor, path) {
   const type = String(request.headers['content-type'] ?? '');
   const extension = type.includes('png') ? 'png' : type.includes('webp') ? 'webp' : type.includes('jpeg') ? 'jpg' : '';
   if (!extension) return send(response, 400, { error: 'Upload a PNG, JPEG, or WebP image.' });
+  const contentType = extension === 'png' ? 'image/png' : extension === 'webp' ? 'image/webp' : 'image/jpeg';
   return readRaw(request, 1_500_000).then((buffer) => {
     if (!buffer.length) return send(response, 400, { error: 'The image was empty.' });
-    const folder = join(uploads, kind);
-    mkdirSync(folder, { recursive: true });
-    const filename = `${id}.${extension}`;
-    writeFileSync(join(folder, filename), buffer);
-    const column = kind === 'teams' ? 'crest_url' : 'photo_url';
-    const table = kind === 'teams' ? 'teams' : 'players';
-    const url = `/uploads/${kind}/${filename}`;
-    const result = db.prepare(`UPDATE ${table} SET ${column} = ? WHERE id = ?`).run(url, id);
-    if (!result.changes) return send(response, 404, { error: 'Not found.' });
-    withRevision(() => ({ id }));
-    send(response, 200, { ok: true, url, snapshot: buildSnapshot(db) });
+    const saved = withRevision(() => setImage(db, kind, id, { contentType, bytes: buffer }));
+    send(response, 200, { ok: true, url: saved.url, snapshot: buildSnapshot(db) });
   });
+}
+
+function serveMedia(response, db, pathname) {
+  const match = pathname.match(/^\/api\/media\/(teams|players|news)\/([^/]+)$/);
+  if (!match) return send(response, 404, { error: 'Not found.' });
+  const row = db.prepare('SELECT content_type, bytes FROM media WHERE id = ?').get(`${match[1]}/${decodeURIComponent(match[2])}`);
+  if (!row?.bytes) return send(response, 404, { error: 'Not found.' });
+  const bytes = Buffer.isBuffer(row.bytes) ? row.bytes : Buffer.from(row.bytes);
+  response.writeHead(200, {
+    'Content-Type': row.content_type || 'application/octet-stream',
+    'Cache-Control': 'public, max-age=86400',
+    'Content-Length': bytes.length,
+  });
+  response.end(bytes);
 }
 
 function readRaw(request, limit) {
@@ -336,13 +346,13 @@ export async function loadLeagueSource() {
 
 export function prepareDatabase(db) {
   const password = process.env.ADMIN_PASSWORD || 'supercup';
-  if (db.dialect === 'postgres') {
-    seedDatabase(db, null, password);
-    return Promise.resolve();
+  if (process.env.DDU_DEMO === '1' && db.dialect !== 'postgres') {
+    return loadLeagueSource().then((league) => {
+      seedDatabase(db, league, password);
+    });
   }
-  return loadLeagueSource().then((league) => {
-    seedDatabase(db, league, password);
-  });
+  seedDatabase(db, null, password);
+  return Promise.resolve();
 }
 
 export function startServer(db = openDatabase(), port = Number(process.env.PORT || 8787)) {

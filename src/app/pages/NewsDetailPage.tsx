@@ -24,6 +24,7 @@ export function NewsDetailPage() {
       </button>
       <p className="text-[11px] font-semibold tracking-[0.16em] text-[#f5c518]">{article.category} · {article.time}</p>
       <h1 className="mt-2 text-3xl font-black text-white">{article.title}</h1>
+      {article.imageUrl && <img src={article.imageUrl} alt="" className="mt-5 h-72 w-full rounded-3xl object-cover" />}
       <p className="mt-4 text-base leading-7 text-white/75">{article.body}</p>
     </div>
   );

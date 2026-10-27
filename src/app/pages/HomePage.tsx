@@ -27,7 +27,7 @@ export function HomePage() {
         <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold">
           <span className="rounded-full bg-[#2450c8]/20 px-3 py-1 text-[#9eb6f5]">6 groups</span>
           <span className="rounded-full bg-[#f5c518]/15 px-3 py-1 text-[#f5c518]">24 departments</span>
-          <span className="rounded-full bg-[#2f9e44]/15 px-3 py-1 text-[#7ddea0]">Top 2 advance</span>
+          <span className="rounded-full bg-[#2f9e44]/15 px-3 py-1 text-[#7ddea0]">Then 16, 8, 4, 2</span>
         </div>
       </section>
 
@@ -70,7 +70,7 @@ export function HomePage() {
             <span className="text-[11px] font-semibold tracking-[0.16em] text-[#f5c518]">TOP SCORER</span>
             <span className="mt-1 block text-lg font-black text-white">{leader.name}</span>
             <span className="mt-1 flex items-center gap-2 text-xs text-white/50">
-              <DepartmentMark shortName={leader.department.shortName} color={leader.department.color} size={22} />
+              <DepartmentMark shortName={leader.department.shortName} color={leader.department.color} size={22} src={leader.department.crestUrl || undefined} />
               {leader.department.name}
             </span>
           </span>

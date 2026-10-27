@@ -182,7 +182,7 @@ function onPitch(db, match, playerId, teamId, beforeId = null) {
 export function seedDatabase(db, source, password) {
   const existing = db.prepare('SELECT COUNT(*) AS total FROM users').get();
   if (Number(existing.total) > 0) return false;
-  if (db.dialect === 'postgres') return seedAccount(db, password);
+  if (!source) return seedAccount(db, password);
 
   transaction(db, () => {
     const now = Date.now();
@@ -420,6 +420,8 @@ export function buildSnapshot(db, now = Date.now()) {
       assistant2: match.assistant2,
       formationHome: match.formation_home,
       formationAway: match.formation_away,
+      stage: match.stage || 'group',
+      slot: Number(match.slot) || 0,
       version: match.version,
       updatedAt: match.updated_at,
     })),
@@ -462,6 +464,7 @@ export function buildSnapshot(db, now = Date.now()) {
       time: article.time_label,
       summary: article.summary,
       body: article.body,
+      imageUrl: article.image_url || '',
     })),
   };
 }
@@ -491,12 +494,47 @@ function slug(value) {
   return base || `item-${Date.now()}`;
 }
 
+function storedImage(input) {
+  const image = input?.image;
+  if (!image) return null;
+  const contentType = String(image.contentType ?? '');
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(contentType)) {
+    throw new RuleError('Upload a PNG, JPEG, or WebP image.');
+  }
+  let raw = String(image.data ?? '');
+  const comma = raw.indexOf(',');
+  if (raw.startsWith('data:') && comma >= 0) raw = raw.slice(comma + 1);
+  const bytes = Buffer.from(raw, 'base64');
+  if (!bytes.length) throw new RuleError('The image was empty.');
+  if (bytes.length > 1_500_000) throw new RuleError('That image is larger than 1.5 MB.');
+  return { contentType, bytes };
+}
+
+function saveMedia(db, kind, id, image) {
+  db.prepare(`INSERT INTO media (id, content_type, bytes) VALUES (?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET content_type = excluded.content_type, bytes = excluded.bytes`).run(`${kind}/${id}`, image.contentType, image.bytes);
+  return `/api/media/${kind}/${encodeURIComponent(id)}?v=${Date.now()}`;
+}
+
+export function setImage(db, kind, id, image) {
+  const table = kind === 'teams' ? 'teams' : 'players';
+  const column = kind === 'teams' ? 'crest_url' : 'photo_url';
+  return transaction(db, () => {
+    if (!db.prepare(`SELECT id FROM ${table} WHERE id = ?`).get(id)) throw new RuleError('Not found.', 404);
+    const url = saveMedia(db, kind, id, image);
+    db.prepare(`UPDATE ${table} SET ${column} = ? WHERE id = ?`).run(url, id);
+    return { id, url };
+  });
+}
+
 export function saveTeam(db, actor, input, id) {
   deny(actor, 'team.write');
   const name = String(input.name ?? '').trim();
   const shortName = String(input.shortName ?? '').trim().toUpperCase();
   const group = String(input.group ?? '').trim();
   if (!name || !shortName || !group) throw new RuleError('Name, short name, and group are required.');
+  const image = storedImage(input);
+  if (!id && !image) throw new RuleError('A team logo is required.');
   return transaction(db, () => {
     const nowId = id || slug(name);
     const before = id ? db.prepare('SELECT * FROM teams WHERE id = ?').get(id) : null;
@@ -507,17 +545,18 @@ export function saveTeam(db, actor, input, id) {
     const pitch = String(input.pitch ?? before?.pitch ?? '').trim();
     const coach = String(input.coach ?? before?.coach ?? '').trim();
     const status = String(input.status ?? before?.status ?? 'active');
+    const crest = image ? saveMedia(db, 'teams', nowId, image) : before?.crest_url ?? '';
     if (id) {
-      db.prepare(`UPDATE teams SET name=?, short_name=?, college=?, group_id=?, color=?, pitch=?, coach=?, status=? WHERE id=?`).run(
-        name, shortName, college, group, color, pitch, coach, status, id,
+      db.prepare(`UPDATE teams SET name=?, short_name=?, college=?, group_id=?, color=?, pitch=?, coach=?, crest_url=?, status=? WHERE id=?`).run(
+        name, shortName, college, group, color, pitch, coach, crest, status, id,
       );
     } else {
-      db.prepare(`INSERT INTO teams (id, name, short_name, college, group_id, color, pitch, coach, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-        nowId, name, shortName, college, group, color, pitch, coach, status,
+      db.prepare(`INSERT INTO teams (id, name, short_name, college, group_id, color, pitch, coach, crest_url, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        nowId, name, shortName, college, group, color, pitch, coach, crest, status,
       );
     }
-    audit(db, actor, id ? 'team.update' : 'team.create', 'team', id || nowId, before, { name, shortName, group });
-    return { id: id || nowId };
+    audit(db, actor, id ? 'team.update' : 'team.create', 'team', nowId, before, { name, shortName, group });
+    return { id: nowId };
   });
 }
 
@@ -529,7 +568,10 @@ export function deleteTeam(db, actor, id) {
   if (actor.role === 'team_manager') throw new RuleError('Only a competition manager can delete a team.', 403);
   return transaction(db, () => {
     const used = db.prepare('SELECT COUNT(*) AS total FROM matches WHERE home_id = ? OR away_id = ?').get(id, id);
-    if (used.total > 0) throw new RuleError('Delete or reassign this team’s matches before deleting the team.');
+    if (Number(used.total) > 0) throw new RuleError('Delete or reassign this team’s matches before deleting the team.');
+    const roster = db.prepare('SELECT id FROM players WHERE team_id = ?').all(id);
+    db.prepare('DELETE FROM media WHERE id = ?').run(`teams/${id}`);
+    for (const player of roster) db.prepare('DELETE FROM media WHERE id = ?').run(`players/${player.id}`);
     db.prepare('DELETE FROM players WHERE team_id = ?').run(id);
     const result = db.prepare('DELETE FROM teams WHERE id = ?').run(id);
     if (!result.changes) throw new RuleError('Team not found.', 404);
@@ -547,6 +589,8 @@ export function savePlayer(db, actor, input, id) {
   if (!name || !teamId || !['GK', 'DEF', 'MID', 'FWD'].includes(position) || !Number.isInteger(number)) {
     throw new RuleError('Name, team, position, and shirt number are required.');
   }
+  const image = storedImage(input);
+  if (!id && !image) throw new RuleError('A player photo is required.');
   if (!db.prepare('SELECT id FROM teams WHERE id = ?').get(teamId)) throw new RuleError('Team not found.', 404);
   return transaction(db, () => {
     const before = id ? playerRow(db, id) : null;
@@ -554,13 +598,14 @@ export function savePlayer(db, actor, input, id) {
     if (!id && db.prepare('SELECT id FROM players WHERE id = ?').get(playerId)) throw new RuleError('That player already exists.');
     const taken = db.prepare('SELECT id FROM players WHERE team_id = ? AND number = ? AND id <> ? AND active = 1').get(teamId, number, playerId);
     if (taken) throw new RuleError(`Shirt ${number} is already used on this team.`);
+    const photo = image ? saveMedia(db, 'players', playerId, image) : before?.photo_url ?? '';
     if (id) {
-      db.prepare(`UPDATE players SET team_id=?, name=?, position=?, number=?, nationality=?, active=? WHERE id=?`).run(
-        teamId, name, position, number, String(input.nationality ?? before.nationality ?? ''), input.active === false ? 0 : 1, id,
+      db.prepare(`UPDATE players SET team_id=?, name=?, position=?, number=?, nationality=?, photo_url=?, active=? WHERE id=?`).run(
+        teamId, name, position, number, String(input.nationality ?? before.nationality ?? ''), photo, input.active === false ? 0 : 1, id,
       );
     } else {
-      db.prepare(`INSERT INTO players (id, team_id, name, position, number, nationality, registered, active) VALUES (?, ?, ?, ?, ?, ?, 1, 1)`).run(
-        playerId, teamId, name, position, number, String(input.nationality ?? ''),
+      db.prepare(`INSERT INTO players (id, team_id, name, position, number, nationality, photo_url, registered, active) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1)`).run(
+        playerId, teamId, name, position, number, String(input.nationality ?? ''), photo,
       );
     }
     audit(db, actor, id ? 'player.update' : 'player.create', 'player', id || playerId, before, { name, teamId, position, number });
@@ -574,13 +619,16 @@ export function saveNews(db, actor, input, id) {
   const summary = String(input.summary ?? '').trim();
   const body = String(input.body ?? '').trim();
   if (!title || !summary || !body) throw new RuleError('Title, summary, and story are required.');
+  const image = storedImage(input);
   return transaction(db, () => {
     const articleId = id || slug(title);
-    if (id && !db.prepare('SELECT id FROM news WHERE id = ?').get(id)) throw new RuleError('Story not found.', 404);
+    const before = id ? db.prepare('SELECT id, image_url FROM news WHERE id = ?').get(id) : null;
+    if (id && !before) throw new RuleError('Story not found.', 404);
     if (!id && db.prepare('SELECT id FROM news WHERE id = ?').get(articleId)) throw new RuleError('A story with that title already exists.');
-    const fields = [title, String(input.category ?? 'News').trim() || 'News', String(input.time ?? 'Today').trim() || 'Today', summary, body];
-    if (id) db.prepare('UPDATE news SET title=?, category=?, time_label=?, summary=?, body=? WHERE id=?').run(...fields, id);
-    else db.prepare('INSERT INTO news (title, category, time_label, summary, body, id) VALUES (?, ?, ?, ?, ?, ?)').run(...fields, articleId);
+    const imageUrl = image ? saveMedia(db, 'news', articleId, image) : (before?.image_url ?? '');
+    const fields = [title, String(input.category ?? 'News').trim() || 'News', String(input.time ?? 'Today').trim() || 'Today', summary, body, imageUrl];
+    if (id) db.prepare('UPDATE news SET title=?, category=?, time_label=?, summary=?, body=?, image_url=? WHERE id=?').run(...fields, id);
+    else db.prepare('INSERT INTO news (title, category, time_label, summary, body, image_url, id) VALUES (?, ?, ?, ?, ?, ?, ?)').run(...fields, articleId);
     audit(db, actor, id ? 'news.update' : 'news.create', 'news', id || articleId, null, { title });
     return { id: id || articleId };
   });
@@ -591,6 +639,7 @@ export function deleteNews(db, actor, id) {
   return transaction(db, () => {
     const result = db.prepare('DELETE FROM news WHERE id = ?').run(id);
     if (!result.changes) throw new RuleError('Story not found.', 404);
+    db.prepare('DELETE FROM media WHERE id = ?').run(`news/${id}`);
     audit(db, actor, 'news.delete', 'news', id, null, null);
     return { ok: true };
   });
@@ -664,53 +713,157 @@ function defaultSquad(db, teamId) {
   return { starters, bench };
 }
 
-export function createMatch(db, actor, input) {
-  deny(actor, 'match.schedule');
+const MATCH_STAGES = new Set(['group', 'r16', 'qf', 'sf', 'final']);
+const KNOCKOUT_TIES = { r16: 8, qf: 4, sf: 2, final: 1 };
+
+function plannedMatch(db, input) {
+  const stage = MATCH_STAGES.has(input.stage) ? input.stage : 'group';
+  const knockout = stage !== 'group';
   const homeId = String(input.homeId ?? '');
   const awayId = String(input.awayId ?? '');
   if (!homeId || !awayId || homeId === awayId) throw new RuleError('Choose two different teams.');
   const home = db.prepare('SELECT * FROM teams WHERE id = ?').get(homeId);
   const away = db.prepare('SELECT * FROM teams WHERE id = ?').get(awayId);
   if (!home || !away) throw new RuleError('Team not found.', 404);
-  if (home.group_id !== away.group_id) throw new RuleError('Group matches must be between teams in the same group.');
+  if (!knockout && home.group_id !== away.group_id) throw new RuleError('Group matches must be between teams in the same group.');
   const date = String(input.date ?? '');
   const time = String(input.time ?? '');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) throw new RuleError('A valid date and kickoff time are required.');
+  const slot = Number(input.slot) || 0;
+  if (knockout && (!Number.isInteger(slot) || slot < 1 || slot > KNOCKOUT_TIES[stage])) {
+    throw new RuleError('Choose a tie in that round.');
+  }
+  if (knockout) {
+    const taken = db.prepare(`SELECT id FROM matches WHERE stage = ? AND slot = ? AND status != 'cancelled'`).get(stage, slot);
+    if (taken) throw new RuleError('That tie is already on the calendar.');
+  }
+  const id = input.id || (knockout
+    ? `${stage}-${slot}-${slug(home.short_name)}-${slug(away.short_name)}`
+    : `${home.group_id.toLowerCase()}-${slug(home.short_name)}-${slug(away.short_name)}-${date}`);
+  if (db.prepare('SELECT id FROM matches WHERE id = ?').get(id)) throw new RuleError('That fixture already exists.');
+  return {
+    id,
+    stage,
+    slot: knockout ? slot : 0,
+    groupId: knockout ? 'KO' : home.group_id,
+    matchday: knockout ? slot : (Number(input.matchday) || 1),
+    homeId,
+    awayId,
+    venue: String(input.venue || home.pitch || 'DDU Main Pitch'),
+    date,
+    time,
+    allowExtra: knockout ? input.allowExtra !== false : Boolean(input.allowExtra),
+    halfMinutes: Number(input.halfMinutes) || 0,
+    referee: String(input.referee ?? ''),
+    assistant1: String(input.assistant1 ?? ''),
+    assistant2: String(input.assistant2 ?? ''),
+  };
+}
+
+function insertScheduledMatch(db, plan) {
   const rules = rulesOf(db);
-  const halfMs = (Number(input.halfMinutes) || rules.halfMinutes) * 60 * 1000;
+  const halfMs = (plan.halfMinutes || rules.halfMinutes) * 60 * 1000;
+  const now = Date.now();
+  db.prepare(`INSERT INTO matches (
+    id, competition_id, group_id, matchday, home_id, away_id, venue, kickoff_date, kickoff_time,
+    status, period, elapsed_ms, half_ms, regulation_ms, et_half_ms, allow_extra, referee, assistant1, assistant2,
+    stage, slot, version, updated_at
+  ) VALUES (?, 'super-cup', ?, ?, ?, ?, ?, ?, ?, 'scheduled', 'pre', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`).run(
+    plan.id,
+    plan.groupId,
+    plan.matchday,
+    plan.homeId,
+    plan.awayId,
+    plan.venue,
+    plan.date,
+    plan.time,
+    halfMs,
+    halfMs * 2,
+    (rules.extraHalfMinutes || 15) * 60 * 1000,
+    plan.allowExtra ? 1 : 0,
+    plan.referee,
+    plan.assistant1,
+    plan.assistant2,
+    plan.stage,
+    plan.slot,
+    now,
+  );
+  const insertSquad = db.prepare('INSERT INTO match_squad (match_id, team_id, player_id, role, sort_index) VALUES (?, ?, ?, ?, ?)');
+  for (const teamId of [plan.homeId, plan.awayId]) {
+    const sheet = defaultSquad(db, teamId);
+    sheet.starters.forEach((player, index) => insertSquad.run(plan.id, teamId, player.id, 'starter', index));
+    sheet.bench.forEach((player, index) => insertSquad.run(plan.id, teamId, player.id, 'bench', index));
+  }
+  return plan.id;
+}
+
+export function createMatch(db, actor, input) {
+  deny(actor, 'match.schedule');
   return transaction(db, () => {
-    const id = input.id || `${home.group_id.toLowerCase()}-${slug(home.short_name)}-${slug(away.short_name)}-${date}`;
-    if (db.prepare('SELECT id FROM matches WHERE id = ?').get(id)) throw new RuleError('That fixture already exists.');
-    const now = Date.now();
-    db.prepare(`INSERT INTO matches (
-      id, competition_id, group_id, matchday, home_id, away_id, venue, kickoff_date, kickoff_time,
-      status, period, elapsed_ms, half_ms, regulation_ms, et_half_ms, allow_extra, referee, assistant1, assistant2, version, updated_at
-    ) VALUES (?, 'super-cup', ?, ?, ?, ?, ?, ?, ?, 'scheduled', 'pre', 0, ?, ?, ?, ?, ?, ?, ?, 1, ?)`).run(
-      id,
-      home.group_id,
-      Number(input.matchday) || 1,
-      homeId,
-      awayId,
-      String(input.venue || home.pitch),
-      date,
-      time,
-      halfMs,
-      halfMs * 2,
-      (rules.extraHalfMinutes || 15) * 60 * 1000,
-      input.allowExtra ? 1 : 0,
-      String(input.referee ?? ''),
-      String(input.assistant1 ?? ''),
-      String(input.assistant2 ?? ''),
-      now,
-    );
-    const insertSquad = db.prepare('INSERT INTO match_squad (match_id, team_id, player_id, role, sort_index) VALUES (?, ?, ?, ?, ?)');
-    for (const teamId of [homeId, awayId]) {
-      const sheet = defaultSquad(db, teamId);
-      sheet.starters.forEach((player, index) => insertSquad.run(id, teamId, player.id, 'starter', index));
-      sheet.bench.forEach((player, index) => insertSquad.run(id, teamId, player.id, 'bench', index));
+    const plan = plannedMatch(db, input);
+    insertScheduledMatch(db, plan);
+    audit(db, actor, 'match.create', 'match', plan.id, null, { homeId: plan.homeId, awayId: plan.awayId, date: plan.date, time: plan.time, stage: plan.stage, slot: plan.slot });
+    return { id: plan.id };
+  });
+}
+
+function roundRobin(teams) {
+  const rotation = [...teams];
+  if (rotation.length % 2 === 1) rotation.push(null);
+  const rounds = [];
+  const count = rotation.length;
+  for (let round = 0; round < count - 1; round += 1) {
+    const pairs = [];
+    for (let index = 0; index < count / 2; index += 1) {
+      const home = rotation[index];
+      const away = rotation[count - 1 - index];
+      if (home && away) pairs.push([home, away]);
     }
-    audit(db, actor, 'match.create', 'match', id, null, { homeId, awayId, date, time });
-    return { id };
+    rounds.push(pairs);
+    const fixed = rotation[0];
+    const rest = rotation.slice(1);
+    rest.unshift(rest.pop());
+    rotation.splice(0, rotation.length, fixed, ...rest);
+  }
+  return rounds;
+}
+
+function shiftIsoDate(date, days) {
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
+export function scheduleGroupFixtures(db, actor, input) {
+  deny(actor, 'match.schedule');
+  const date = String(input.date ?? '');
+  const time = String(input.time ?? '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) throw new RuleError('A valid date and kickoff time are required.');
+  const requested = input.group ? [String(input.group).toUpperCase()] : ['A', 'B', 'C', 'D', 'E', 'F'];
+  return transaction(db, () => {
+    let created = 0;
+    for (const group of requested) {
+      const teams = db.prepare(`SELECT * FROM teams WHERE group_id = ? AND status != 'withdrawn' ORDER BY name`).all(group);
+      if (teams.length < 2) continue;
+      roundRobin(teams).forEach((pairs, index) => {
+        const kickoff = shiftIsoDate(date, index * 7);
+        for (const [home, away] of pairs) {
+          const exists = db.prepare(`SELECT id FROM matches WHERE COALESCE(stage, 'group') = 'group' AND status != 'cancelled' AND ((home_id = ? AND away_id = ?) OR (home_id = ? AND away_id = ?))`).get(home.id, away.id, away.id, home.id);
+          if (exists) continue;
+          insertScheduledMatch(db, plannedMatch(db, {
+            stage: 'group',
+            homeId: home.id,
+            awayId: away.id,
+            date: kickoff,
+            time,
+            venue: home.pitch,
+            matchday: index + 1,
+          }));
+          created += 1;
+        }
+      });
+    }
+    audit(db, actor, 'match.round', 'competition', 'super-cup', null, { created, groups: requested });
+    return { created };
   });
 }
 

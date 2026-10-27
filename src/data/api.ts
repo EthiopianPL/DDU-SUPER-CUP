@@ -13,6 +13,22 @@ export async function desk(path: string, options: { method?: string; body?: unkn
   return data;
 }
 
+export function imagePayload(file: File) {
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+    return Promise.reject(new Error('Upload a PNG, JPEG, or WebP image.'));
+  }
+  if (file.size > 1_500_000) return Promise.reject(new Error('That image is larger than 1.5 MB.'));
+  return new Promise<{ contentType: string; data: string }>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result ?? '');
+      resolve({ contentType: file.type, data: text.slice(text.indexOf(',') + 1) });
+    };
+    reader.onerror = () => reject(new Error('Could not read that image.'));
+    reader.readAsDataURL(file);
+  });
+}
+
 export async function uploadImage(path: string, file: File) {
   const response = await fetch(path, {
     method: 'POST',

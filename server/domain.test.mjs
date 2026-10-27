@@ -7,6 +7,7 @@ import { startServer } from './http.mjs';
 
 process.env.DDU_DB = join(mkdtempSync(join(tmpdir(), 'ddu-')), 'cup.db');
 process.env.ADMIN_PASSWORD = 'supercup';
+process.env.DDU_DEMO = '1';
 
 test('match events, permissions, clock, and standings stay consistent', async () => {
   const { server } = await startServer(undefined, 0);
@@ -235,6 +236,72 @@ test('match events, permissions, clock, and standings stay consistent', async ()
     assert.equal(hidden.status, 200);
     const outsider = await call('/api/users', { cookie: reader });
     assert.equal(outsider.status, 403);
+
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const missingLogo = await call('/api/teams', { method: 'POST', cookie: admin, body: { name: 'No Logo', shortName: 'NL', group: 'A' } });
+    assert.equal(missingLogo.status, 400);
+    const createdTeam = await call('/api/teams', { method: 'POST', cookie: admin, body: { name: 'Logo FC', shortName: 'LFC', group: 'F', image: { contentType: 'image/png', data: png } } });
+    assert.equal(createdTeam.status, 200, createdTeam.data.error);
+    const team = createdTeam.data.snapshot.teams.find((item) => item.shortName === 'LFC');
+    assert.ok(team.crestUrl.startsWith('/api/media/teams/'));
+    const picture = await fetch(`${base}${team.crestUrl}`);
+    assert.equal(picture.status, 200);
+    assert.equal(picture.headers.get('content-type'), 'image/png');
+    const missingPhoto = await call('/api/players', { method: 'POST', cookie: admin, body: { name: 'No Photo', teamId: team.id, position: 'MID', number: 7 } });
+    assert.equal(missingPhoto.status, 400);
+    const addedPlayer = await call('/api/players', { method: 'POST', cookie: admin, body: { name: 'Photo Kid', teamId: team.id, position: 'MID', number: 8, image: { contentType: 'image/png', data: png } } });
+    assert.equal(addedPlayer.status, 200, addedPlayer.data.error);
+    const player = addedPlayer.data.snapshot.players.find((item) => item.name === 'Photo Kid');
+    const face = await fetch(`${base}${player.photoUrl}`);
+    assert.equal(face.status, 200);
+    assert.equal(face.headers.get('content-type'), 'image/png');
+
+    const plain = await call('/api/news', { method: 'POST', cookie: admin, body: { title: 'Plain story', summary: 'No picture', body: 'Just words.' } });
+    assert.equal(plain.status, 200, plain.data.error);
+    assert.equal(plain.data.snapshot.news.find((article) => article.title === 'Plain story').imageUrl, '');
+    const pictured = await call('/api/news', { method: 'POST', cookie: admin, body: { title: 'Photo story', summary: 'Has a picture', body: 'Look.', image: { contentType: 'image/png', data: png } } });
+    assert.equal(pictured.status, 200, pictured.data.error);
+    const story = pictured.data.snapshot.news.find((article) => article.title === 'Photo story');
+    assert.ok(story.imageUrl.startsWith('/api/media/news/'));
+    const shot = await fetch(`${base}${story.imageUrl}`);
+    assert.equal(shot.status, 200);
+    assert.equal(shot.headers.get('content-type'), 'image/png');
+    const gone = await call(`/api/news/${story.id}`, { method: 'DELETE', cookie: admin, body: {} });
+    assert.equal(gone.status, 200, gone.data.error);
+    const missing = await fetch(`${base}${story.imageUrl.split('?')[0]}`);
+    assert.equal(missing.status, 404);
+
+    const crossGroup = await call('/api/matches', {
+      method: 'POST',
+      cookie: admin,
+      body: { homeId: 'software-engineering', awayId: 'civil-engineering', date: '2026-12-20', time: '15:00' },
+    });
+    assert.equal(crossGroup.status, 400);
+
+    const knockout = await call('/api/matches', {
+      method: 'POST',
+      cookie: admin,
+      body: { stage: 'r16', slot: 1, homeId: 'software-engineering', awayId: 'civil-engineering', date: '2026-12-20', time: '15:00', venue: 'DDU Main Pitch' },
+    });
+    assert.equal(knockout.status, 200, knockout.data.error);
+    const tie = knockout.data.snapshot.matches.find((match) => match.id === knockout.data.id);
+    assert.equal(tie.stage, 'r16');
+    assert.equal(tie.slot, 1);
+    assert.equal(tie.allowExtra, true);
+    const duplicateTie = await call('/api/matches', {
+      method: 'POST',
+      cookie: admin,
+      body: { stage: 'r16', slot: 1, homeId: 'medicine', awayId: 'law', date: '2026-12-20', time: '18:00' },
+    });
+    assert.equal(duplicateTie.status, 400);
+
+    const round = await call('/api/matches/round', {
+      method: 'POST',
+      cookie: admin,
+      body: { group: 'A', date: '2027-01-02', time: '10:00' },
+    });
+    assert.equal(round.status, 200, round.data.error);
+    assert.equal(round.data.created, 0);
   } finally {
     server.close();
   }

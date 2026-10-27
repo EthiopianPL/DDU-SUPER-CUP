@@ -153,6 +153,7 @@ export function MatchDetailsPage() {
                   shortName={home?.shortName ?? '?'}
                   color={home?.color ?? '#2450c8'}
                   size={56}
+                  src={home?.crestUrl || undefined}
                 />
               </div>
               <span className="mt-2.5 block text-sm font-bold text-white group-hover:underline sm:text-base">
@@ -228,6 +229,7 @@ export function MatchDetailsPage() {
                   shortName={away?.shortName ?? '?'}
                   color={away?.color ?? '#dc2626'}
                   size={56}
+                  src={away?.crestUrl || undefined}
                 />
               </div>
               <span className="mt-2.5 block text-sm font-bold text-white group-hover:underline sm:text-base">
@@ -301,6 +303,8 @@ export function MatchDetailsPage() {
             awayShort={away?.shortName ?? 'A'}
             homeColor={home?.color ?? '#334155'}
             awayColor={away?.color ?? '#334155'}
+            homeCrest={home?.crestUrl || undefined}
+            awayCrest={away?.crestUrl || undefined}
             homeSheet={homeSheet}
             awaySheet={awaySheet}
             timeline={timeline}
@@ -379,6 +383,8 @@ function Pitch({
   awayShort,
   homeColor,
   awayColor,
+  homeCrest,
+  awayCrest,
   homeSheet,
   awaySheet,
   timeline,
@@ -391,6 +397,8 @@ function Pitch({
   awayShort: string;
   homeColor: string;
   awayColor: string;
+  homeCrest?: string;
+  awayCrest?: string;
   homeSheet: ReturnType<typeof matchSheet>;
   awaySheet: ReturnType<typeof matchSheet>;
   timeline: TimelineEvent[];
@@ -409,7 +417,7 @@ function Pitch({
   return (
     <section>
       <div className="relative overflow-hidden rounded-3xl bg-[#3f7a4c]">
-        <TeamBar name={homeName} shortName={homeShort} color={homeColor} formation={homeSheet.formation} />
+        <TeamBar name={homeName} shortName={homeShort} color={homeColor} crest={homeCrest} formation={homeSheet.formation} />
         <div className="relative h-[760px]">
           <PitchLines />
           {[...homeLines, ...awayLines].map((line) => line.players.map((player, index) => (
@@ -424,18 +432,18 @@ function Pitch({
             />
           )))}
         </div>
-        <TeamBar name={awayName} shortName={awayShort} color={awayColor} formation={awaySheet.formation} />
+        <TeamBar name={awayName} shortName={awayShort} color={awayColor} crest={awayCrest} formation={awaySheet.formation} />
       </div>
       <SubList substitutions={substitutions} homeId={homeSheet.starters[0]?.departmentId} awayId={awaySheet.starters[0]?.departmentId} homeShort={homeShort} awayShort={awayShort} />
     </section>
   );
 }
 
-function TeamBar({ name, shortName, color, formation }: { name: string; shortName: string; color: string; formation: string }) {
+function TeamBar({ name, shortName, color, crest, formation }: { name: string; shortName: string; color: string; crest?: string; formation: string }) {
   return (
     <div className="relative flex items-center justify-between gap-3 px-4 py-3">
       <span className="flex min-w-0 items-center gap-2">
-        <DepartmentMark shortName={shortName} color={color} size={28} />
+        <DepartmentMark shortName={shortName} color={color} size={28} src={crest} />
         <span className="truncate text-sm font-bold text-white">{name}</span>
       </span>
       <span className="shrink-0 rounded-full bg-[#146b32] px-2.5 py-1 text-[11px] font-bold text-white">{formation}</span>
@@ -528,9 +536,13 @@ function PitchPlayer({
   return (
     <div className="absolute -translate-x-1/2 -translate-y-1/2 text-center" style={{ top, left }}>
       <div className="relative mx-auto h-9 w-9">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg text-[11px] font-black text-white shadow-md" style={{ background: tile }}>
-          {initials(player.name)}
-        </span>
+        {player.photoUrl ? (
+          <img src={player.photoUrl} alt="" className="h-9 w-9 rounded-lg object-cover shadow-md" />
+        ) : (
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg text-[11px] font-black text-white shadow-md" style={{ background: tile }}>
+            {initials(player.name)}
+          </span>
+        )}
         {played && subbed && (
           <span className="absolute -left-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#e11d48] text-white">
             <ArrowDown className="h-3 w-3" strokeWidth={3} />

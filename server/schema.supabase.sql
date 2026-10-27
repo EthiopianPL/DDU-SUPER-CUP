@@ -75,6 +75,8 @@ CREATE TABLE IF NOT EXISTS matches (
   assistant2 VARCHAR(160) NOT NULL DEFAULT '',
   formation_home VARCHAR(16) NOT NULL DEFAULT '4-2-3-1',
   formation_away VARCHAR(16) NOT NULL DEFAULT '4-2-3-1',
+  stage VARCHAR(16) NOT NULL DEFAULT 'group',
+  slot INT NOT NULL DEFAULT 0,
   version INT NOT NULL DEFAULT 1,
   updated_at BIGINT NOT NULL,
   CONSTRAINT fk_matches_home FOREIGN KEY (home_id) REFERENCES teams(id),
@@ -133,7 +135,8 @@ CREATE TABLE IF NOT EXISTS news (
   category VARCHAR(80) NOT NULL,
   time_label VARCHAR(80) NOT NULL,
   summary TEXT NOT NULL,
-  body TEXT NOT NULL
+  body TEXT NOT NULL,
+  image_url TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS audit_log (
@@ -149,3 +152,15 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_events_match ON match_events (match_id, voided, type);
+
+CREATE TABLE IF NOT EXISTS media (
+  id TEXT PRIMARY KEY,
+  content_type VARCHAR(40) NOT NULL,
+  bytes BYTEA NOT NULL
+);
+
+ALTER TABLE teams ALTER COLUMN crest_url TYPE TEXT;
+ALTER TABLE players ALTER COLUMN photo_url TYPE TEXT;
+ALTER TABLE news ADD COLUMN IF NOT EXISTS image_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE matches ADD COLUMN IF NOT EXISTS stage VARCHAR(16) NOT NULL DEFAULT 'group';
+ALTER TABLE matches ADD COLUMN IF NOT EXISTS slot INT NOT NULL DEFAULT 0;

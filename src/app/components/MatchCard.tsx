@@ -28,6 +28,23 @@ export interface MatchCardProps {
 
 }
 
+function TeamBadge({ team }: { team: Team }) {
+  if (team.logo_url) {
+    return <img src={team.logo_url} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover shadow-md transition-transform group-hover:scale-105 sm:h-12 sm:w-12" />;
+  }
+  return (
+    <div
+      className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-full font-black text-xs sm:text-sm shadow-md transition-transform group-hover:scale-105"
+      style={{
+        background: team.color,
+        color: team.color.toLowerCase() === '#f5c518' ? '#102018' : '#ffffff',
+      }}
+    >
+      {team.short_name || team.name.charAt(0)}
+    </div>
+  );
+}
+
 export function MatchCard({
   id,
   homeTeam,
@@ -104,15 +121,7 @@ export function MatchCard({
         {/* Left Zone — Home Team */}
         <div className="flex flex-col items-center justify-center text-center min-w-0">
           {/* Circular Badge (40–48px) */}
-          <div
-            className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-full font-black text-xs sm:text-sm shadow-md transition-transform group-hover:scale-105"
-            style={{
-              background: homeTeam.color,
-              color: homeTeam.color.toLowerCase() === '#f5c518' ? '#102018' : '#ffffff',
-            }}
-          >
-            {homeTeam.short_name || homeTeam.name.charAt(0)}
-          </div>
+          <TeamBadge team={homeTeam} />
           {/* Department Name Centered Directly Below */}
           <span
             className="mt-2 block max-w-[110px] sm:max-w-[150px] truncate text-xs font-bold leading-tight text-white group-hover:text-[#f5c518] sm:text-sm transition-colors"
@@ -168,15 +177,7 @@ export function MatchCard({
         {/* Right Zone — Away Team */}
         <div className="flex flex-col items-center justify-center text-center min-w-0">
           {/* Circular Badge (40–48px) */}
-          <div
-            className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-full font-black text-xs sm:text-sm shadow-md transition-transform group-hover:scale-105"
-            style={{
-              background: awayTeam.color,
-              color: awayTeam.color.toLowerCase() === '#f5c518' ? '#102018' : '#ffffff',
-            }}
-          >
-            {awayTeam.short_name || awayTeam.name.charAt(0)}
-          </div>
+          <TeamBadge team={awayTeam} />
           {/* Department Name Centered Directly Below */}
           <span
             className="mt-2 block max-w-[110px] sm:max-w-[150px] truncate text-xs font-bold leading-tight text-white group-hover:text-[#f5c518] sm:text-sm transition-colors"
