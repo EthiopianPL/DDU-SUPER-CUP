@@ -246,7 +246,7 @@ export function MatchDetailsPage() {
       </nav>
 
       {activeTab === 'overview' && (
-        <section id="match-panel-overview" role="tabpanel" aria-labelledby="match-tab-overview" className="mt-4">
+        <section id="match-panel-overview" role="tabpanel" aria-labelledby="match-tab-overview" className="mt-8">
           {fixture.status === 'upcoming' ? (
             <KickoffClock date={fixture.date} time={fixture.time} detail={fixture.detail} />
           ) : (
