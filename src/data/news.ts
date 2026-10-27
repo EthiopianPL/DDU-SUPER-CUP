@@ -6,6 +6,7 @@ export interface NewsArticle {
   summary: string;
   body: string;
   imageUrl?: string;
+  createdAt?: number;
 }
 
 export const newsArticles: NewsArticle[] = [

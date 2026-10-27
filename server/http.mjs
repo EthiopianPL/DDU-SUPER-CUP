@@ -15,6 +15,7 @@ import {
   createUser,
   currentRevision,
   deleteNews,
+  ensureNewsStamps,
   deleteTeam,
   listAudit,
   listUsers,
@@ -387,6 +388,7 @@ export function prepareDatabase(db) {
     });
   }
   seedDatabase(db, null, password);
+  ensureNewsStamps(db);
   return Promise.resolve();
 }
 

@@ -1,32 +1,22 @@
 import { useNavigate } from 'react-router';
 import { ChevronRight, Flame, Calendar, Newspaper } from 'lucide-react';
 import { MatchCard } from '../components/MatchCard';
-import { cardTeam, fixtures, topScorers, sortFixturesByPriority } from '../../data/supercup';
+import { cardTeam, fixtures, getTournamentTodayString, topScorers, sortFixturesByPriority } from '../../data/supercup';
 import { newsArticles } from '../../data/news';
 import { useLeagueVersion } from '../../data/live';
 import { DepartmentMark } from '../components/DepartmentMark';
-
-function dayStamp(offset: number) {
-  const date = new Date();
-  date.setHours(12, 0, 0, 0);
-  date.setDate(date.getDate() + offset);
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${date.getFullYear()}-${month}-${day}`;
-}
 
 export function HomePage() {
   const navigate = useNavigate();
   const version = useLeagueVersion();
   void version;
-  const today = dayStamp(0);
-  const until = dayStamp(2);
+  const today = getTournamentTodayString();
   const live = sortFixturesByPriority(fixtures.filter((fixture) => fixture.status === 'live'));
   const upcoming = sortFixturesByPriority(
-    fixtures.filter((fixture) => fixture.status === 'upcoming' && fixture.date >= today && fixture.date <= until),
+    fixtures.filter((fixture) => fixture.status === 'upcoming' && fixture.date === today),
   );
   const leader = topScorers(1)[0];
-  const stories = newsArticles.slice(0, 3);
+  const stories = [...newsArticles].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)).slice(0, 2);
 
   return (
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-5">
@@ -36,27 +26,6 @@ export function HomePage() {
         <h1 className="mt-2 text-4xl font-black tracking-tight text-white">Super Cup</h1>
         <p className="mt-2 max-w-sm text-sm text-white/60">Department football.</p>
       </section>
-
-      {leader?.department && (
-        <button
-          type="button"
-          onClick={() => navigate(`/team/${leader.departmentId}`)}
-          className="mb-6 flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#10192b] px-4 py-4 text-left"
-        >
-          <span>
-            <span className="text-[11px] font-semibold tracking-[0.16em] text-[#f5c518]">TOP SCORER</span>
-            <span className="mt-1 block text-lg font-black text-white">{leader.name}</span>
-            <span className="mt-1 flex items-center gap-2 text-xs text-white/50">
-              <DepartmentMark shortName={leader.department.shortName} color={leader.department.color} size={22} src={leader.department.crestUrl || undefined} />
-              {leader.department.name}
-            </span>
-          </span>
-          <span className="text-right">
-            <span className="block text-3xl font-black text-[#f5c518]">{leader.goals}</span>
-            <span className="text-xs text-white/40">goals</span>
-          </span>
-        </button>
-      )}
 
       <section className="mb-6">
         <div className="mb-3 flex items-center justify-between">
@@ -86,6 +55,27 @@ export function HomePage() {
         </div>
       </section>
 
+      {leader?.department && (
+        <button
+          type="button"
+          onClick={() => navigate(`/team/${leader.departmentId}`)}
+          className="mb-6 flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#10192b] px-4 py-4 text-left"
+        >
+          <span>
+            <span className="text-[11px] font-semibold tracking-[0.16em] text-[#f5c518]">TOP SCORER</span>
+            <span className="mt-1 block text-lg font-black text-white">{leader.name}</span>
+            <span className="mt-1 flex items-center gap-2 text-xs text-white/50">
+              <DepartmentMark shortName={leader.department.shortName} color={leader.department.color} size={22} src={leader.department.crestUrl || undefined} />
+              {leader.department.name}
+            </span>
+          </span>
+          <span className="text-right">
+            <span className="block text-3xl font-black text-[#f5c518]">{leader.goals}</span>
+            <span className="text-xs text-white/40">goals</span>
+          </span>
+        </button>
+      )}
+
       <section className="mb-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-lg font-black text-white">
@@ -105,7 +95,7 @@ export function HomePage() {
               stadium={fixture.stadium}
             />
           ))}
-          {!upcoming.length && <p className="rounded-2xl border border-white/10 bg-[#10192b] px-4 py-6 text-sm text-white/50">No matches in the next 2 days.</p>}
+          {!upcoming.length && <p className="rounded-2xl border border-white/10 bg-[#10192b] px-4 py-6 text-sm text-white/50">No fixtures today.</p>}
         </div>
       </section>
 
