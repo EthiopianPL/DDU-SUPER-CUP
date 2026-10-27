@@ -153,9 +153,12 @@ test('match events, permissions, clock, and standings stay consistent', async ()
     const second = await call(`/api/matches/${matchId}/events`, {
       method: 'POST',
       cookie: admin,
-      body: { type: 'card', side: 'home', playerId: homeStarter.playerId, cardType: 'second_yellow', detail: 'second foul', clientKey: 'y-2', version },
+      body: { type: 'card', side: 'home', playerId: homeStarter.playerId, cardType: 'yellow', detail: 'second foul', clientKey: 'y-2', version },
     });
     assert.equal(second.status, 200, second.data.error);
+    const bookings = second.data.snapshot.events.filter((event) => event.matchId === matchId && event.playerId === homeStarter.playerId && event.type === 'card' && !event.voided);
+    assert.equal(bookings.filter((event) => event.cardType === 'yellow').length, 1);
+    assert.equal(bookings.filter((event) => event.cardType === 'second_yellow').length, 1);
     version = second.data.snapshot.matches.find((match) => match.id === matchId).version;
     const sentOff = await call(`/api/matches/${matchId}/events`, {
       method: 'POST',
@@ -188,6 +191,39 @@ test('match events, permissions, clock, and standings stay consistent', async ()
     version = removed.data.snapshot.matches.find((match) => match.id === matchId).version;
     assert.equal(removed.data.snapshot.matches.find((match) => match.id === matchId).homeScore, 1);
 
+    const intoStoppage = await call(`/api/matches/${matchId}/clock`, {
+      method: 'POST',
+      cookie: admin,
+      body: { action: 'set_clock', seconds: 47 * 60, version },
+    });
+    assert.equal(intoStoppage.status, 200, intoStoppage.data.error);
+    version = intoStoppage.data.snapshot.matches.find((match) => match.id === matchId).version;
+    const board = await call(`/api/matches/${matchId}/events`, {
+      method: 'POST',
+      cookie: admin,
+      body: { type: 'added_time', addedMinute: 3, clientKey: 'added-1', version },
+    });
+    assert.equal(board.status, 200, board.data.error);
+    assert.equal(board.data.snapshot.matches.find((match) => match.id === matchId).addedMs, 180000);
+    version = board.data.snapshot.matches.find((match) => match.id === matchId).version;
+    const late = await call(`/api/matches/${matchId}/events`, {
+      method: 'POST',
+      cookie: admin,
+      body: { type: 'goal', side: 'home', playerId: homeAssist.playerId, goalType: 'open_play', minute: 47, clientKey: 'late-1', version },
+    });
+    assert.equal(late.status, 200, late.data.error);
+    const lateGoal = late.data.snapshot.events.find((event) => event.matchId === matchId && event.type === 'goal' && event.playerId === homeAssist.playerId && !event.voided);
+    assert.equal(lateGoal.minute, 45);
+    assert.equal(lateGoal.addedMinute, 2);
+    version = late.data.snapshot.matches.find((match) => match.id === matchId).version;
+    const undoLate = await call(`/api/matches/${matchId}/events/${late.data.id}/void`, {
+      method: 'POST',
+      cookie: admin,
+      body: { reason: 'Stoppage check', version },
+    });
+    assert.equal(undoLate.status, 200, undoLate.data.error);
+    version = undoLate.data.snapshot.matches.find((match) => match.id === matchId).version;
+
     const paused = await call(`/api/matches/${matchId}/clock`, {
       method: 'POST',
       cookie: admin,
@@ -201,6 +237,44 @@ test('match events, permissions, clock, and standings stay consistent', async ()
     const held = await call(`/api/matches/${matchId}/clock`, { method: 'POST', cookie: admin, body: { action: 'pause', version } });
     assert.equal(held.data.snapshot.matches.find((match) => match.id === matchId).runningSince, null);
     assert.equal(held.data.snapshot.matches.find((match) => match.id === matchId).elapsedMs >= 125000, true);
+    version = held.data.snapshot.matches.find((match) => match.id === matchId).version;
+
+    const toHalf = await call(`/api/matches/${matchId}/clock`, { method: 'POST', cookie: admin, body: { action: 'halftime', version } });
+    assert.equal(toHalf.status, 200, toHalf.data.error);
+    assert.equal(toHalf.data.snapshot.matches.find((match) => match.id === matchId).addedMs, 0);
+    version = toHalf.data.snapshot.matches.find((match) => match.id === matchId).version;
+    const secondHalf = await call(`/api/matches/${matchId}/clock`, { method: 'POST', cookie: admin, body: { action: 'second_half', version } });
+    assert.equal(secondHalf.status, 200, secondHalf.data.error);
+    version = secondHalf.data.snapshot.matches.find((match) => match.id === matchId).version;
+    const deep = await call(`/api/matches/${matchId}/clock`, {
+      method: 'POST',
+      cookie: admin,
+      body: { action: 'set_clock', seconds: 91 * 60, version },
+    });
+    version = deep.data.snapshot.matches.find((match) => match.id === matchId).version;
+    const secondBoard = await call(`/api/matches/${matchId}/events`, {
+      method: 'POST',
+      cookie: admin,
+      body: { type: 'added_time', addedMinute: 4, clientKey: 'added-2', version },
+    });
+    assert.equal(secondBoard.data.snapshot.matches.find((match) => match.id === matchId).addedMs, 240000);
+    version = secondBoard.data.snapshot.matches.find((match) => match.id === matchId).version;
+    const lateSecond = await call(`/api/matches/${matchId}/events`, {
+      method: 'POST',
+      cookie: admin,
+      body: { type: 'goal', side: 'home', playerId: homeAssist.playerId, goalType: 'open_play', minute: 93, clientKey: 'late-2', version },
+    });
+    assert.equal(lateSecond.status, 200, lateSecond.data.error);
+    const secondStoppage = lateSecond.data.snapshot.events.find((event) => event.matchId === matchId && !event.voided && event.type === 'goal' && event.addedMinute === 3);
+    assert.equal(secondStoppage.minute, 90);
+    version = lateSecond.data.snapshot.matches.find((match) => match.id === matchId).version;
+    const undoSecond = await call(`/api/matches/${matchId}/events/${lateSecond.data.id}/void`, {
+      method: 'POST',
+      cookie: admin,
+      body: { reason: 'Second half check', version },
+    });
+    assert.equal(undoSecond.status, 200, undoSecond.data.error);
+    version = undoSecond.data.snapshot.matches.find((match) => match.id === matchId).version;
 
     const fresh = await call('/api/snapshot');
     const groupPoints = (rows, teamId) => {

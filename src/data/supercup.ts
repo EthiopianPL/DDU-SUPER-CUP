@@ -51,6 +51,8 @@ export interface Fixture {
   runningSince?: number | null;
   addedSeconds?: number;
   halfSeconds?: number;
+  regulationSeconds?: number;
+  extraHalfSeconds?: number;
   allowExtra?: boolean;
   pensHome?: number | null;
   pensAway?: number | null;
@@ -510,6 +512,7 @@ export interface TimelineEvent {
   assistId?: string;
   assistName?: string;
   detail?: string;
+  addedMinute?: number;
 }
 
 const GOAL_MINUTES = [9, 18, 27, 36, 44, 52, 61, 70, 77, 84];
@@ -653,6 +656,7 @@ export interface MatchSheet {
 
 export interface Substitution {
   minute: number;
+  addedMinute?: number;
   teamId: string;
   offId: string;
   onPlayer: Player;
@@ -796,6 +800,7 @@ export function matchTimeline(fixture: Fixture): TimelineEvent[] {
       if (event.type === 'goal') {
         return {
           minute: event.minute,
+          addedMinute: event.addedMinute || undefined,
           teamId: event.creditedTeamId || event.teamId || '',
           playerId: event.playerId || '',
           playerName: event.goalType === 'own_goal' ? `${event.playerName} (OG)` : event.playerName,
@@ -808,6 +813,7 @@ export function matchTimeline(fixture: Fixture): TimelineEvent[] {
       if (event.type === 'card') {
         return {
           minute: event.minute,
+          addedMinute: event.addedMinute || undefined,
           teamId: event.teamId || '',
           playerId: event.playerId || '',
           playerName: event.playerName,
@@ -818,6 +824,7 @@ export function matchTimeline(fixture: Fixture): TimelineEvent[] {
       if (event.type === 'substitution') {
         return {
           minute: event.minute,
+          addedMinute: event.addedMinute || undefined,
           teamId: event.teamId || '',
           playerId: event.playerId || '',
           playerName: `${event.playerName} for ${event.relatedName}`,
@@ -867,6 +874,7 @@ export function matchSubstitutions(fixture: Fixture): Substitution[] {
     .filter((event) => event.matchId === fixture.id && event.type === 'substitution' && !event.voided)
     .map((event) => ({
       minute: event.minute,
+      addedMinute: event.addedMinute || undefined,
       teamId: event.teamId || '',
       offId: event.playerId || '',
       onPlayer: players.find((player) => player.id === event.relatedPlayerId) ?? {
@@ -885,18 +893,40 @@ export function formatMatchClock(clock: { minute: number; seconds: number }) {
   return `${String(clock.minute).padStart(2, '0')}:${String(clock.seconds).padStart(2, '0')}`;
 }
 
+export function formatLiveTime(clock: { minute: number; seconds: number; stoppage?: number }) {
+  if (!clock.stoppage) return formatMatchClock(clock);
+  const extraMinutes = Math.floor(clock.stoppage / 60);
+  const extraSeconds = clock.stoppage % 60;
+  return `${String(clock.minute).padStart(2, '0')}:00 +${String(extraMinutes).padStart(2, '0')}:${String(extraSeconds).padStart(2, '0')}`;
+}
+
+function periodEndSeconds(period: string | undefined, half: number, regulation: number, extra: number) {
+  if (period === 'first_half') return half;
+  if (period === 'second_half') return regulation;
+  if (period === 'extra_first') return regulation + extra;
+  if (period === 'extra_second') return regulation + extra * 2;
+  return null;
+}
+
 export function viewClock(fixture: Fixture | undefined, now = Date.now()) {
   if (!fixture || fixture.status !== 'live') return null;
   const base = (fixture.elapsedSeconds ?? 0) * 1000;
   const elapsed = base + (fixture.runningSince ? Math.max(0, now + clockSync.offset - fixture.runningSince) : 0);
   const total = Math.max(0, Math.floor(elapsed / 1000));
+  const half = fixture.halfSeconds ?? leagueRules.halfMinutes * 60;
+  const regulation = fixture.regulationSeconds ?? half * 2;
+  const extra = fixture.extraHalfSeconds ?? leagueRules.extraHalfMinutes * 60;
+  const end = periodEndSeconds(fixture.period, half, regulation, extra);
+  const stoppage = end == null ? 0 : Math.max(0, total - end);
+  const shown = end == null ? total : Math.min(total, end);
   return {
     total,
-    minute: Math.floor(total / 60),
-    seconds: total % 60,
+    minute: Math.floor(shown / 60),
+    seconds: shown % 60,
     running: Boolean(fixture.runningSince),
     period: fixture.period ?? '',
     added: Math.floor((fixture.addedSeconds ?? 0) / 60),
+    stoppage,
   };
 }
 

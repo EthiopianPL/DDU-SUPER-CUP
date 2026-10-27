@@ -20,7 +20,7 @@ import { GroupTable } from '../components/GroupTable';
 import {
   clockSync,
   formatKickoff,
-  formatMatchClock,
+  formatLiveTime,
   getDepartment,
   getFixture,
   GROUP_COLLEGES,
@@ -159,10 +159,7 @@ export function MatchDetailsPage() {
                 />
               </div>
               <span className="mt-2.5 block text-sm font-bold text-white group-hover:underline sm:text-base">
-                {home?.name ?? 'Home Team'}
-              </span>
-              <span className="mt-1.5 rounded bg-[#2450c8]/25 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-[#9eb6f5]">
-                HOME
+                {home?.name ?? home?.shortName ?? 'Team'}
               </span>
             </button>
           </div>
@@ -175,13 +172,13 @@ export function MatchDetailsPage() {
                   <div className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
                   <span className="text-xs font-black tracking-wide text-red-500">LIVE</span>
                   <span className="font-mono text-xs font-bold text-red-400">
-                    {clock ? formatMatchClock(clock) : `${fixture.minute ?? 0}'`}
+                    {clock ? formatLiveTime(clock) : `${fixture.minute ?? 0}'`}
                   </span>
                 </div>
                 <div className="text-4xl font-black tracking-tight text-white sm:text-5xl">
                   {fixture.homeScore} <span className="text-white/30">-</span> {fixture.awayScore}
                 </div>
-                <p className="mt-1 text-[11px] font-semibold text-white/50">{periodText(fixture.period, clock?.running)}</p>
+                <p className="mt-1 text-[11px] font-semibold text-white/50">{periodText(fixture.period, clock?.running)}{clock && clock.added > 0 ? ` · +${clock.added}` : ''}</p>
                 {fixture.pensHome != null && fixture.pensAway != null && (
                   <p className="text-[11px] font-bold text-[#f5c518]">Pens {fixture.pensHome}-{fixture.pensAway}</p>
                 )}
@@ -222,10 +219,7 @@ export function MatchDetailsPage() {
                 />
               </div>
               <span className="mt-2.5 block text-sm font-bold text-white group-hover:underline sm:text-base">
-                {away?.name ?? 'Away Team'}
-              </span>
-              <span className="mt-1.5 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-white/70">
-                AWAY
+                {away?.name ?? away?.shortName ?? 'Team'}
               </span>
             </button>
           </div>
@@ -323,20 +317,7 @@ export function MatchDetailsPage() {
             <GroupTable
               group={fixture.group}
               highlightTeamIds={[fixture.homeId, fixture.awayId]}
-              homeTeamId={fixture.homeId}
-              awayTeamId={fixture.awayId}
             />
-          </div>
-
-          {/* Live Contextual Impact Note */}
-          <div className="rounded-2xl border border-white/10 bg-[#10192b] p-4 text-xs leading-relaxed text-white/70">
-            <p className="font-bold text-white">
-              Match Impact on Group {fixture.group}
-            </p>
-            <p className="mt-1">
-              Teams highlighted with <span className="font-bold text-[#9eb6f5]">[HOME]</span> and{' '}
-              <span className="font-bold text-white">[AWAY]</span> show the current standings impact. Positions 1 & 2 qualify directly for the knockout stage following the conclusion of Matchday 3 on October 31.
-            </p>
           </div>
         </section>
       )}
@@ -939,8 +920,9 @@ function EventTimeline({
 }) {
   const rows = [
     ...events.filter((event) => event.kind === 'goal' || event.kind === 'yellow' || event.kind === 'red').map((event) => ({
-      key: `${event.kind}-${event.playerId}-${event.minute}-${event.assistId ?? ''}`,
+      key: `${event.kind}-${event.playerId}-${event.minute}-${event.addedMinute ?? 0}-${event.assistId ?? ''}`,
       minute: event.minute,
+      added: event.addedMinute ?? 0,
       teamId: event.teamId,
       kind: event.kind,
       title: event.kind === 'goal' ? 'Goal' : event.kind === 'yellow' ? 'Yellow card' : 'Red card',
@@ -950,8 +932,9 @@ function EventTimeline({
     ...substitutions.map((change) => {
       const off = players.find((player) => player.id === change.offId);
       return {
-        key: `sub-${change.offId}-${change.onPlayer.id}-${change.minute}`,
+        key: `sub-${change.offId}-${change.onPlayer.id}-${change.minute}-${change.addedMinute ?? 0}`,
         minute: change.minute,
+        added: change.addedMinute ?? 0,
         teamId: change.teamId,
         kind: 'sub' as const,
         title: 'Substitution',
@@ -959,7 +942,7 @@ function EventTimeline({
         extra: off ? `On for ${off.name}` : '',
       };
     }),
-  ].sort((a, b) => a.minute - b.minute || a.title.localeCompare(b.title));
+  ].sort((a, b) => a.minute - b.minute || a.added - b.added || a.title.localeCompare(b.title));
 
   if (!rows.length) {
     return (
@@ -988,7 +971,7 @@ function EventTimeline({
               )}
             </div>
             <span className="relative z-10 flex h-6 min-w-7 items-center justify-center rounded-full border border-white/15 bg-[#0c1424] px-1.5 font-mono text-[11px] font-bold text-[#f5c518] shadow-md">
-              {row.minute}&apos;
+              {row.added ? `${row.minute}+${row.added}` : row.minute}&apos;
             </span>
             <div className="min-w-0 flex items-center justify-start">
               {!home && (
