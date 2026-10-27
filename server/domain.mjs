@@ -907,7 +907,13 @@ export function saveLineup(db, actor, matchId, input) {
     assertNotFinished(match);
     if (teamId !== match.home_id && teamId !== match.away_id) throw new RuleError('That team is not in this match.');
     const formation = String(input.formation ?? '4-2-3-1');
-    for (const playerId of [...starters, ...bench]) ensureSquadPlayerSafe(db, playerId, teamId);
+    const roles = formationRoles(formation);
+    if (starters.length !== roles.length) throw new RuleError('Fill every position in the formation.');
+    starters.forEach((playerId, index) => {
+      const player = ensureSquadPlayerSafe(db, playerId, teamId);
+      if (player.position !== roles[index]) throw new RuleError(`${player.name} is a ${player.position} and cannot fill the ${roles[index]} position.`);
+    });
+    for (const playerId of bench) ensureSquadPlayerSafe(db, playerId, teamId);
     db.prepare('DELETE FROM match_squad WHERE match_id = ? AND team_id = ?').run(matchId, teamId);
     const insert = db.prepare('INSERT INTO match_squad (match_id, team_id, player_id, role, sort_index) VALUES (?, ?, ?, ?, ?)');
     starters.forEach((playerId, index) => insert.run(matchId, teamId, playerId, 'starter', index));
@@ -919,9 +925,19 @@ export function saveLineup(db, actor, matchId, input) {
   });
 }
 
+function formationRoles(formation) {
+  const counts = String(formation).split('-').map((part) => Number(part)).filter((count) => Number.isInteger(count) && count > 0);
+  const shape = counts.length >= 2 ? counts : [4, 3, 3];
+  const roles = ['GK', ...Array.from({ length: shape[0] }, () => 'DEF')];
+  shape.slice(1, -1).forEach((count) => roles.push(...Array.from({ length: count }, () => 'MID')));
+  roles.push(...Array.from({ length: shape[shape.length - 1] }, () => 'FWD'));
+  return roles;
+}
+
 function ensureSquadPlayerSafe(db, playerId, teamId) {
   const player = playerRow(db, playerId);
   if (player.team_id !== teamId || !player.active) throw new RuleError(`${player.name} is not an active player for this team.`);
+  return player;
 }
 
 function insertEvent(db, match, actor, input, countsForScore) {

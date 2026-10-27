@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import {
   ArrowDown,
@@ -12,6 +12,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { DepartmentMark } from '../components/DepartmentMark';
+import { formationPlan } from '../../data/formation';
 import { useLeagueVersion } from '../../data/live';
 import { useMatchClock } from '../useMatchClock';
 import { GroupTable } from '../components/GroupTable';
@@ -248,6 +249,8 @@ export function MatchDetailsPage() {
         </div>
       </section>
 
+      <LiveNotice events={timeline} live={isLive} />
+
       {/* Match Center Segmented Navigation Tabs */}
       <nav
         role="tablist"
@@ -310,6 +313,7 @@ export function MatchDetailsPage() {
             timeline={timeline}
             substitutions={substitutions}
             played={played}
+            live={isLive}
           />
           <EventList events={timeline} />
           {recorded.length > 0 && (
@@ -388,6 +392,7 @@ function Pitch({
   timeline,
   substitutions,
   played,
+  live,
 }: {
   homeName: string;
   awayName: string;
@@ -402,9 +407,11 @@ function Pitch({
   timeline: TimelineEvent[];
   substitutions: ReturnType<typeof matchSubstitutions>;
   played: boolean;
+  live: boolean;
 }) {
   const homeLines = formationLines(homeSheet.formation, homeSheet.starters);
   const awayLines = formationLines(awaySheet.formation, awaySheet.starters);
+  const fresh = useFreshMarks(timeline, live);
   const homeTops = band(homeLines.length, 8, 42);
   const awayTops = band(awayLines.length, 92, 58);
 
@@ -422,6 +429,7 @@ function Pitch({
               top={homeTops[lineIndex]}
               left={`${spread(players.length)[index]}%`}
               timeline={timeline}
+              fresh={fresh.has(player.id)}
               subbed={substitutions.some((change) => change.offId === player.id)}
               played={played}
             />
@@ -435,6 +443,7 @@ function Pitch({
               top={awayTops[lineIndex]}
               left={`${spread(players.length)[index]}%`}
               timeline={timeline}
+              fresh={fresh.has(player.id)}
               subbed={substitutions.some((change) => change.offId === player.id)}
               played={played}
             />
@@ -464,33 +473,61 @@ function TeamBar({ name, shortName, color, crest, formation }: { name: string; s
 }
 
 function formationLines(formation: string, starters: Player[]) {
-  const shape = formation.split('-').map((part) => Number(part)).filter((count) => Number.isInteger(count) && count > 0);
-  const pools: Record<Player['position'], Player[]> = {
-    GK: starters.filter((player) => player.position === 'GK'),
-    DEF: starters.filter((player) => player.position === 'DEF'),
-    MID: starters.filter((player) => player.position === 'MID'),
-    FWD: starters.filter((player) => player.position === 'FWD'),
-  };
-    const used = new Set<string>();
-  const take = (prefer: Player['position'], count: number) => {
-    const line: Player[] = [];
-    const order = [prefer, ...(['GK', 'DEF', 'MID', 'FWD'] as const).filter((slot) => slot !== prefer)];
-    order.forEach((slot) => {
-      pools[slot].forEach((player) => {
-        if (line.length >= count || used.has(player.id)) return;
-        line.push(player);
-        used.add(player.id);
-      });
-    });
-    return line;
-  };
-  const counts = shape.length >= 2 ? shape : [4, 3, 3];
-  const lines = [take('GK', 1), take('DEF', counts[0])];
-  counts.slice(1, -1).forEach((count) => lines.push(take('MID', count)));
-  lines.push(take('FWD', counts[counts.length - 1]));
-  const rest = starters.filter((player) => !used.has(player.id));
-  if (rest.length) lines.push(rest);
-  return lines.filter((line) => line.length);
+  const lines: Player[][] = [];
+  let index = 0;
+  formationPlan(formation).forEach((row) => {
+    const line = starters.slice(index, index + row.length);
+    index += row.length;
+    if (line.length) lines.push(line);
+  });
+  if (index < starters.length) lines.push(starters.slice(index));
+  return lines;
+}
+
+function useFreshMarks(events: TimelineEvent[], live: boolean) {
+  const seen = useRef('');
+  const [ids, setIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (!live) return;
+    const marks = events.filter((event) => event.kind === 'goal' || event.kind === 'yellow' || event.kind === 'red');
+    const latest = marks[marks.length - 1];
+    const key = latest ? `${latest.kind}:${latest.playerId}:${latest.minute}:${latest.assistId ?? ''}` : '';
+    if (!key || key === seen.current) return;
+    const first = seen.current === '';
+    seen.current = key;
+    if (first) return;
+    const next = [latest.playerId, latest.assistId].filter((id): id is string => Boolean(id));
+    setIds(next);
+    const timer = window.setTimeout(() => setIds([]), 4500);
+    return () => window.clearTimeout(timer);
+  }, [events, live]);
+  return new Set(ids);
+}
+
+function LiveNotice({ events, live }: { events: TimelineEvent[]; live: boolean }) {
+  const seen = useRef('');
+  const [text, setText] = useState('');
+  useEffect(() => {
+    if (!live) return;
+    const marks = events.filter((event) => event.kind === 'goal' || event.kind === 'yellow' || event.kind === 'red');
+    const latest = marks[marks.length - 1];
+    const key = latest ? `${latest.kind}:${latest.playerId}:${latest.minute}:${latest.assistId ?? ''}` : '';
+    if (!key || key === seen.current) return;
+    const first = seen.current === '';
+    seen.current = key;
+    if (first) return;
+    const label = latest.kind === 'goal' ? 'Goal' : latest.kind === 'yellow' ? 'Yellow card' : 'Red card';
+    const assist = latest.kind === 'goal' && latest.assistName ? ` · Assist ${latest.assistName}` : '';
+    setText(`${label} · ${latest.playerName}${assist}`);
+    const timer = window.setTimeout(() => setText(''), 4500);
+    return () => window.clearTimeout(timer);
+  }, [events, live]);
+  if (!text) return null;
+  return (
+    <p role="status" className="mt-4 rounded-2xl border border-[#f5c518]/50 bg-[#f5c518] px-4 py-3 text-center text-sm font-black text-[#102018] shadow-lg">
+      {text}
+    </p>
+  );
 }
 
 function band(count: number, from: number, to: number) {
@@ -551,6 +588,7 @@ function PitchPlayer({
   top,
   left,
   timeline,
+  fresh,
   subbed,
   played,
 }: {
@@ -560,6 +598,7 @@ function PitchPlayer({
   top: string;
   left: string;
   timeline: TimelineEvent[];
+  fresh: boolean;
   subbed: boolean;
   played: boolean;
 }) {
@@ -570,26 +609,43 @@ function PitchPlayer({
 
   return (
     <div className={`absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center ${nameAbove ? 'flex-col-reverse' : ''}`} style={{ top, left }}>
-      <div className="relative mx-auto h-9 w-9">
-        <span className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/90 text-[12px] font-black text-white shadow-md" style={{ background: color }}>
-          {player.number}
-        </span>
+      <div className={`relative h-11 w-11 ${fresh ? 'animate-pulse' : ''}`}>
+        {player.photoUrl ? (
+          <img src={player.photoUrl} alt="" className="h-11 w-11 rounded-full border-2 border-white object-cover shadow-md" />
+        ) : (
+          <span className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-white text-[12px] font-black text-white shadow-md" style={{ background: color }}>
+            {player.number}
+          </span>
+        )}
+        {player.photoUrl && (
+          <span className="absolute -bottom-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-black text-white" style={{ background: color }}>
+            {player.number}
+          </span>
+        )}
         {played && subbed && (
           <span className="absolute -left-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#e11d48] text-white">
             <ArrowDown className="h-3 w-3" strokeWidth={3} />
           </span>
         )}
-        {played && scored && <BallMark />}
-        {played && assisted && <BootMark />}
-        {played && booked && (
-          <span className={`absolute -bottom-1 -right-1 h-3 w-2 rounded-[2px] ${booked.kind === 'red' ? 'bg-[#e11d48]' : 'bg-[#f5c518]'}`} />
+      </div>
+      <div className={nameAbove ? 'mb-1' : 'mt-1'}>
+        <p className="whitespace-nowrap text-[10px] font-semibold text-white drop-shadow">{compactName(player.name)}</p>
+        {played && (scored || assisted || booked) && (
+          <p className="mt-0.5 flex justify-center gap-1">
+            {scored && <Mark label="GOAL" tone="white" />}
+            {assisted && <Mark label="ASSIST" tone="gold" />}
+            {booked?.kind === 'yellow' && <Mark label="YELLOW" tone="gold" />}
+            {booked?.kind === 'red' && <Mark label="RED" tone="red" />}
+          </p>
         )}
       </div>
-      <p className={`${nameAbove ? 'mb-1' : 'mt-1'} whitespace-nowrap text-[10px] font-semibold text-white drop-shadow`}>
-        {compactName(player.name)}
-      </p>
     </div>
   );
+}
+
+function Mark({ label, tone }: { label: string; tone: 'white' | 'gold' | 'red' }) {
+  const color = tone === 'red' ? 'bg-[#e11d48] text-white' : tone === 'gold' ? 'bg-[#f5c518] text-[#102018]' : 'bg-white text-[#102018]';
+  return <span className={`rounded px-1 text-[8px] font-black leading-4 ${color}`}>{label}</span>;
 }
 
 function PitchLines() {
@@ -602,26 +658,6 @@ function PitchLines() {
       <div className="absolute bottom-0 left-[20%] right-[20%] h-[14%] border-x border-t border-white/40" />
       <div className="absolute bottom-0 left-[34%] right-[34%] h-[6%] border-x border-t border-white/40" />
     </div>
-  );
-}
-
-function BallMark() {
-  return (
-    <svg viewBox="0 0 24 24" className="absolute -right-2.5 top-1/2 z-20 h-5 w-5 -translate-y-1/2 drop-shadow" aria-label="Goal">
-      <circle cx="12" cy="12" r="11" fill="#ffffff" />
-      <circle cx="12" cy="12" r="7.4" fill="#102018" />
-      <path fill="#ffffff" d="M12 6.2 13.8 8.6 12 9.8 10.2 8.6Z M12 9.8 13.8 8.6 15.8 10.4 14.2 12.8 12 11.6Z M12 9.8 10.2 8.6 8.2 10.4 9.8 12.8 12 11.6Z M9.8 12.8 12 11.6 14.2 12.8 13.4 15.2 10.6 15.2Z" />
-    </svg>
-  );
-}
-
-function BootMark() {
-  return (
-    <svg viewBox="0 0 24 24" className="absolute -left-2.5 top-1/2 z-20 h-5 w-5 -translate-y-1/2 drop-shadow" aria-label="Assist">
-      <circle cx="12" cy="12" r="11" fill="#ffffff" />
-      <path fill="#102018" d="M6.2 14.4c.4-2.8 1.8-4.4 3.6-4.6l.5-1.6h1.8v1.6h4.4c1 0 1.7.6 1.7 1.5v1.1H7.2c-.8 0-1.3-.4-1-1.1Z" />
-      <path fill="#102018" d="M6.4 15.6h11.2v1H6.4zM7.2 16.8h1.1v1.1H7.2zM9.6 16.8h1.1v1.1H9.6zM12 16.8h1.1v1.1H12zM14.4 16.8h1.1v1.1h-1.1z" />
-    </svg>
   );
 }
 
@@ -656,9 +692,13 @@ function BenchList({ title, color, players }: { title: string; color: string; pl
       <ul className="mt-2 space-y-1.5">
         {players.map((player) => (
           <li key={player.id} className="flex items-center gap-2 text-sm text-white/85">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black text-white" style={{ background: color }}>
-              {player.number}
-            </span>
+            {player.photoUrl ? (
+              <img src={player.photoUrl} alt="" className="h-7 w-7 rounded-full object-cover" />
+            ) : (
+              <span className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-black text-white" style={{ background: color }}>
+                {player.number}
+              </span>
+            )}
             <span className="min-w-0 flex-1 truncate">{player.name}</span>
             <span className="text-[10px] font-bold uppercase tracking-wide text-white/40">{player.position}</span>
           </li>

@@ -5,24 +5,26 @@ import { BottomNav } from './BottomNav';
 import { BrandLockup } from './BrandLockup';
 import { leagueStatus, useLeagueVersion } from '../../data/live';
 
+const MAIN_TABS = new Set(['/', '/discover', '/matches', '/news']);
+
 export function Layout() {
   const location = useLocation();
   const desk = location.pathname.startsWith('/admin');
-  const spot = `${location.pathname}${location.search}`;
+  const mainTab = MAIN_TABS.has(location.pathname);
   const version = useLeagueVersion();
   const { ready, error } = leagueStatus();
-  const [passing, setPassing] = useState(!desk);
+  const [passing, setPassing] = useState(mainTab);
   void version;
 
   useEffect(() => {
-    if (desk) {
+    if (!mainTab) {
       setPassing(false);
       return;
     }
     setPassing(true);
-    const timer = window.setTimeout(() => setPassing(false), 1500);
+    const timer = window.setTimeout(() => setPassing(false), 1200);
     return () => window.clearTimeout(timer);
-  }, [spot, desk]);
+  }, [location.pathname, mainTab]);
 
   const waiting = passing || (!desk && !ready);
 
