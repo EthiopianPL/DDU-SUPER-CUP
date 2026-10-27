@@ -61,6 +61,57 @@ export function HomePage() {
       <section className="mb-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-lg font-black text-white">
+            <Flame className="h-5 w-5 text-red-500" />
+            Live games
+          </h2>
+          <button type="button" onClick={() => navigate('/matches')} className="flex items-center text-sm font-semibold text-[#f5c518]">
+            Matches <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="space-y-3">
+          {live.map((fixture) => (
+            <MatchCard
+              key={fixture.id}
+              id={fixture.id}
+              homeTeam={cardTeam(fixture.homeId)}
+              awayTeam={cardTeam(fixture.awayId)}
+              homeScore={fixture.homeScore}
+              awayScore={fixture.awayScore}
+              status="live"
+              stadium={fixture.stadium}
+              matchMinute={fixture.minute}
+            />
+          ))}
+          {!live.length && <p className="rounded-2xl border border-white/10 bg-[#10192b] px-4 py-6 text-sm text-white/50">No games are live.</p>}
+        </div>
+      </section>
+
+      <section className="mb-6">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-lg font-black text-white">
+            <Calendar className="h-5 w-5 text-[#f5c518]" />
+            Next fixtures
+          </h2>
+        </div>
+        <div className="space-y-3">
+          {upcoming.map((fixture) => (
+            <MatchCard
+              key={fixture.id}
+              id={fixture.id}
+              homeTeam={cardTeam(fixture.homeId)}
+              awayTeam={cardTeam(fixture.awayId)}
+              status="upcoming"
+              time={`${fixture.date} · ${fixture.time}`}
+              stadium={fixture.stadium}
+            />
+          ))}
+          {!upcoming.length && <p className="rounded-2xl border border-white/10 bg-[#10192b] px-4 py-6 text-sm text-white/50">No matches in the next 2 days.</p>}
+        </div>
+      </section>
+
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-lg font-black text-white">
             <Newspaper className="h-5 w-5 text-[#f5c518]" />
             News
           </h2>
@@ -88,57 +139,6 @@ export function HomePage() {
             </button>
           ))}
           {!stories.length && <p className="rounded-2xl border border-white/10 bg-[#10192b] px-4 py-6 text-sm text-white/50">No stories yet.</p>}
-        </div>
-      </section>
-
-      <section className="mb-6">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-lg font-black text-white">
-            <Flame className="h-5 w-5 text-red-500" />
-            Live games
-          </h2>
-          <button type="button" onClick={() => navigate('/matches')} className="flex items-center text-sm font-semibold text-[#f5c518]">
-            Matches <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="space-y-3">
-          {live.map((fixture) => (
-            <MatchCard
-              key={fixture.id}
-              id={fixture.id}
-              homeTeam={cardTeam(fixture.homeId)}
-              awayTeam={cardTeam(fixture.awayId)}
-              homeScore={fixture.homeScore}
-              awayScore={fixture.awayScore}
-              status="live"
-              stadium={fixture.stadium}
-              matchMinute={fixture.minute}
-            />
-          ))}
-          {!live.length && <p className="rounded-2xl border border-white/10 bg-[#10192b] px-4 py-6 text-sm text-white/50">No games are live.</p>}
-        </div>
-      </section>
-
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-lg font-black text-white">
-            <Calendar className="h-5 w-5 text-[#f5c518]" />
-            Next 2 days
-          </h2>
-        </div>
-        <div className="space-y-3">
-          {upcoming.map((fixture) => (
-            <MatchCard
-              key={fixture.id}
-              id={fixture.id}
-              homeTeam={cardTeam(fixture.homeId)}
-              awayTeam={cardTeam(fixture.awayId)}
-              status="upcoming"
-              time={`${fixture.date} · ${fixture.time}`}
-              stadium={fixture.stadium}
-            />
-          ))}
-          {!upcoming.length && <p className="rounded-2xl border border-white/10 bg-[#10192b] px-4 py-6 text-sm text-white/50">No matches in the next 2 days.</p>}
         </div>
       </section>
     </div>
