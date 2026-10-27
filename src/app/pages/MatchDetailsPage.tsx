@@ -840,79 +840,48 @@ function EventTimeline({
 
   if (!rows.length) {
     return (
-      <p className="rounded-2xl border border-white/10 bg-[#10192b] px-4 py-6 text-center text-xs text-white/55">
+      <p className="mx-auto max-w-sm py-4 text-center text-xs text-white/50">
         No goals, cards, or substitutions yet.
       </p>
     );
   }
 
   return (
-    <ol className="relative space-y-2 max-w-xl mx-auto">
-      <span className="absolute bottom-2 left-1/2 top-2 w-px -translate-x-1/2 bg-white/15" aria-hidden="true" />
+    <ol className="relative mx-auto max-w-sm space-y-1.5 py-1">
+      <span className="absolute bottom-1 left-1/2 top-1 w-px -translate-x-1/2 bg-white/15" aria-hidden="true" />
       {rows.map((row) => {
         const home = row.teamId === homeId;
-        const team = getDepartment(row.teamId);
         return (
           <li key={row.key} className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
-            <div className="min-w-0 flex justify-end">
-              {home && <TimelineCard row={row} team={team?.shortName} color={team?.color} align="end" />}
+            <div className="min-w-0 flex items-center justify-end">
+              {home && (
+                <div
+                  title={row.extra ? `${row.title} · ${row.extra}` : row.title}
+                  className="flex items-center gap-1.5 truncate text-xs font-semibold text-white/90"
+                >
+                  <span className="truncate">{row.name}</span>
+                  <EventMark kind={row.kind} />
+                </div>
+              )}
             </div>
-            <span className="relative z-10 flex h-6 min-w-7 items-center justify-center rounded-full border border-white/15 bg-[#0c1424] px-1 font-mono text-[10px] font-black text-[#f5c518] shadow-sm">
+            <span className="relative z-10 flex h-5 min-w-6 items-center justify-center rounded-full bg-[#0c1424] px-1 font-mono text-[10px] font-bold text-[#f5c518] shadow-sm">
               {row.minute}&apos;
             </span>
-            <div className="min-w-0 flex justify-start">
-              {!home && <TimelineCard row={row} team={team?.shortName} color={team?.color} align="start" />}
+            <div className="min-w-0 flex items-center justify-start">
+              {!home && (
+                <div
+                  title={row.extra ? `${row.title} · ${row.extra}` : row.title}
+                  className="flex items-center gap-1.5 truncate text-xs font-semibold text-white/90"
+                >
+                  <EventMark kind={row.kind} />
+                  <span className="truncate">{row.name}</span>
+                </div>
+              )}
             </div>
           </li>
         );
       })}
     </ol>
-  );
-}
-
-function TimelineCard({
-  row,
-  team,
-  color,
-  align,
-}: {
-  row: { kind: string; title: string; name: string; extra: string };
-  team?: string;
-  color?: string;
-  align: 'start' | 'end';
-}) {
-  const isHome = align === 'end';
-  return (
-    <article
-      className={`inline-block max-w-full rounded-xl border border-white/10 bg-[#10192b] px-2.5 py-1.5 shadow-sm transition-colors hover:border-white/20 ${
-        isHome ? 'ml-auto text-right' : 'mr-auto text-left'
-      }`}
-    >
-      <div
-        className={`flex items-center gap-1.5 text-xs font-bold text-white ${
-          isHome ? 'justify-end' : 'justify-start'
-        }`}
-      >
-        {!isHome && <EventMark kind={row.kind} />}
-        {team && (
-          <span
-            className="rounded px-1 text-[9px] font-black uppercase tracking-wider"
-            style={{
-              background: color ? `${color}25` : 'rgba(255,255,255,0.1)',
-              color: color || '#f5c518',
-            }}
-          >
-            {team}
-          </span>
-        )}
-        <span className="truncate">{row.name}</span>
-        {isHome && <EventMark kind={row.kind} />}
-      </div>
-      <p className="mt-0.5 text-[10px] text-white/55">
-        <span className="font-semibold text-white/75">{row.title}</span>
-        {row.extra ? ` · ${row.extra}` : ''}
-      </p>
-    </article>
   );
 }
 
