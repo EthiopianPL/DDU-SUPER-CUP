@@ -246,7 +246,7 @@ export function MatchDetailsPage() {
       </nav>
 
       {activeTab === 'overview' && (
-        <section id="match-panel-overview" role="tabpanel" aria-labelledby="match-tab-overview" className="mt-6">
+        <section id="match-panel-overview" role="tabpanel" aria-labelledby="match-tab-overview" className="mt-4">
           {fixture.status === 'upcoming' ? (
             <KickoffClock date={fixture.date} time={fixture.time} detail={fixture.detail} />
           ) : (
@@ -786,17 +786,17 @@ function KickoffClock({ date, time, detail, compact = false }: { date: string; t
   ];
 
   return (
-    <section className="rounded-3xl border border-white/10 bg-[#10192b] px-4 py-6 text-center shadow-xl">
-      <p className="text-[11px] font-bold tracking-[0.18em] text-[#f5c518]">{held ? headline.toUpperCase() : 'KICKOFF COUNTDOWN'}</p>
-      <p className="mt-1 text-sm text-white/55">{formatKickoff(date, time)} · {time} EAT</p>
+    <section className="mx-auto max-w-lg rounded-2xl border border-white/10 bg-[#10192b] px-4 py-5 text-center shadow-xl">
+      <p className="text-[10px] font-bold tracking-[0.18em] text-[#f5c518]">{held ? headline.toUpperCase() : 'KICKOFF COUNTDOWN'}</p>
+      <p className="mt-0.5 text-xs text-white/55">{formatKickoff(date, time)} · {time} EAT</p>
       {waiting ? (
-        <p className="mt-5 text-lg font-black text-white">{held ? 'This match is not on the clock.' : 'Waiting for the whistle.'}</p>
+        <p className="mt-4 text-base font-black text-white">{held ? 'This match is not on the clock.' : 'Waiting for the whistle.'}</p>
       ) : (
-        <div className={`mt-5 grid gap-2 ${days > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+        <div className={`mt-4 grid gap-2 ${days > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
           {units.map((unit) => (
-            <div key={unit.label} className="rounded-2xl border border-white/10 bg-[#0c1424] px-2 py-3">
-              <p className="font-mono text-3xl font-black text-white">{unit.value}</p>
-              <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white/40">{unit.label}</p>
+            <div key={unit.label} className="rounded-xl border border-white/10 bg-[#0c1424] px-2 py-2">
+              <p className="font-mono text-2xl font-black text-white">{unit.value}</p>
+              <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-white/40">{unit.label}</p>
             </div>
           ))}
         </div>
@@ -840,25 +840,29 @@ function EventTimeline({
 
   if (!rows.length) {
     return (
-      <p className="rounded-3xl border border-white/10 bg-[#10192b] px-4 py-8 text-center text-sm text-white/55">
+      <p className="rounded-2xl border border-white/10 bg-[#10192b] px-4 py-6 text-center text-xs text-white/55">
         No goals, cards, or substitutions yet.
       </p>
     );
   }
 
   return (
-    <ol className="relative space-y-3">
-      <span className="absolute bottom-3 left-1/2 top-3 w-px -translate-x-1/2 bg-white/15" aria-hidden="true" />
+    <ol className="relative space-y-2 max-w-xl mx-auto">
+      <span className="absolute bottom-2 left-1/2 top-2 w-px -translate-x-1/2 bg-white/15" aria-hidden="true" />
       {rows.map((row) => {
         const home = row.teamId === homeId;
         const team = getDepartment(row.teamId);
         return (
-          <li key={row.key} className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-2">
-            <div className="min-w-0">{home && <TimelineCard row={row} team={team?.shortName} color={team?.color} align="end" />}</div>
-            <span className="relative z-10 mt-2 flex h-7 min-w-8 items-center justify-center rounded-full border border-white/15 bg-[#0c1424] px-1.5 font-mono text-[11px] font-black text-[#f5c518]">
+          <li key={row.key} className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+            <div className="min-w-0 flex justify-end">
+              {home && <TimelineCard row={row} team={team?.shortName} color={team?.color} align="end" />}
+            </div>
+            <span className="relative z-10 flex h-6 min-w-7 items-center justify-center rounded-full border border-white/15 bg-[#0c1424] px-1 font-mono text-[10px] font-black text-[#f5c518] shadow-sm">
               {row.minute}&apos;
             </span>
-            <div className="min-w-0">{!home && <TimelineCard row={row} team={team?.shortName} color={team?.color} align="start" />}</div>
+            <div className="min-w-0 flex justify-start">
+              {!home && <TimelineCard row={row} team={team?.shortName} color={team?.color} align="start" />}
+            </div>
           </li>
         );
       })}
@@ -877,31 +881,89 @@ function TimelineCard({
   color?: string;
   align: 'start' | 'end';
 }) {
+  const isHome = align === 'end';
   return (
-    <article className={`max-w-full rounded-2xl border border-white/10 bg-[#10192b] px-3 py-2 ${align === 'end' ? 'ml-auto text-right' : 'mr-auto text-left'}`}>
-      <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: color || '#f5c518', justifyContent: align === 'end' ? 'flex-end' : 'flex-start' }}>
-        <EventMark kind={row.kind} />
-        {team || row.title}
+    <article
+      className={`inline-block max-w-full rounded-xl border border-white/10 bg-[#10192b] px-2.5 py-1.5 shadow-sm transition-colors hover:border-white/20 ${
+        isHome ? 'ml-auto text-right' : 'mr-auto text-left'
+      }`}
+    >
+      <div
+        className={`flex items-center gap-1.5 text-xs font-bold text-white ${
+          isHome ? 'justify-end' : 'justify-start'
+        }`}
+      >
+        {!isHome && <EventMark kind={row.kind} />}
+        {team && (
+          <span
+            className="rounded px-1 text-[9px] font-black uppercase tracking-wider"
+            style={{
+              background: color ? `${color}25` : 'rgba(255,255,255,0.1)',
+              color: color || '#f5c518',
+            }}
+          >
+            {team}
+          </span>
+        )}
+        <span className="truncate">{row.name}</span>
+        {isHome && <EventMark kind={row.kind} />}
+      </div>
+      <p className="mt-0.5 text-[10px] text-white/55">
+        <span className="font-semibold text-white/75">{row.title}</span>
+        {row.extra ? ` · ${row.extra}` : ''}
       </p>
-      <p className="mt-1 text-sm font-bold text-white">{row.title}</p>
-      <p className="text-xs text-white/70">{row.name}</p>
-      {row.extra && <p className="text-[11px] text-white/45">{row.extra}</p>}
     </article>
   );
 }
 
 function EventMark({ kind }: { kind: string }) {
-  if (kind === 'yellow') return <span className="inline-block h-3 w-2.5 rounded-[2px] bg-[#f5c518]" aria-hidden="true" />;
-  if (kind === 'red') return <span className="inline-block h-3 w-2.5 rounded-[2px] bg-[#e11d48]" aria-hidden="true" />;
+  if (kind === 'yellow') {
+    return (
+      <span
+        className="inline-block h-3 w-2 shrink-0 rounded-[1.5px] bg-[#f5c518] shadow-[0_1px_2px_rgba(0,0,0,0.8)] ring-1 ring-black/40"
+        title="Yellow card"
+        aria-label="Yellow card"
+      />
+    );
+  }
+  if (kind === 'red') {
+    return (
+      <span
+        className="inline-block h-3 w-2 shrink-0 rounded-[1.5px] bg-[#e11d48] shadow-[0_1px_2px_rgba(0,0,0,0.8)] ring-1 ring-black/40"
+        title="Red card"
+        aria-label="Red card"
+      />
+    );
+  }
   if (kind === 'sub') {
     return (
-      <span className="inline-flex items-center" aria-hidden="true">
+      <span className="inline-flex shrink-0 items-center" aria-label="Substitution">
         <ArrowUp className="h-3 w-3 text-[#1f9d55]" strokeWidth={3} />
-        <ArrowDown className="h-3 w-3 text-[#e11d48]" strokeWidth={3} />
+        <ArrowDown className="-ml-1 h-3 w-3 text-[#e11d48]" strokeWidth={3} />
       </span>
     );
   }
-  return <span className="inline-block h-2.5 w-2.5 rounded-full bg-white" aria-hidden="true" />;
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-3 w-3 shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+      fill="none"
+      aria-label="Goal"
+    >
+      <circle cx="12" cy="12" r="10" fill="#ffffff" stroke="#102018" strokeWidth="1.2" />
+      <polygon points="12,7.2 16.5,10.5 14.8,15.8 9.2,15.8 7.5,10.5" fill="#102018" />
+      <line x1="12" y1="7.2" x2="12" y2="2" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
+      <line x1="16.5" y1="10.5" x2="21.5" y2="8.9" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
+      <line x1="14.8" y1="15.8" x2="17.9" y2="20.1" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
+      <line x1="9.2" y1="15.8" x2="6.1" y2="20.1" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
+      <line x1="7.5" y1="10.5" x2="2.5" y2="8.9" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M10 2.2A10 10 0 0 1 14 2.2L12 7.2Z" fill="#102018" />
+      <path d="M21.7 10.3A10 10 0 0 1 20.3 14.6L16.5 10.5Z" fill="#102018" />
+      <path d="M15.4 21.2A10 10 0 0 1 11.5 22L14.8 15.8Z" fill="#102018" />
+      <path d="M8.6 15.8L12.5 22A10 10 0 0 1 8.6 21.2Z" fill="#102018" />
+      <path d="M7.5 10.5L3.7 14.6A10 10 0 0 1 2.3 10.3Z" fill="#102018" />
+    </svg>
+  );
 }
 
 function BenchList({ title, color, players }: { title: string; color: string; players: Player[] }) {
