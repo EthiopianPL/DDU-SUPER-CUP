@@ -36,10 +36,11 @@ export function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-[#070d18]/95 backdrop-blur-lg sm:hidden"
+      className="fixed left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-md sm:hidden pointer-events-none"
+      style={{ bottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
       aria-label="Mobile navigation"
     >
-      <div className="mx-auto flex max-w-3xl items-center justify-around">
+      <div className="flex items-center justify-between rounded-full border border-white/10 bg-[#0c1424]/95 p-1.5 shadow-2xl shadow-black/70 backdrop-blur-xl pointer-events-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = isItemActive(item.path);
@@ -49,11 +50,15 @@ export function BottomNav() {
               key={item.id}
               type="button"
               onClick={() => navigate(item.path)}
-              className="flex flex-1 flex-col items-center px-1 py-2.5 transition-colors focus:outline-none"
+              className={`flex flex-1 flex-col items-center justify-center gap-1.5 py-2 px-1 rounded-full transition-all duration-200 cursor-pointer ${
+                isActive
+                  ? 'bg-[#f5c518] text-[#102018] shadow-md font-bold'
+                  : 'bg-transparent text-white/50 hover:text-white/80 active:scale-95 font-medium'
+              }`}
               aria-current={isActive ? 'page' : undefined}
             >
-              <Icon className={`mb-1 h-5 w-5 transition-colors ${isActive ? 'text-[#f5c518]' : 'text-white/40'}`} />
-              <span className={`text-[11px] transition-colors ${isActive ? 'font-bold text-[#f5c518]' : 'font-medium text-white/45'}`}>
+              <Icon className={`h-5 w-5 shrink-0 transition-colors ${isActive ? 'text-[#102018]' : 'text-white/50'}`} />
+              <span className={`text-[11px] leading-none font-bold transition-colors ${isActive ? 'text-[#102018]' : 'text-white/50'}`}>
                 {item.label}
               </span>
             </button>

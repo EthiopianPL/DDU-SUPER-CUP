@@ -39,7 +39,7 @@ export function Layout() {
       )}
 
       {!desk && !waiting && <Header />}
-      <main className="w-full">
+      <main className="w-full pb-8 sm:pb-0">
         {waiting && <MatchLoading error={passing ? '' : error} />}
         {!waiting && (desk || ready) && <Outlet />}
       </main>
