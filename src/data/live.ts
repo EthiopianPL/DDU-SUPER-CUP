@@ -75,13 +75,15 @@ export interface Snapshot {
     confirmed: boolean;
     formationHome: string;
     formationAway: string;
+    stage?: 'group' | 'r16' | 'qf' | 'sf' | 'final';
+    slot?: number;
     version: number;
     updatedAt: number;
   }>;
   events: MatchEventRecord[];
   squads: SquadRow[];
   stats: ManualStat[];
-  news: Array<{ id: string; title: string; category: string; time: string; summary: string; body: string }>;
+  news: Array<{ id: string; title: string; category: string; time: string; summary: string; body: string; imageUrl?: string }>;
 }
 
 export function applySnapshot(data: Snapshot) {
@@ -101,6 +103,8 @@ export function applySnapshot(data: Snapshot) {
     addedSeconds: match.addedMs / 1000,
     halfSeconds: match.halfMs / 1000,
     runningSince: match.runningSince,
+    stage: match.stage || 'group',
+    slot: match.slot || 0,
   })));
   replace(newsArticles, data.news);
   replace(matchEvents, data.events);

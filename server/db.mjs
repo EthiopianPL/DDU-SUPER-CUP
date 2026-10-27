@@ -138,6 +138,8 @@ function migrate(db) {
       assistant2 TEXT NOT NULL DEFAULT '',
       formation_home TEXT NOT NULL DEFAULT '4-2-3-1',
       formation_away TEXT NOT NULL DEFAULT '4-2-3-1',
+      stage TEXT NOT NULL DEFAULT 'group',
+      slot INTEGER NOT NULL DEFAULT 0,
       version INTEGER NOT NULL DEFAULT 1,
       updated_at INTEGER NOT NULL
     );
@@ -187,7 +189,8 @@ function migrate(db) {
       category TEXT NOT NULL,
       time_label TEXT NOT NULL,
       summary TEXT NOT NULL,
-      body TEXT NOT NULL
+      body TEXT NOT NULL,
+      image_url TEXT NOT NULL DEFAULT ''
     );
     CREATE TABLE IF NOT EXISTS audit_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -201,6 +204,17 @@ function migrate(db) {
       created_at INTEGER NOT NULL
     );
   `);
+  const newsColumns = db.prepare('PRAGMA table_info(news)').all();
+  if (newsColumns.length && !newsColumns.some((column) => column.name === 'image_url')) {
+    db.exec(`ALTER TABLE news ADD COLUMN image_url TEXT NOT NULL DEFAULT ''`);
+  }
+  const matchColumns = db.prepare('PRAGMA table_info(matches)').all();
+  if (matchColumns.length && !matchColumns.some((column) => column.name === 'stage')) {
+    db.exec(`ALTER TABLE matches ADD COLUMN stage TEXT NOT NULL DEFAULT 'group'`);
+  }
+  if (matchColumns.length && !matchColumns.some((column) => column.name === 'slot')) {
+    db.exec(`ALTER TABLE matches ADD COLUMN slot INTEGER NOT NULL DEFAULT 0`);
+  }
 }
 
 function serverFile(name) {

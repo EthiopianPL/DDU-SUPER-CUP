@@ -11,6 +11,7 @@ import {
   controlMatch,
   correctEvent,
   createMatch,
+  scheduleGroupFixtures,
   createUser,
   currentRevision,
   deleteNews,
@@ -135,6 +136,7 @@ async function serveApi(request, response, db, url) {
   if (request.method === 'POST' && path === '/api/teams') return mutate(response, db, () => saveTeam(db, must(actor), body));
   if (request.method === 'POST' && path === '/api/players') return mutate(response, db, () => savePlayer(db, must(actor), body));
   if (request.method === 'POST' && path === '/api/news') return mutate(response, db, () => saveNews(db, must(actor), body));
+  if (request.method === 'POST' && path === '/api/matches/round') return mutate(response, db, () => scheduleGroupFixtures(db, must(actor), body));
   if (request.method === 'POST' && path === '/api/matches') return mutate(response, db, () => createMatch(db, must(actor), body));
 
   if (one && request.method === 'PATCH' && one[1] === 'teams') return mutate(response, db, () => saveTeam(db, must(actor), body, decodeURIComponent(one[2])));
@@ -273,7 +275,7 @@ function uploadImage(request, response, db, actor, path) {
 }
 
 function serveMedia(response, db, pathname) {
-  const match = pathname.match(/^\/api\/media\/(teams|players)\/([^/]+)$/);
+  const match = pathname.match(/^\/api\/media\/(teams|players|news)\/([^/]+)$/);
   if (!match) return send(response, 404, { error: 'Not found.' });
   const row = db.prepare('SELECT content_type, bytes FROM media WHERE id = ?').get(`${match[1]}/${decodeURIComponent(match[2])}`);
   if (!row?.bytes) return send(response, 404, { error: 'Not found.' });
@@ -344,13 +346,13 @@ export async function loadLeagueSource() {
 
 export function prepareDatabase(db) {
   const password = process.env.ADMIN_PASSWORD || 'supercup';
-  if (db.dialect === 'postgres') {
-    seedDatabase(db, null, password);
-    return Promise.resolve();
+  if (process.env.DDU_DEMO === '1' && db.dialect !== 'postgres') {
+    return loadLeagueSource().then((league) => {
+      seedDatabase(db, league, password);
+    });
   }
-  return loadLeagueSource().then((league) => {
-    seedDatabase(db, league, password);
-  });
+  seedDatabase(db, null, password);
+  return Promise.resolve();
 }
 
 export function startServer(db = openDatabase(), port = Number(process.env.PORT || 8787)) {

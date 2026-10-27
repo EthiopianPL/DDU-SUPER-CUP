@@ -60,6 +60,8 @@ export interface Fixture {
   assistant2?: string;
   formationHome?: string;
   formationAway?: string;
+  stage?: 'group' | 'r16' | 'qf' | 'sf' | 'final';
+  slot?: number;
   version?: number;
   updatedAt?: number;
 }
@@ -405,7 +407,7 @@ export function standingsFor(group: GroupId): Standing[] {
   });
 
   const played = fixtures
-    .filter((fixture) => fixture.group === group && fixture.confirmed && fixture.detail === 'finished' && fixture.homeScore != null && fixture.awayScore != null)
+    .filter((fixture) => (fixture.stage ?? 'group') === 'group' && fixture.group === group && fixture.confirmed && fixture.detail === 'finished' && fixture.homeScore != null && fixture.awayScore != null)
     .sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`));
 
   played.forEach((fixture) => {

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { Trophy, Users, BarChart3, Search, X, Award, ChevronRight } from 'lucide-react';
+import { Trophy, Users, BarChart3, Search, X, Award, ChevronRight, GitBranch } from 'lucide-react';
+import { KnockoutRoad } from '../components/KnockoutRoad';
 import { GroupTable } from '../components/GroupTable';
 import { MatchCard } from '../components/MatchCard';
 import { DepartmentMark, Portrait } from '../components/DepartmentMark';
@@ -18,7 +19,7 @@ import {
 } from '../../data/supercup';
 import { useLeagueVersion } from '../../data/live';
 
-export type DiscoverTab = 'groups' | 'teams' | 'stats';
+export type DiscoverTab = 'groups' | 'road' | 'teams' | 'stats';
 
 export function DiscoverPage() {
   const navigate = useNavigate();
@@ -31,7 +32,9 @@ export function DiscoverPage() {
       ? 'teams'
       : rawTab === 'stats' || rawTab === 'statistics'
         ? 'stats'
-        : 'groups';
+        : rawTab === 'road' || rawTab === 'knockout' || rawTab === 'bracket'
+          ? 'road'
+          : 'groups';
 
   // Group filter for Groups tab and Departments tab
   const rawGroup = (searchParams.get('group') || '').toUpperCase();
@@ -60,8 +63,8 @@ export function DiscoverPage() {
 
   // Groups data sorted by smart priority: LIVE -> UPCOMING -> FINISHED
   const groupFixtures = useMemo(
-    () => sortFixturesByPriority(fixtures.filter((fixture) => fixture.group === selectedGroup)),
-    [selectedGroup],
+    () => sortFixturesByPriority(fixtures.filter((fixture) => fixture.group === selectedGroup && (fixture.stage ?? 'group') === 'group')),
+    [selectedGroup, version],
   );
 
   // Filtered departments
@@ -100,7 +103,7 @@ export function DiscoverPage() {
       <div
         role="tablist"
         aria-label="Discover tournament sections"
-        className="grid grid-cols-3 gap-1 rounded-2xl border border-white/10 bg-[#10192b] p-1.5 shadow-inner"
+        className="grid grid-cols-4 gap-1 rounded-2xl border border-white/10 bg-[#10192b] p-1.5 shadow-inner"
       >
         <button
           id="tab-groups"
@@ -116,10 +119,24 @@ export function DiscoverPage() {
           }`}
         >
           <Trophy className={`h-4 w-4 shrink-0 ${activeTab === 'groups' ? 'text-[#102018]' : 'text-white/40'}`} />
-          <span className="truncate">
-            <span className="hidden sm:inline">Groups & Standings</span>
-            <span className="sm:hidden">Standings</span>
-          </span>
+          <span className="truncate">Groups</span>
+        </button>
+
+        <button
+          id="tab-road"
+          role="tab"
+          type="button"
+          aria-selected={activeTab === 'road'}
+          aria-controls="panel-road"
+          onClick={() => setTab('road')}
+          className={`flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518] focus-visible:ring-offset-2 focus-visible:ring-offset-[#10192b] active:scale-[0.98] ${
+            activeTab === 'road'
+              ? 'bg-[#f5c518] text-[#102018] shadow-md'
+              : 'text-white/60 hover:bg-white/5 hover:text-white'
+          }`}
+        >
+          <GitBranch className={`h-4 w-4 shrink-0 ${activeTab === 'road' ? 'text-[#102018]' : 'text-white/40'}`} />
+          <span className="truncate">Road</span>
         </button>
 
         <button
@@ -136,10 +153,7 @@ export function DiscoverPage() {
           }`}
         >
           <Users className={`h-4 w-4 shrink-0 ${activeTab === 'teams' ? 'text-[#102018]' : 'text-white/40'}`} />
-          <span className="truncate">
-            <span className="hidden sm:inline">Departments</span>
-            <span className="sm:hidden">Depts</span>
-          </span>
+          <span className="truncate">Teams</span>
         </button>
 
         <button
@@ -156,10 +170,7 @@ export function DiscoverPage() {
           }`}
         >
           <BarChart3 className={`h-4 w-4 shrink-0 ${activeTab === 'stats' ? 'text-[#102018]' : 'text-white/40'}`} />
-          <span className="truncate">
-            <span className="hidden sm:inline">Tournament Stats</span>
-            <span className="sm:hidden">Stats</span>
-          </span>
+          <span className="truncate">Stats</span>
         </button>
       </div>
 
@@ -231,6 +242,12 @@ export function DiscoverPage() {
               ))}
             </div>
           </div>
+        </section>
+      )}
+
+      {activeTab === 'road' && (
+        <section id="panel-road" role="tabpanel" aria-labelledby="tab-road" className="mt-4">
+          <KnockoutRoad />
         </section>
       )}
 

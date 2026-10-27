@@ -18,6 +18,7 @@ import {
   squads,
   type GroupId,
 } from '../../data/supercup';
+import { STAGE_OPTIONS, stageLabel, tieCount, type Stage } from '../../data/knockout';
 
 type Role = 'super_admin' | 'match_admin' | 'competition_manager' | 'team_manager' | 'reader';
 type Section = 'overview' | 'matches' | 'teams' | 'players' | 'news' | 'users' | 'audit' | 'rules';
@@ -207,88 +208,173 @@ function MatchList({ version, onOpen, onMessage, onError }: { version: number; o
   void version;
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
-  const [creating, setCreating] = useState(false);
   const rows = fixtures.filter((fixture) => {
     const home = getDepartment(fixture.homeId);
     const away = getDepartment(fixture.awayId);
-    const text = `${home?.name} ${away?.name} ${fixture.stadium} ${fixture.group}`.toLowerCase();
+    const text = `${home?.name ?? ''} ${away?.name ?? ''} ${fixture.stadium} ${fixture.group} ${fixture.stage ?? ''}`.toLowerCase();
     const statusOk = status === 'all' || fixture.detail === status || fixture.status === status;
     return statusOk && text.includes(query.trim().toLowerCase());
   });
 
   return (
-    <div>
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-3xl font-black">Matches</h1>
-        <button type="button" onClick={() => setCreating((value) => !value)} className="rounded-xl bg-[#f5c518] px-3 py-2 text-sm font-black text-[#102018]">New match</button>
+    <div className="mx-auto max-w-3xl">
+      <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">FIXTURES</p>
+      <h1 className="mt-1 text-3xl font-black">Matches</h1>
+      <p className="mt-1 text-sm text-white/45">Nothing is placed on the calendar until you schedule it here.</p>
+      <MatchForm onDone={onMessage} onError={onError} />
+      <GroupRoundForm onDone={onMessage} onError={onError} />
+      <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+        <input className={`${inputClass} mt-0`} placeholder="Search teams or venue" value={query} onChange={(event) => setQuery(event.target.value)} />
+        <select className={`${inputClass} mt-0 sm:max-w-[180px]`} value={status} onChange={(event) => setStatus(event.target.value)}>
+          {['all', 'scheduled', 'live', 'halftime', 'finished', 'postponed', 'suspended', 'cancelled', 'abandoned'].map((item) => (
+            <option key={item} value={item}>{item}</option>
+          ))}
+        </select>
       </div>
-      {creating && <MatchForm onDone={(text) => { setCreating(false); onMessage(text); }} onError={onError} />}
-      <div className="mt-4 flex flex-wrap gap-2">
-        <input className={`${inputClass} mt-0 max-w-xs`} placeholder="Search teams or venue" value={query} onChange={(event) => setQuery(event.target.value)} />
-        {['all', 'scheduled', 'live', 'halftime', 'finished', 'postponed', 'suspended', 'cancelled', 'abandoned'].map((item) => (
-          <button key={item} type="button" onClick={() => setStatus(item)} className={`rounded-full px-3 py-1.5 text-xs font-bold ${status === item ? 'bg-white text-[#102018]' : 'bg-white/5 text-white/60'}`}>{item}</button>
-        ))}
-      </div>
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
-        <table className="min-w-[760px] w-full text-left text-sm">
-          <thead className="bg-white/[0.03] text-xs uppercase tracking-wide text-white/40">
-            <tr>
-              <th className="px-3 py-2">Fixture</th>
-              <th className="px-3 py-2">Kickoff</th>
-              <th className="px-3 py-2">Score</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Venue</th>
-              <th className="px-3 py-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((fixture) => (
-              <tr key={fixture.id} className="border-t border-white/5">
-                <td className="px-3 py-2 font-bold">{labelOf(fixture.homeId)} vs {labelOf(fixture.awayId)}<span className="mt-0.5 block text-xs font-normal text-white/35">Group {fixture.group} · MD{fixture.matchday}</span></td>
-                <td className="px-3 py-2 text-white/60">{fixture.date} {fixture.time}</td>
-                <td className="px-3 py-2 font-mono">{fixture.status === 'upcoming' ? '–' : `${fixture.homeScore}-${fixture.awayScore}`}</td>
-                <td className="px-3 py-2">{fixture.detail}{fixture.confirmed ? ' · confirmed' : ''}</td>
-                <td className="px-3 py-2 text-white/50">{fixture.stadium}</td>
-                <td className="px-3 py-2 text-right">
-                  <button type="button" onClick={() => onOpen(fixture.id)} className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold">Open</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {!rows.length && <p className="px-3 py-8 text-center text-sm text-white/40">No matches for this filter.</p>}
-      </div>
+      <ul className="mt-3 space-y-2">
+        {rows.map((fixture) => {
+          const knockout = fixture.stage && fixture.stage !== 'group';
+          return (
+            <li key={fixture.id}>
+              <button type="button" onClick={() => onOpen(fixture.id)} className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#10192b] px-3 py-3 text-left">
+                <span className="min-w-0">
+                  <span className="block text-[11px] font-bold uppercase tracking-wide text-[#f5c518]">
+                    {knockout ? `${stageLabel(fixture.stage)} · Tie ${fixture.slot}` : `Group ${fixture.group} · Matchday ${fixture.matchday}`}
+                  </span>
+                  <span className="mt-0.5 block truncate text-sm font-black">{labelOf(fixture.homeId)} vs {labelOf(fixture.awayId)}</span>
+                  <span className="block text-xs text-white/40">{fixture.date} {fixture.time} · {fixture.stadium}</span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <span className="block font-mono text-sm font-black">{fixture.status === 'upcoming' ? '–' : `${fixture.homeScore}-${fixture.awayScore}`}</span>
+                  <span className="text-[11px] font-bold text-white/40">{fixture.detail}{fixture.confirmed ? ' · confirmed' : ''}</span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {!rows.length && <p className="mt-4 rounded-2xl border border-white/10 px-3 py-8 text-center text-sm text-white/40">No matches yet. Schedule one above.</p>}
     </div>
   );
 }
 
 function MatchForm({ onDone, onError }: { onDone: (text: string) => void; onError: (text: string) => void }) {
-  const [homeId, setHomeId] = useState(departments[0]?.id ?? '');
-  const [awayId, setAwayId] = useState(departments[1]?.id ?? '');
+  const [stage, setStage] = useState<Stage>('group');
+  const [group, setGroup] = useState<GroupId>('A');
+  const [slot, setSlot] = useState('1');
+  const [matchday, setMatchday] = useState('1');
+  const pool = stage === 'group' ? departments.filter((team) => team.group === group) : departments;
+  const [homeId, setHomeId] = useState(pool[0]?.id ?? '');
+  const [awayId, setAwayId] = useState(pool[1]?.id ?? '');
   const [date, setDate] = useState('2026-11-07');
   const [time, setTime] = useState('15:00');
   const [venue, setVenue] = useState('DDU Main Pitch');
+  const [referee, setReferee] = useState('');
   const [allowExtra, setAllowExtra] = useState(false);
+  const home = pool.find((team) => team.id === homeId) ?? pool[0];
+  const awayOptions = pool.filter((team) => team.id !== home?.id);
+  const away = awayOptions.find((team) => team.id === awayId) ?? awayOptions[0];
+  const ties = tieCount(stage);
+
   return (
     <form
-      className="mt-4 grid gap-3 rounded-2xl border border-white/10 bg-[#10192b] p-4 sm:grid-cols-2"
+      className="mt-5 rounded-3xl border border-white/10 bg-[#10192b] p-5"
       onSubmit={async (event) => {
         event.preventDefault();
         try {
-          await desk('/api/matches', { body: { homeId, awayId, date, time, venue, allowExtra, matchday: 1 } });
+          if (!home || !away) throw new Error('Add two teams before scheduling a match.');
+          await desk('/api/matches', {
+            body: {
+              stage,
+              slot: stage === 'group' ? 0 : Math.min(Number(slot) || 1, ties),
+              matchday: Number(matchday) || 1,
+              homeId: home.id,
+              awayId: away.id,
+              date,
+              time,
+              venue,
+              referee,
+              allowExtra: stage === 'group' ? allowExtra : true,
+            },
+          });
           onDone('Match scheduled.');
         } catch (reason) {
           onError(reason instanceof Error ? reason.message : 'Could not schedule the match.');
         }
       }}
     >
-      <Select label="Home" value={homeId} onChange={setHomeId} options={departments.map((team) => ({ id: team.id, label: team.name }))} />
-      <Select label="Away" value={awayId} onChange={setAwayId} options={departments.map((team) => ({ id: team.id, label: team.name }))} />
-      <label className="text-xs font-bold text-white/50">Date<input className={inputClass} type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
-      <label className="text-xs font-bold text-white/50">Kickoff<input className={inputClass} type="time" value={time} onChange={(event) => setTime(event.target.value)} /></label>
-      <label className="text-xs font-bold text-white/50 sm:col-span-2">Venue<input className={inputClass} value={venue} onChange={(event) => setVenue(event.target.value)} /></label>
-      <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={allowExtra} onChange={(event) => setAllowExtra(event.target.checked)} /> Allow extra time and penalties</label>
-      <button type="submit" className="rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018] sm:col-span-2">Schedule</button>
+      <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">NEW MATCH</p>
+      <h2 className="mt-1 text-xl font-black">Schedule a fixture</h2>
+      <div className="mt-4 grid gap-4">
+        <ChoiceRow label="Round" value={stageLabel(stage)} options={STAGE_OPTIONS.map((item) => item.label)} onChange={(label) => {
+          const next = STAGE_OPTIONS.find((item) => item.label === label)?.id ?? 'group';
+          setStage(next);
+          if (next !== 'group') {
+            setAllowExtra(true);
+            if (Number(slot) > tieCount(next)) setSlot('1');
+          }
+        }} />
+        {stage === 'group' ? (
+          <ChoiceRow label="Group" value={group} options={['A', 'B', 'C', 'D', 'E', 'F']} onChange={(value) => setGroup(value as GroupId)} />
+        ) : (
+          <ChoiceRow label="Tie" value={String(Math.min(Number(slot) || 1, ties))} options={Array.from({ length: ties }, (_, index) => String(index + 1))} onChange={setSlot} />
+        )}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Select label="Home" value={home?.id ?? ''} onChange={setHomeId} options={pool.map((team) => ({ id: team.id, label: `${team.shortName} · ${team.name}` }))} />
+          <Select label="Away" value={away?.id ?? ''} onChange={setAwayId} options={awayOptions.map((team) => ({ id: team.id, label: `${team.shortName} · ${team.name}` }))} />
+          {stage === 'group' && <Field label="Matchday" value={matchday} onChange={setMatchday} placeholder="1" inputMode="numeric" />}
+          <label className="text-[11px] font-bold uppercase tracking-wide text-white/40">Date
+            <input className={inputClass} type="date" value={date} required onChange={(event) => setDate(event.target.value)} />
+          </label>
+          <label className="text-[11px] font-bold uppercase tracking-wide text-white/40">Kickoff
+            <input className={inputClass} type="time" value={time} required onChange={(event) => setTime(event.target.value)} />
+          </label>
+          <Field label="Venue" value={venue} onChange={setVenue} placeholder="Campus pitch" />
+          <Field label="Referee" value={referee} onChange={setReferee} placeholder="Optional" />
+        </div>
+        {stage === 'group' && (
+          <label className="flex items-center gap-2 text-sm text-white/70">
+            <input type="checkbox" checked={allowExtra} onChange={(event) => setAllowExtra(event.target.checked)} />
+            Allow extra time and penalties
+          </label>
+        )}
+        {stage !== 'group' && <p className="text-xs text-white/40">Knockout ties allow extra time and penalties. The winner fills the next round on Discover once the result is confirmed.</p>}
+      </div>
+      <button type="submit" className="mt-5 w-full rounded-xl bg-[#f5c518] px-4 py-3 text-sm font-black text-[#102018] sm:w-auto">Schedule match</button>
+    </form>
+  );
+}
+
+function GroupRoundForm({ onDone, onError }: { onDone: (text: string) => void; onError: (text: string) => void }) {
+  const [group, setGroup] = useState('ALL');
+  const [date, setDate] = useState('2026-11-07');
+  const [time, setTime] = useState('15:00');
+  return (
+    <form
+      className="mt-3 rounded-3xl border border-white/10 bg-[#10192b] p-5"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        try {
+          const data = await desk('/api/matches/round', { body: { group: group === 'ALL' ? '' : group, date, time } });
+          onDone(data.created ? `Scheduled ${data.created} group matches.` : 'Those group matches are already on the calendar.');
+        } catch (reason) {
+          onError(reason instanceof Error ? reason.message : 'Could not build the group fixtures.');
+        }
+      }}
+    >
+      <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">GROUP DRAW</p>
+      <h2 className="mt-1 text-xl font-black">Fill a group calendar</h2>
+      <p className="mt-1 text-sm text-white/45">Builds the missing round-robin only. Each matchday is one week apart. Scores stay blank until you play the match.</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <Select label="Group" value={group} onChange={setGroup} options={[{ id: 'ALL', label: 'All groups' }, ...['A', 'B', 'C', 'D', 'E', 'F'].map((id) => ({ id, label: `Group ${id}` }))]} />
+        <label className="text-[11px] font-bold uppercase tracking-wide text-white/40">First matchday
+          <input className={inputClass} type="date" value={date} onChange={(event) => setDate(event.target.value)} required />
+        </label>
+        <label className="text-[11px] font-bold uppercase tracking-wide text-white/40">Kickoff
+          <input className={inputClass} type="time" value={time} onChange={(event) => setTime(event.target.value)} required />
+        </label>
+      </div>
+      <button type="submit" className="mt-4 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-black">Schedule missing fixtures</button>
     </form>
   );
 }
@@ -340,7 +426,7 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
           </div>
           <TeamBlock team={away} align="end" />
         </div>
-        <p className="mt-3 text-center text-xs text-white/35">{fixture.stadium} · {fixture.date} {fixture.time}{fixture.referee ? ` · Ref ${fixture.referee}` : ''}{fixture.confirmed ? ' · Confirmed' : ''}</p>
+        <p className="mt-3 text-center text-xs text-white/35">{fixture.stage && fixture.stage !== 'group' ? `${stageLabel(fixture.stage)} · Tie ${fixture.slot}` : `Group ${fixture.group} · MD${fixture.matchday}`} · {fixture.stadium} · {fixture.date} {fixture.time}{fixture.referee ? ` · Ref ${fixture.referee}` : ''}{fixture.confirmed ? ' · Confirmed' : ''}</p>
         <div className="mt-4 flex flex-wrap gap-2">
           {finished && <p className="w-full text-sm text-white/50">This match is finished. The score, lineup, and events stay as recorded.</p>}
           {!finished && (fixture.detail === 'scheduled' || fixture.detail === 'postponed') ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'kickoff' })}>Kick off</Action> : null}
@@ -864,17 +950,18 @@ function ChoiceRow({ label, value, options, onChange }: { label: string; value: 
   );
 }
 
-function PicturePicker({ preview, empty, round = false, required = false, inputKey, onFile }: {
+function PicturePicker({ preview, empty, round = false, wide = false, required = false, inputKey, onFile }: {
   preview: string;
   empty: string;
   round?: boolean;
+  wide?: boolean;
   required?: boolean;
   inputKey?: number;
   onFile: (file: File | null) => void;
 }) {
   return (
-    <label className="flex shrink-0 cursor-pointer flex-col items-center gap-2">
-      <span className={`relative flex h-32 w-32 items-center justify-center overflow-hidden border border-dashed border-white/20 bg-[#0c1424] ${round ? 'rounded-full' : 'rounded-3xl'}`}>
+    <label className={`flex shrink-0 cursor-pointer flex-col items-center gap-2 ${wide ? 'w-full' : ''}`}>
+      <span className={`relative flex items-center justify-center overflow-hidden border border-dashed border-white/20 bg-[#0c1424] ${wide ? 'h-44 w-full rounded-2xl' : 'h-32 w-32'} ${round ? 'rounded-full' : ''} ${wide || round ? '' : 'rounded-3xl'}`}>
         {preview ? <img src={preview} alt="" className="h-full w-full object-cover" /> : <span className="px-4 text-center text-xs font-bold leading-snug text-white/45">{empty}</span>}
         <input
           key={inputKey}
@@ -1080,6 +1167,16 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
   const [body, setBody] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState('');
+  const [photoKey, setPhotoKey] = useState(0);
+  const choosePhoto = (next: File | null) => {
+    setFile(next);
+    setPreview((current) => {
+      if (current.startsWith('blob:')) URL.revokeObjectURL(current);
+      return next ? URL.createObjectURL(next) : '';
+    });
+  };
   return (
     <div className="mx-auto max-w-3xl">
       <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">STORIES</p>
@@ -1087,8 +1184,17 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
       <form className="mt-5 rounded-3xl border border-white/10 bg-[#10192b] p-5" onSubmit={async (event) => {
         event.preventDefault();
         try {
-          await desk('/api/news', { body: { title, summary, body, category: 'News', time: 'Today' } });
-          setTitle(''); setSummary(''); setBody('');
+          const image = file ? await imagePayload(file) : undefined;
+          await desk('/api/news', { body: { title, summary, body, category: 'News', time: 'Today', ...(image ? { image } : {}) } });
+          setTitle('');
+          setSummary('');
+          setBody('');
+          setFile(null);
+          setPhotoKey((value) => value + 1);
+          setPreview((current) => {
+            if (current.startsWith('blob:')) URL.revokeObjectURL(current);
+            return '';
+          });
           onMessage('Story published.');
         } catch (reason) {
           onError(reason instanceof Error ? reason.message : 'Could not publish the story.');
@@ -1097,6 +1203,7 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
         <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">NEW STORY</p>
         <h2 className="mt-1 text-xl font-black">Publish a story</h2>
         <div className="mt-5 grid gap-3">
+          <PicturePicker preview={preview} empty="Story photo" wide inputKey={photoKey} onFile={choosePhoto} />
           <Field label="Title" value={title} onChange={setTitle} placeholder="Headline" required />
           <Field label="Summary" value={summary} onChange={setSummary} placeholder="One line for the news list" required />
           <label className="text-[11px] font-bold uppercase tracking-wide text-white/40">Story
@@ -1107,19 +1214,22 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
       </form>
       <ul className="mt-6 space-y-2">
         {newsArticles.map((article) => (
-          <li key={article.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#10192b] px-3 py-2.5">
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-bold">{article.title}</span>
-              <span className="block text-xs font-semibold text-white/35">{article.category} · {article.time}</span>
+          <li key={article.id} className="overflow-hidden rounded-2xl border border-white/10 bg-[#10192b]">
+            {article.imageUrl && <img src={article.imageUrl} alt="" className="h-36 w-full object-cover" />}
+            <span className="flex items-center justify-between gap-3 px-3 py-2.5">
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-bold">{article.title}</span>
+                <span className="block text-xs font-semibold text-white/35">{article.category} · {article.time}</span>
+              </span>
+              <button type="button" className="shrink-0 rounded-full bg-white/5 px-3 py-1.5 text-xs font-bold text-red-300" onClick={async () => {
+                try {
+                  await desk(`/api/news/${article.id}`, { method: 'DELETE', body: {} });
+                  onMessage('Story removed.');
+                } catch (reason) {
+                  onError(reason instanceof Error ? reason.message : 'Could not remove the story.');
+                }
+              }}>Delete</button>
             </span>
-            <button type="button" className="shrink-0 rounded-full bg-white/5 px-3 py-1.5 text-xs font-bold text-red-300" onClick={async () => {
-              try {
-                await desk(`/api/news/${article.id}`, { method: 'DELETE', body: {} });
-                onMessage('Story removed.');
-              } catch (reason) {
-                onError(reason instanceof Error ? reason.message : 'Could not remove the story.');
-              }
-            }}>Delete</button>
           </li>
         ))}
         {!newsArticles.length && <li className="rounded-2xl border border-white/10 px-3 py-6 text-sm text-white/40">No stories yet.</li>}
