@@ -559,6 +559,87 @@ function spread(count: number) {
   return Array.from({ length: count }, (_, index) => inset + ((100 - inset * 2) * index) / (count - 1));
 }
 
+function FootballIcon({ count = 1 }: { count?: number }) {
+  return (
+    <span className="relative inline-flex items-center justify-center" title={count > 1 ? `${count} Goals` : 'Goal'}>
+      <svg
+        viewBox="0 0 24 24"
+        className="h-3.5 w-3.5 shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+        fill="none"
+        aria-hidden="true"
+      >
+        <circle cx="12" cy="12" r="10" fill="#ffffff" stroke="#102018" strokeWidth="1.2" />
+        <polygon points="12,7.2 16.5,10.5 14.8,15.8 9.2,15.8 7.5,10.5" fill="#102018" />
+        <line x1="12" y1="7.2" x2="12" y2="2" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
+        <line x1="16.5" y1="10.5" x2="21.5" y2="8.9" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
+        <line x1="14.8" y1="15.8" x2="17.9" y2="20.1" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
+        <line x1="9.2" y1="15.8" x2="6.1" y2="20.1" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
+        <line x1="7.5" y1="10.5" x2="2.5" y2="8.9" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
+        <path d="M10 2.2A10 10 0 0 1 14 2.2L12 7.2Z" fill="#102018" />
+        <path d="M21.7 10.3A10 10 0 0 1 20.3 14.6L16.5 10.5Z" fill="#102018" />
+        <path d="M15.4 21.2A10 10 0 0 1 11.5 22L14.8 15.8Z" fill="#102018" />
+        <path d="M8.6 15.8L12.5 22A10 10 0 0 1 8.6 21.2Z" fill="#102018" />
+        <path d="M7.5 10.5L3.7 14.6A10 10 0 0 1 2.3 10.3Z" fill="#102018" />
+      </svg>
+      {count > 1 && (
+        <span className="absolute -bottom-1 -right-1.5 flex h-3 min-w-3 items-center justify-center rounded-full bg-[#0c1424] px-0.5 text-[8px] font-black leading-none text-white ring-1 ring-white/50 shadow-sm">
+          {count}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function BootIcon({ count = 1 }: { count?: number }) {
+  return (
+    <span className="relative inline-flex items-center justify-center" title={count > 1 ? `${count} Assists` : 'Assist'}>
+      <svg
+        viewBox="0 0 24 24"
+        className="h-3.5 w-3.5 shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+        fill="currentColor"
+        aria-hidden="true"
+      >
+        <path
+          d="M2.5 13.5c0-1.8 1-3.2 2.5-4l4.5-2.2c.8-.4 1.8-.2 2.4.5l1.6 2 4 1.2c1.4.4 2.5 1.5 2.8 2.9l.8 2.9c.2.6-.3 1-.9 1H3.5c-.6 0-1-.4-1-1v-3.3z"
+          fill="#f5c518"
+          stroke="#102018"
+          strokeWidth="0.8"
+        />
+        <path d="M8 11.5l2.5-1.5m-1 3.5l3-1.5" stroke="#102018" strokeWidth="1" strokeLinecap="round" />
+        <rect x="4.5" y="18.5" width="2" height="2" rx="0.5" fill="#f5c518" />
+        <rect x="8.5" y="18.5" width="2" height="2" rx="0.5" fill="#f5c518" />
+        <rect x="14" y="18.5" width="2" height="2" rx="0.5" fill="#f5c518" />
+        <rect x="18" y="18.5" width="2" height="2" rx="0.5" fill="#f5c518" />
+      </svg>
+      {count > 1 && (
+        <span className="absolute -bottom-1 -right-1.5 flex h-3 min-w-3 items-center justify-center rounded-full bg-[#0c1424] px-0.5 text-[8px] font-black leading-none text-white ring-1 ring-white/50 shadow-sm">
+          {count}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function YellowCardIcon() {
+  return (
+    <span
+      className="inline-block h-3.5 w-2.5 shrink-0 rounded-[1.5px] bg-[#f5c518] shadow-[0_1px_3px_rgba(0,0,0,0.8)] ring-1 ring-black/40"
+      title="Yellow card"
+      aria-label="Yellow card"
+    />
+  );
+}
+
+function RedCardIcon() {
+  return (
+    <span
+      className="inline-block h-3.5 w-2.5 shrink-0 rounded-[1.5px] bg-[#e11d48] shadow-[0_1px_3px_rgba(0,0,0,0.8)] ring-1 ring-black/40"
+      title="Red card"
+      aria-label="Red card"
+    />
+  );
+}
+
 function PitchPlayer({
   player,
   color,
@@ -581,13 +662,26 @@ function PitchPlayer({
   played: boolean;
 }) {
   const marks = timeline.filter((event) => event.playerId === player.id);
-  const scored = marks.some((event) => event.kind === 'goal');
-  const assisted = timeline.some((event) => event.kind === 'goal' && event.assistId === player.id);
-  const booked = marks.find((event) => event.kind === 'yellow' || event.kind === 'red');
+  const goalCount = marks.filter((event) => event.kind === 'goal').length;
+  const assistCount = timeline.filter((event) => event.kind === 'goal' && event.assistId === player.id).length;
+  const hasYellow = marks.some((event) => event.kind === 'yellow');
+  const hasRed = marks.some((event) => event.kind === 'red');
+  const hasEvents = played && (goalCount > 0 || assistCount > 0 || hasYellow || hasRed);
 
   return (
     <div className={`absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center ${nameAbove ? 'flex-col-reverse' : ''}`} style={{ top, left }}>
       <div className={`relative h-11 w-11 ${fresh ? 'animate-pulse' : ''}`}>
+        {hasEvents && (
+          <div
+            className="pointer-events-none absolute bottom-[calc(100%+3px)] left-1/2 z-30 flex -translate-x-1/2 items-center justify-center gap-1.5 whitespace-nowrap"
+            aria-label="Player events"
+          >
+            {hasYellow && <YellowCardIcon />}
+            {hasRed && <RedCardIcon />}
+            {goalCount > 0 && <FootballIcon count={goalCount} />}
+            {assistCount > 0 && <BootIcon count={assistCount} />}
+          </div>
+        )}
         {player.photoUrl ? (
           <img src={player.photoUrl} alt="" className="h-11 w-11 rounded-full border-2 border-white object-cover shadow-md" />
         ) : (
@@ -606,24 +700,11 @@ function PitchPlayer({
           </span>
         )}
       </div>
-      <div className={nameAbove ? 'mb-1' : 'mt-1'}>
+      <div className={nameAbove ? (hasEvents ? 'mb-4.5' : 'mb-1') : 'mt-1'}>
         <p className="whitespace-nowrap text-[10px] font-semibold text-white drop-shadow">{compactName(player.name)}</p>
-        {played && (scored || assisted || booked) && (
-          <p className="mt-0.5 flex justify-center gap-1">
-            {scored && <Mark label="GOAL" tone="white" />}
-            {assisted && <Mark label="ASSIST" tone="gold" />}
-            {booked?.kind === 'yellow' && <Mark label="YELLOW" tone="gold" />}
-            {booked?.kind === 'red' && <Mark label="RED" tone="red" />}
-          </p>
-        )}
       </div>
     </div>
   );
-}
-
-function Mark({ label, tone }: { label: string; tone: 'white' | 'gold' | 'red' }) {
-  const color = tone === 'red' ? 'bg-[#e11d48] text-white' : tone === 'gold' ? 'bg-[#f5c518] text-[#102018]' : 'bg-white text-[#102018]';
-  return <span className={`rounded px-1 text-[8px] font-black leading-4 ${color}`}>{label}</span>;
 }
 
 function PitchLines() {
