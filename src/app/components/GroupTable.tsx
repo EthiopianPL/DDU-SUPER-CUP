@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router';
 import { DepartmentMark } from './DepartmentMark';
 import { GROUP_COLLEGES, standingsFor, type GroupId } from '../../data/supercup';
+import { useLeagueVersion } from '../../data/live';
 
 interface GroupTableProps {
   group: GroupId;
@@ -17,6 +18,8 @@ export function GroupTable({
   homeTeamId,
   awayTeamId,
 }: GroupTableProps) {
+  const version = useLeagueVersion();
+  void version;
   const navigate = useNavigate();
   const rows = standingsFor(group);
 

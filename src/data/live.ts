@@ -86,7 +86,23 @@ export interface Snapshot {
   news: Array<{ id: string; title: string; category: string; time: string; summary: string; body: string; imageUrl?: string }>;
 }
 
-export function applySnapshot(data: Snapshot) {
+let currentRevision = 0;
+const liveChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
+  ? new BroadcastChannel('ddu_supercup_live_sync')
+  : null;
+
+if (liveChannel) {
+  liveChannel.onmessage = (event) => {
+    if (event.data?.type === 'snapshot' && event.data.snapshot) {
+      applySnapshot(event.data.snapshot, false);
+    } else if (event.data?.type === 'changed') {
+      refreshLeague().catch(() => {});
+    }
+  };
+}
+
+export function applySnapshot(data: Snapshot, broadcastCrossTab = true) {
+  currentRevision = data.revision ?? currentRevision;
   clockSync.offset = data.serverNow - Date.now();
   Object.assign(leagueRules, data.competition?.rules ?? {});
   replace(departments, data.teams.map((team) => ({
@@ -113,6 +129,14 @@ export function applySnapshot(data: Snapshot) {
   leagueReady = true;
   leagueError = '';
   emit();
+
+  if (broadcastCrossTab && liveChannel) {
+    try {
+      liveChannel.postMessage({ type: 'snapshot', snapshot: data });
+    } catch {
+      // Ignore broadcast errors
+    }
+  }
 }
 
 function setOffset(value: number) {
@@ -141,13 +165,28 @@ export function applyClock(payload: { serverNow: number; matches: Array<{ id: st
   if (changed) emit();
 }
 
-export async function refreshLeague() {
-  const response = await fetch('/api/snapshot', { cache: 'no-store' });
-  if (!response.ok) throw new Error('The match server did not respond.');
-  applySnapshot(await response.json());
+let refreshingPromise: Promise<void> | null = null;
+export function refreshLeague(): Promise<void> {
+  if (refreshingPromise) return refreshingPromise;
+  refreshingPromise = (async () => {
+    try {
+      const response = await fetch('/api/snapshot', { cache: 'no-store' });
+      if (!response.ok) throw new Error('The match server did not respond.');
+      const data = await response.json();
+      applySnapshot(data);
+    } finally {
+      refreshingPromise = null;
+    }
+  })();
+  return refreshingPromise;
 }
 
+let booted = false;
+
 export async function bootLeague() {
+  if (booted) return;
+  booted = true;
+
   try {
     await refreshLeague();
   } catch (error) {
@@ -155,24 +194,90 @@ export async function bootLeague() {
     leagueError = error instanceof Error ? error.message : 'The match server is offline.';
     emit();
   }
-  const source = new EventSource('/api/live');
-  source.addEventListener('changed', () => {
-    refreshLeague().catch(() => {
-      leagueError = 'Reconnecting to the match server.';
-      emit();
-    });
-  });
-  source.addEventListener('clock', (event) => {
-    applyClock(JSON.parse((event as MessageEvent).data));
-  });
-  source.onopen = () => {
-    if (leagueError) {
-      leagueError = '';
-      emit();
+
+  let source: EventSource | null = null;
+
+  function connectSSE() {
+    try {
+      if (source) {
+        source.close();
+      }
+      source = new EventSource('/api/live');
+
+      source.addEventListener('hello', (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent).data);
+          if (payload.revision && payload.revision !== currentRevision) {
+            refreshLeague().catch(() => {});
+          }
+        } catch {
+          // ignore parse errors
+        }
+      });
+
+      source.addEventListener('changed', () => {
+        refreshLeague().catch(() => {
+          leagueError = 'Reconnecting to the match server.';
+          emit();
+        });
+      });
+
+      source.addEventListener('clock', (event) => {
+        try {
+          applyClock(JSON.parse((event as MessageEvent).data));
+        } catch {
+          // ignore clock errors
+        }
+      });
+
+      source.onopen = () => {
+        if (leagueError) {
+          leagueError = '';
+          emit();
+        }
+        // Always verify latest state on connect/reconnect
+        refreshLeague().catch(() => {});
+      };
+
+      source.onerror = () => {
+        leagueError = 'Reconnecting to the match server.';
+        emit();
+      };
+    } catch {
+      // EventSource instantiation failed (e.g. offline)
     }
-  };
-  source.onerror = () => {
-    leagueError = 'Reconnecting to the match server.';
-    emit();
-  };
+  }
+
+  connectSSE();
+
+  // Listen for tab focus and visibility change to immediately catch any missed updates
+  if (typeof window !== 'undefined') {
+    window.addEventListener('focus', () => {
+      refreshLeague().catch(() => {});
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        refreshLeague().catch(() => {});
+      }
+    });
+  }
+
+  // Periodic heartbeat polling fallback:
+  // Checks /api/health every 4 seconds. If revision increased or SSE dropped, refreshes immediately.
+  setInterval(async () => {
+    try {
+      if (source && source.readyState === EventSource.CLOSED) {
+        connectSSE();
+      }
+      const response = await fetch('/api/health', { cache: 'no-store' });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.revision && data.revision !== currentRevision) {
+          await refreshLeague();
+        }
+      }
+    } catch {
+      // Ignore network hiccup in periodic check
+    }
+  }, 4000);
 }

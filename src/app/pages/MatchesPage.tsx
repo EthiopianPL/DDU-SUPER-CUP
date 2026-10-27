@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { MatchCard } from '../components/MatchCard';
+import { useLeagueVersion } from '../../data/live';
 import {
   cardTeam,
   fixtures,
@@ -23,6 +24,7 @@ import {
 type StatusFilter = 'all' | 'live' | 'upcoming' | 'finished';
 
 export function MatchesPage() {
+  const version = useLeagueVersion();
   const systemTodayStr = useMemo(() => getTournamentTodayString(), []);
 
   // Initial date:
@@ -94,7 +96,7 @@ export function MatchesPage() {
     });
 
     return sortFixturesByPriority(filtered);
-  }, [selectedDate, status]);
+  }, [selectedDate, status, version]);
 
   // Dynamically find the nearest date with fixtures without hardcoding any dates
   const nearestFixtureDate = useMemo(() => {
@@ -113,11 +115,11 @@ export function MatchesPage() {
       }
     }
     return closest;
-  }, [selectedDate]);
+  }, [selectedDate, version]);
 
   const liveMatchesCount = useMemo(
     () => fixtures.filter((f) => f.date === selectedDate && f.status === 'live').length,
-    [selectedDate],
+    [selectedDate, version],
   );
 
   return (

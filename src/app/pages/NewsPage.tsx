@@ -1,7 +1,10 @@
 import { useNavigate } from 'react-router';
 import { newsArticles } from '../../data/news';
+import { useLeagueVersion } from '../../data/live';
 
 export function NewsPage() {
+  const version = useLeagueVersion();
+  void version;
   const navigate = useNavigate();
 
   return (

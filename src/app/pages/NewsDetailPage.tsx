@@ -1,8 +1,11 @@
 import { useNavigate, useParams } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
 import { getNewsArticle } from '../../data/news';
+import { useLeagueVersion } from '../../data/live';
 
 export function NewsDetailPage() {
+  const version = useLeagueVersion();
+  void version;
   const { id } = useParams();
   const navigate = useNavigate();
   const article = id ? getNewsArticle(id) : undefined;

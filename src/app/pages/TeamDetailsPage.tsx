@@ -2,6 +2,7 @@ import { useNavigate, useParams } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
 import { MatchCard } from '../components/MatchCard';
 import { DepartmentMark, Portrait } from '../components/DepartmentMark';
+import { useLeagueVersion } from '../../data/live';
 import {
   cardTeam,
   fixturesForDepartment,
@@ -11,6 +12,8 @@ import {
 } from '../../data/supercup';
 
 export function TeamDetailsPage() {
+  const version = useLeagueVersion();
+  void version;
   const { id } = useParams();
   const navigate = useNavigate();
   const department = id ? getDepartment(id) : undefined;
