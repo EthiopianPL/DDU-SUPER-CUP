@@ -160,7 +160,28 @@ function freezeElapsed(match, now) {
 function sideTeam(match, side) {
   if (side === 'home') return match.home_id;
   if (side === 'away') return match.away_id;
-  throw new RuleError('Choose the home or away team.');
+  throw new RuleError('Choose a team.');
+}
+
+function periodEndMinute(match) {
+  const half = Math.round(Number(match.half_ms) / 60000);
+  const regulation = Math.round(Number(match.regulation_ms) / 60000) || half * 2;
+  const extra = Math.round(Number(match.et_half_ms) / 60000);
+  if (match.period === 'first_half') return half;
+  if (match.period === 'second_half') return regulation;
+  if (match.period === 'extra_first') return regulation + extra;
+  if (match.period === 'extra_second') return regulation + extra * 2;
+  return null;
+}
+
+function splitPlayedMinute(match, minute, addedMinute) {
+  const end = periodEndMinute(match);
+  const at = Number(minute) || 0;
+  const added = Number(addedMinute) || 0;
+  if (end == null) return { minute: at, addedMinute: added };
+  if (added > 0) return { minute: Math.min(at, end), addedMinute: added };
+  if (at > end) return { minute: end, addedMinute: at - end };
+  return { minute: at, addedMinute: 0 };
 }
 
 function ensureSquadPlayer(db, match, playerId, teamId) {
@@ -998,8 +1019,11 @@ export function recordEvent(db, actor, matchId, input) {
       assertVersion(match, input.version);
       assertWritable(actor, match);
       const clock = clockSnapshot(match);
-      const minute = input.minute == null ? clock.minute : Number(input.minute);
-      const addedMinute = input.addedMinute == null ? 0 : Number(input.addedMinute);
+      const rawMinute = input.minute == null ? clock.minute : Number(input.minute);
+      const rawAdded = input.addedMinute == null ? 0 : Number(input.addedMinute);
+      const stamped = splitPlayedMinute(match, rawMinute, rawAdded);
+      const minute = stamped.minute;
+      const addedMinute = stamped.addedMinute;
       if (!Number.isInteger(minute) || minute < 0 || minute > 150) throw new RuleError('Enter a valid match minute.');
       if (!Number.isInteger(addedMinute) || addedMinute < 0 || addedMinute > 30) throw new RuleError('Enter a valid added-time minute.');
       const base = { ...input, minute, addedMinute, period: input.period || match.period, clientKey: input.clientKey || randomUUID() };
@@ -1037,14 +1061,14 @@ export function recordEvent(db, actor, matchId, input) {
 
       if (type === 'card') {
         requireLivePeriod(match);
-        const cardType = String(input.cardType || '');
+        let cardType = String(input.cardType || '');
         if (!['yellow', 'second_yellow', 'red'].includes(cardType)) throw new RuleError('Choose a card.');
         const teamId = sideTeam(match, input.side);
         if (!input.playerId) throw new RuleError('Choose the player.');
         onPitch(db, match, input.playerId, teamId);
         const yellows = yellowCount(activeEvents(db, match.id), input.playerId);
-        if (cardType === 'yellow' && yellows >= 1) throw new RuleError('This player already has a yellow card. Record a second yellow.');
-        if (cardType === 'second_yellow' && yellows !== 1) throw new RuleError('A second yellow needs one active yellow card first.');
+        if (cardType === 'yellow' && yellows >= 1) cardType = 'second_yellow';
+        if (cardType === 'second_yellow' && yellows < 1) throw new RuleError('A second yellow needs one yellow card first.');
         const saved = insertEvent(db, match, actor, { ...base, type: 'card', teamId, playerId: input.playerId, cardType }, false);
         if (!saved.duplicate) audit(db, actor, 'card.record', 'match', match.id, null, { cardType, playerId: input.playerId, minute });
         return saved;
@@ -1107,7 +1131,8 @@ export function recordEvent(db, actor, matchId, input) {
         const minutes = Number(input.addedMinute ?? input.minute);
         if (!Number.isInteger(minutes) || minutes < 0 || minutes > 30) throw new RuleError('Enter the added minutes.');
         db.prepare('UPDATE matches SET added_ms = ?, version = version + 1, updated_at = ? WHERE id = ?').run(minutes * 60 * 1000, Date.now(), match.id);
-        const saved = insertEvent(db, match, actor, { ...base, type: 'added_time', minute: clock.minute, addedMinute: minutes, detail: `Added time ${minutes}` }, false);
+        const end = periodEndMinute(match);
+        const saved = insertEvent(db, match, actor, { ...base, type: 'added_time', minute: end ?? clock.minute, addedMinute: minutes, detail: `Added time ${minutes}` }, false);
         if (!saved.duplicate) audit(db, actor, 'clock.added', 'match', match.id, { added: match.added_ms }, { added: minutes });
         return saved;
       }
@@ -1277,6 +1302,7 @@ export function controlMatch(db, actor, matchId, input) {
       patch.period = 'extra_break';
       patch.elapsed_ms = match.regulation_ms + match.et_half_ms;
       patch.running_since = null;
+      patch.added_ms = 0;
     } else if (action === 'extra_second') {
       if (match.period !== 'extra_break') throw new RuleError('Start the second extra period from the break.');
       startRunning('live', 'extra_second', match.regulation_ms + match.et_half_ms);
@@ -1285,11 +1311,13 @@ export function controlMatch(db, actor, matchId, input) {
       patch.status = 'penalties';
       patch.period = 'penalties';
       patch.running_since = null;
+      patch.added_ms = 0;
     } else if (action === 'full_time') {
       if (['scheduled', 'postponed', 'cancelled'].includes(match.status)) throw new RuleError('Kick off before ending the match.');
       patch.status = 'finished';
       patch.period = 'full_time';
       patch.running_since = null;
+      patch.added_ms = 0;
       patch.confirmed = 0;
     } else if (action === 'confirm') {
       if (match.status !== 'finished') throw new RuleError('Finish the match before confirming the result.');

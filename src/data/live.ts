@@ -70,6 +70,8 @@ export interface Snapshot {
     runningSince: number | null;
     addedMs: number;
     halfMs: number;
+    regulationMs?: number;
+    etHalfMs?: number;
     allowExtra: boolean;
     pensHome: number | null;
     pensAway: number | null;
@@ -120,6 +122,8 @@ export function applySnapshot(data: Snapshot, broadcastCrossTab = true) {
     runningSince: match.runningSince == null ? null : Number(match.runningSince),
     addedSeconds: match.addedMs / 1000,
     halfSeconds: match.halfMs / 1000,
+    regulationSeconds: match.regulationMs ? match.regulationMs / 1000 : undefined,
+    extraHalfSeconds: match.etHalfMs ? match.etHalfMs / 1000 : undefined,
     stage: match.stage || 'group',
     slot: match.slot || 0,
   })));

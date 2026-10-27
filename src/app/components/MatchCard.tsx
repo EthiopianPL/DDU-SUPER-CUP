@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router';
 import { MapPin } from 'lucide-react';
-import { formatKickoff, formatMatchClock, getFixture } from '../../data/supercup';
+import { formatKickoff, formatLiveTime, getFixture } from '../../data/supercup';
 import { useMatchClock } from '../useMatchClock';
 
 interface Team {
@@ -75,7 +75,7 @@ export function MatchCard({
   const isUpcoming = status === 'upcoming';
 
   const formattedLiveTime = clock
-    ? `${formatMatchClock(clock)}${clock.added > 0 ? ` +${clock.added}` : ''}`
+    ? formatLiveTime(clock)
     : `${liveMinute}'${liveMinute >= 45 && injuryTime > 0 ? ` +${injuryTime}` : ''}`;
 
   return (
