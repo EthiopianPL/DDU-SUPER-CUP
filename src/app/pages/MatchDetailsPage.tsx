@@ -374,8 +374,6 @@ export function MatchDetailsPage() {
   );
 }
 
-const TILES = ['#6d5344', '#3e5270', '#5c4638', '#4d5b4a', '#70543f', '#3c4e63', '#645244', '#455446'];
-
 function Pitch({
   homeName,
   awayName,
@@ -405,14 +403,10 @@ function Pitch({
   substitutions: ReturnType<typeof matchSubstitutions>;
   played: boolean;
 }) {
-  const homeLines = formationLines(homeSheet).map((players, index) => ({
-    top: ['8%', '17%', '26%', '35%', '44%'][index],
-    players,
-  }));
-  const awayLines = [...formationLines(awaySheet)].reverse().map((players, index) => ({
-    top: ['56%', '65%', '74%', '83%', '92%'][index],
-    players: [...players].reverse(),
-  }));
+  const homeLines = formationLines(homeSheet.formation, homeSheet.starters);
+  const awayLines = formationLines(awaySheet.formation, awaySheet.starters);
+  const homeTops = band(homeLines.length, 8, 42);
+  const awayTops = band(awayLines.length, 92, 58);
 
   return (
     <section>
@@ -420,12 +414,26 @@ function Pitch({
         <TeamBar name={homeName} shortName={homeShort} color={homeColor} crest={homeCrest} formation={homeSheet.formation} />
         <div className="relative h-[760px]">
           <PitchLines />
-          {[...homeLines, ...awayLines].map((line) => line.players.map((player, index) => (
+          {homeLines.map((players, lineIndex) => players.map((player, index) => (
             <PitchPlayer
-              key={`${line.top}-${player.id}`}
+              key={player.id}
               player={player}
-              top={line.top}
-              left={`${spread(line.players.length)[index]}%`}
+              color={homeColor}
+              top={homeTops[lineIndex]}
+              left={`${spread(players.length)[index]}%`}
+              timeline={timeline}
+              subbed={substitutions.some((change) => change.offId === player.id)}
+              played={played}
+            />
+          )))}
+          {awayLines.map((players, lineIndex) => [...players].reverse().map((player, index) => (
+            <PitchPlayer
+              key={player.id}
+              player={player}
+              color={awayColor}
+              nameAbove
+              top={awayTops[lineIndex]}
+              left={`${spread(players.length)[index]}%`}
               timeline={timeline}
               subbed={substitutions.some((change) => change.offId === player.id)}
               played={played}
@@ -435,6 +443,10 @@ function Pitch({
         <TeamBar name={awayName} shortName={awayShort} color={awayColor} crest={awayCrest} formation={awaySheet.formation} />
       </div>
       <SubList substitutions={substitutions} homeId={homeSheet.starters[0]?.departmentId} awayId={awaySheet.starters[0]?.departmentId} homeShort={homeShort} awayShort={awayShort} />
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <BenchList title={homeShort} color={homeColor} players={homeSheet.bench} />
+        <BenchList title={awayShort} color={awayColor} players={awaySheet.bench} />
+      </div>
     </section>
   );
 }
@@ -451,18 +463,39 @@ function TeamBar({ name, shortName, color, crest, formation }: { name: string; s
   );
 }
 
-function formationLines(sheet: ReturnType<typeof matchSheet>) {
-  const keepers = sheet.starters.filter((player) => player.position === 'GK');
-  const defenders = sheet.starters.filter((player) => player.position === 'DEF');
-  const mids = sheet.starters.filter((player) => player.position === 'MID');
-  const forwards = sheet.starters.filter((player) => player.position === 'FWD');
-  return [
-    keepers,
-    defenders,
-    mids.slice(0, 2),
-    [mids[2], forwards[0], forwards[1]].filter((player): player is Player => Boolean(player)),
-    forwards.slice(2),
-  ];
+function formationLines(formation: string, starters: Player[]) {
+  const shape = formation.split('-').map((part) => Number(part)).filter((count) => Number.isInteger(count) && count > 0);
+  const pools: Record<Player['position'], Player[]> = {
+    GK: starters.filter((player) => player.position === 'GK'),
+    DEF: starters.filter((player) => player.position === 'DEF'),
+    MID: starters.filter((player) => player.position === 'MID'),
+    FWD: starters.filter((player) => player.position === 'FWD'),
+  };
+    const used = new Set<string>();
+  const take = (prefer: Player['position'], count: number) => {
+    const line: Player[] = [];
+    const order = [prefer, ...(['GK', 'DEF', 'MID', 'FWD'] as const).filter((slot) => slot !== prefer)];
+    order.forEach((slot) => {
+      pools[slot].forEach((player) => {
+        if (line.length >= count || used.has(player.id)) return;
+        line.push(player);
+        used.add(player.id);
+      });
+    });
+    return line;
+  };
+  const counts = shape.length >= 2 ? shape : [4, 3, 3];
+  const lines = [take('GK', 1), take('DEF', counts[0])];
+  counts.slice(1, -1).forEach((count) => lines.push(take('MID', count)));
+  lines.push(take('FWD', counts[counts.length - 1]));
+  const rest = starters.filter((player) => !used.has(player.id));
+  if (rest.length) lines.push(rest);
+  return lines.filter((line) => line.length);
+}
+
+function band(count: number, from: number, to: number) {
+  if (count <= 1) return [`${from}%`];
+  return Array.from({ length: count }, (_, index) => `${from + ((to - from) * index) / (count - 1)}%`);
 }
 
 function SubList({
@@ -507,13 +540,14 @@ function SubList({
 
 function spread(count: number) {
   if (count <= 1) return [50];
-  if (count === 2) return [32, 68];
-  if (count === 3) return [18, 50, 82];
-  return [14, 38, 62, 86];
+  const inset = count >= 5 ? 10 : count === 4 ? 16 : count === 3 ? 22 : 32;
+  return Array.from({ length: count }, (_, index) => inset + ((100 - inset * 2) * index) / (count - 1));
 }
 
 function PitchPlayer({
   player,
+  color,
+  nameAbove = false,
   top,
   left,
   timeline,
@@ -521,6 +555,8 @@ function PitchPlayer({
   played,
 }: {
   player: Player;
+  color: string;
+  nameAbove?: boolean;
   top: string;
   left: string;
   timeline: TimelineEvent[];
@@ -531,18 +567,13 @@ function PitchPlayer({
   const scored = marks.some((event) => event.kind === 'goal');
   const assisted = timeline.some((event) => event.kind === 'goal' && event.assistId === player.id);
   const booked = marks.find((event) => event.kind === 'yellow' || event.kind === 'red');
-  const tile = TILES[player.number % TILES.length];
 
   return (
-    <div className="absolute -translate-x-1/2 -translate-y-1/2 text-center" style={{ top, left }}>
+    <div className={`absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center ${nameAbove ? 'flex-col-reverse' : ''}`} style={{ top, left }}>
       <div className="relative mx-auto h-9 w-9">
-        {player.photoUrl ? (
-          <img src={player.photoUrl} alt="" className="h-9 w-9 rounded-lg object-cover shadow-md" />
-        ) : (
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg text-[11px] font-black text-white shadow-md" style={{ background: tile }}>
-            {initials(player.name)}
-          </span>
-        )}
+        <span className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/90 text-[12px] font-black text-white shadow-md" style={{ background: color }}>
+          {player.number}
+        </span>
         {played && subbed && (
           <span className="absolute -left-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#e11d48] text-white">
             <ArrowDown className="h-3 w-3" strokeWidth={3} />
@@ -550,9 +581,12 @@ function PitchPlayer({
         )}
         {played && scored && <BallMark />}
         {played && assisted && <BootMark />}
+        {played && booked && (
+          <span className={`absolute -bottom-1 -right-1 h-3 w-2 rounded-[2px] ${booked.kind === 'red' ? 'bg-[#e11d48]' : 'bg-[#f5c518]'}`} />
+        )}
       </div>
-      <p className="mt-2.5 whitespace-nowrap text-[10px] font-semibold text-white drop-shadow">
-        {player.number} {compactName(player.name)}
+      <p className={`${nameAbove ? 'mb-1' : 'mt-1'} whitespace-nowrap text-[10px] font-semibold text-white drop-shadow`}>
+        {compactName(player.name)}
       </p>
     </div>
   );
@@ -615,11 +649,28 @@ function EventList({ events }: { events: TimelineEvent[] }) {
   );
 }
 
+function BenchList({ title, color, players }: { title: string; color: string; players: Player[] }) {
+  return (
+    <section className="rounded-2xl border border-white/10 bg-[#10192b] p-3">
+      <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/45">Substitutes · {title}</p>
+      <ul className="mt-2 space-y-1.5">
+        {players.map((player) => (
+          <li key={player.id} className="flex items-center gap-2 text-sm text-white/85">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black text-white" style={{ background: color }}>
+              {player.number}
+            </span>
+            <span className="min-w-0 flex-1 truncate">{player.name}</span>
+            <span className="text-[10px] font-bold uppercase tracking-wide text-white/40">{player.position}</span>
+          </li>
+        ))}
+        {!players.length && <li className="text-sm text-white/45">No substitutes named.</li>}
+      </ul>
+    </section>
+  );
+}
+
 function compactName(name: string) {
   const [first, last] = name.split(' ');
   return `${first?.[0] ?? ''}. ${last ?? first}`;
 }
 
-function initials(name: string) {
-  return name.split(' ').slice(0, 2).map((part) => part[0]).join('');
-}

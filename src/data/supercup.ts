@@ -673,28 +673,43 @@ function fillerPlayer(departmentId: string, slot: number, position: Player['posi
 }
 
 export function sampleMatchSheet(departmentId: string): MatchSheet {
-  const squad = players.filter((player) => player.departmentId === departmentId && player.registered !== false);
+  const squad = players
+    .filter((player) => player.departmentId === departmentId && player.registered !== false)
+    .sort((a, b) => a.number - b.number || a.name.localeCompare(b.name));
+  const used = new Set<string>();
+  const pick = (position: Player['position'], count: number) => {
+    const chosen = squad.filter((player) => player.position === position && !used.has(player.id)).slice(0, count);
+    chosen.forEach((player) => used.add(player.id));
+    return chosen;
+  };
+  const starters = [...pick('GK', 1), ...pick('DEF', 4), ...pick('MID', 5)];
+  const forwards = squad.filter((player) => player.position === 'FWD' && !used.has(player.id));
+  const striker = forwards.find((player) => player.number === 9) ?? forwards[0];
+  forwards.filter((player) => player !== striker).forEach((player) => {
+    if (starters.length >= 10) return;
+    starters.push(player);
+    used.add(player.id);
+  });
+  if (striker && starters.length < 11) {
+    starters.push(striker);
+    used.add(striker.id);
+  }
+  squad.forEach((player) => {
+    if (starters.length >= 11 || used.has(player.id)) return;
+    starters.push(player);
+    used.add(player.id);
+  });
   const taken = new Set(squad.map((player) => player.name));
-  const starters = [
-    ...squad.filter((player) => player.position === 'GK'),
-    ...squad.filter((player) => player.position === 'DEF'),
-    fillerPlayer(departmentId, 0, 'DEF', 3, taken),
-    fillerPlayer(departmentId, 1, 'DEF', 6, taken),
-    ...squad.filter((player) => player.position === 'MID'),
-    ...squad.filter((player) => player.position === 'FWD'),
-    fillerPlayer(departmentId, 2, 'FWD', 7, taken),
-  ];
-
+  let slot = 0;
+  while (starters.length < 11) {
+    const player = fillerPlayer(departmentId, slot, slot === 0 ? 'GK' : 'MID', 30 + slot, taken);
+    slot += 1;
+    starters.push(player);
+  }
   return {
     formation: '4-2-3-1',
-    starters,
-    bench: [
-      fillerPlayer(departmentId, 3, 'GK', 12, taken),
-      fillerPlayer(departmentId, 4, 'DEF', 14, taken),
-      fillerPlayer(departmentId, 5, 'MID', 15, taken),
-      fillerPlayer(departmentId, 6, 'MID', 16, taken),
-      fillerPlayer(departmentId, 7, 'FWD', 17, taken),
-    ],
+    starters: starters.slice(0, 11),
+    bench: squad.filter((player) => !starters.slice(0, 11).some((starter) => starter.id === player.id)),
   };
 }
 
