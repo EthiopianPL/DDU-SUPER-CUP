@@ -58,7 +58,7 @@ export function HomePage() {
       {leader?.department && (
         <button
           type="button"
-          onClick={() => navigate(`/team/${leader.departmentId}`)}
+          onClick={() => navigate('/discover?tab=stats')}
           className="mb-6 flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#10192b] px-4 py-4 text-left"
         >
           <span>
