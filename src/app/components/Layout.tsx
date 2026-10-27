@@ -1,14 +1,29 @@
+import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router';
 import { Header } from './Header';
 import { BottomNav } from './BottomNav';
 import { BrandLockup } from './BrandLockup';
 import { leagueStatus, useLeagueVersion } from '../../data/live';
 
+const INTRO_KEY = 'ddu-first-view';
+
 export function Layout() {
   const desk = useLocation().pathname.startsWith('/admin');
   const version = useLeagueVersion();
   const { ready, error } = leagueStatus();
+  const [intro, setIntro] = useState(() => sessionStorage.getItem(INTRO_KEY) !== '1');
   void version;
+
+  useEffect(() => {
+    if (!intro || desk) return;
+    const timer = window.setTimeout(() => {
+      sessionStorage.setItem(INTRO_KEY, '1');
+      setIntro(false);
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [intro, desk]);
+
+  const waiting = !desk && (intro || !ready);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#070d18] text-white">
@@ -20,12 +35,12 @@ export function Layout() {
         </div>
       )}
 
-      {!desk && ready && <Header />}
+      {!desk && !waiting && <Header />}
       <main className="w-full">
-        {!ready && <MatchLoading error={error} />}
-        {ready && <Outlet />}
+        {waiting && <MatchLoading error={intro ? '' : error} />}
+        {!waiting && (desk || ready) && <Outlet />}
       </main>
-      {!desk && ready && <BottomNav />}
+      {!desk && !waiting && <BottomNav />}
     </div>
   );
 }

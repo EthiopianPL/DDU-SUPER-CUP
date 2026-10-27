@@ -19,7 +19,7 @@ import {
 } from '../../data/supercup';
 import { useLeagueVersion } from '../../data/live';
 
-export type DiscoverTab = 'groups' | 'road' | 'teams' | 'stats';
+export type DiscoverTab = 'groups' | 'knockout' | 'teams' | 'stats';
 
 export function DiscoverPage() {
   const navigate = useNavigate();
@@ -33,7 +33,7 @@ export function DiscoverPage() {
       : rawTab === 'stats' || rawTab === 'statistics'
         ? 'stats'
         : rawTab === 'road' || rawTab === 'knockout' || rawTab === 'bracket'
-          ? 'road'
+          ? 'knockout'
           : 'groups';
 
   // Group filter for Groups tab and Departments tab
@@ -123,20 +123,20 @@ export function DiscoverPage() {
         </button>
 
         <button
-          id="tab-road"
+          id="tab-knockout"
           role="tab"
           type="button"
-          aria-selected={activeTab === 'road'}
-          aria-controls="panel-road"
-          onClick={() => setTab('road')}
-          className={`flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518] focus-visible:ring-offset-2 focus-visible:ring-offset-[#10192b] active:scale-[0.98] ${
-            activeTab === 'road'
+          aria-selected={activeTab === 'knockout'}
+          aria-controls="panel-knockout"
+          onClick={() => setTab('knockout')}
+          className={`flex items-center justify-center gap-1 rounded-xl px-1 py-2.5 text-center text-[10px] font-bold transition-all sm:gap-1.5 sm:px-2 sm:text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518] focus-visible:ring-offset-2 focus-visible:ring-offset-[#10192b] active:scale-[0.98] ${
+            activeTab === 'knockout'
               ? 'bg-[#f5c518] text-[#102018] shadow-md'
               : 'text-white/60 hover:bg-white/5 hover:text-white'
           }`}
         >
-          <GitBranch className={`h-4 w-4 shrink-0 ${activeTab === 'road' ? 'text-[#102018]' : 'text-white/40'}`} />
-          <span className="truncate">Road</span>
+          <GitBranch className={`h-4 w-4 shrink-0 ${activeTab === 'knockout' ? 'text-[#102018]' : 'text-white/40'}`} />
+          <span className="truncate">Knockout</span>
         </button>
 
         <button
@@ -245,8 +245,8 @@ export function DiscoverPage() {
         </section>
       )}
 
-      {activeTab === 'road' && (
-        <section id="panel-road" role="tabpanel" aria-labelledby="tab-road" className="mt-4">
+      {activeTab === 'knockout' && (
+        <section id="panel-knockout" role="tabpanel" aria-labelledby="tab-knockout" className="mt-4">
           <KnockoutRoad />
         </section>
       )}
