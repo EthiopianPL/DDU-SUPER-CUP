@@ -495,6 +495,17 @@ export interface GoalEvent {
   playerName: string;
 }
 
+export interface TimelineEvent {
+  minute: number;
+  teamId: string;
+  playerId: string;
+  playerName: string;
+  kind: 'goal' | 'yellow' | 'red' | 'sub' | 'note';
+  assistId?: string;
+  assistName?: string;
+  detail?: string;
+}
+
 const GOAL_MINUTES = [9, 18, 27, 36, 44, 52, 61, 70, 77, 84];
 
 function sampleGoalEvents(fixture: Fixture): GoalEvent[] {

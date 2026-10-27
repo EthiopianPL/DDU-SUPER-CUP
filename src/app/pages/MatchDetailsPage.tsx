@@ -7,6 +7,7 @@ import {
   MapPin,
   Calendar,
   Clock,
+  History,
   Users,
   Trophy,
   Shield,
@@ -17,6 +18,7 @@ import { useLeagueVersion } from '../../data/live';
 import { useMatchClock } from '../useMatchClock';
 import { GroupTable } from '../components/GroupTable';
 import {
+  clockSync,
   formatKickoff,
   formatMatchClock,
   getDepartment,
@@ -28,11 +30,12 @@ import {
   matchSubstitutions,
   matchTimeline,
   periodText,
+  players,
   type Player,
   type TimelineEvent,
 } from '../../data/supercup';
 
-type MatchTab = 'lineups' | 'standings';
+type MatchTab = 'overview' | 'lineups' | 'standings';
 
 export function MatchDetailsPage() {
   const { id } = useParams();
@@ -41,7 +44,7 @@ export function MatchDetailsPage() {
 
   // URL Tab state synchronization
   const rawTab = (searchParams.get('tab') || '').toLowerCase();
-  const activeTab: MatchTab = rawTab === 'standings' || rawTab === 'table' ? 'standings' : 'lineups';
+  const activeTab: MatchTab = rawTab === 'lineups' ? 'lineups' : rawTab === 'standings' || rawTab === 'table' ? 'standings' : 'overview';
 
   const setTab = (tab: MatchTab) => {
     const next = new URLSearchParams(searchParams);
@@ -206,15 +209,7 @@ export function MatchDetailsPage() {
                 )}
               </div>
             ) : (
-              <div className="text-center">
-                <span className="mb-2 inline-block rounded-full border border-[#f5c518]/30 bg-[#f5c518]/15 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-[#f5c518]">
-                  Upcoming
-                </span>
-                <div className="text-2xl font-black tracking-widest text-white/40 sm:text-3xl">
-                  VS
-                </div>
-                <p className="mt-1 font-mono text-sm font-bold text-[#f5c518]">{fixture.time} EAT</p>
-              </div>
+              <KickoffClock date={fixture.date} time={fixture.time} detail={fixture.detail} compact />
             )}
           </div>
 
@@ -255,42 +250,26 @@ export function MatchDetailsPage() {
       <nav
         role="tablist"
         aria-label="Match center sections"
-        className="mt-6 grid grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-[#10192b] p-1.5 shadow-inner"
+        className="mt-6 grid grid-cols-3 gap-1 rounded-2xl border border-white/10 bg-[#10192b] p-1.5 shadow-inner"
       >
-        <button
-          id="match-tab-lineups"
-          role="tab"
-          type="button"
-          aria-selected={activeTab === 'lineups'}
-          aria-controls="match-panel-lineups"
-          onClick={() => setTab('lineups')}
-          className={`flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518] focus-visible:ring-offset-2 focus-visible:ring-offset-[#10192b] ${
-            activeTab === 'lineups'
-              ? 'bg-[#f5c518] text-[#102018] shadow-md font-black'
-              : 'text-white/60 hover:bg-white/5 hover:text-white'
-          }`}
-        >
-          <Users className={`h-4 w-4 shrink-0 ${activeTab === 'lineups' ? 'text-[#102018]' : 'text-white/40'}`} />
-          <span className="truncate">Lineups</span>
-        </button>
-
-        <button
-          id="match-tab-standings"
-          role="tab"
-          type="button"
-          aria-selected={activeTab === 'standings'}
-          aria-controls="match-panel-standings"
-          onClick={() => setTab('standings')}
-          className={`flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518] focus-visible:ring-offset-2 focus-visible:ring-offset-[#10192b] ${
-            activeTab === 'standings'
-              ? 'bg-[#f5c518] text-[#102018] shadow-md font-black'
-              : 'text-white/60 hover:bg-white/5 hover:text-white'
-          }`}
-        >
-          <Trophy className={`h-4 w-4 shrink-0 ${activeTab === 'standings' ? 'text-[#102018]' : 'text-white/40'}`} />
-          <span className="truncate">Standings</span>
-        </button>
+        <MatchTabButton id="overview" active={activeTab === 'overview'} onSelect={() => setTab('overview')} icon={History} label="Overview" />
+        <MatchTabButton id="lineups" active={activeTab === 'lineups'} onSelect={() => setTab('lineups')} icon={Users} label="Lineups" />
+        <MatchTabButton id="standings" active={activeTab === 'standings'} onSelect={() => setTab('standings')} icon={Trophy} label="Standings" />
       </nav>
+
+      {activeTab === 'overview' && (
+        <section id="match-panel-overview" role="tabpanel" aria-labelledby="match-tab-overview" className="mt-6">
+          {fixture.status === 'upcoming' ? (
+            <KickoffClock date={fixture.date} time={fixture.time} detail={fixture.detail} />
+          ) : (
+            <EventTimeline
+              events={timeline}
+              substitutions={substitutions}
+              homeId={fixture.homeId}
+            />
+          )}
+        </section>
+      )}
 
       {activeTab === 'lineups' && (
         <section
@@ -315,7 +294,6 @@ export function MatchDetailsPage() {
             played={played}
             live={isLive}
           />
-          <EventList events={timeline} />
           {recorded.length > 0 && (
             <div className="rounded-2xl border border-white/10 bg-[#10192b] p-4">
               <p className="text-[11px] font-bold tracking-[0.14em] text-white/40">ENTERED BY THE MATCH OFFICIAL</p>
@@ -661,28 +639,200 @@ function PitchLines() {
   );
 }
 
-function EventList({ events }: { events: TimelineEvent[] }) {
-  if (!events.length) return null;
+function MatchTabButton({
+  id,
+  active,
+  onSelect,
+  icon: Icon,
+  label,
+}: {
+  id: MatchTab;
+  active: boolean;
+  onSelect: () => void;
+  icon: typeof History;
+  label: string;
+}) {
   return (
-    <ol className="space-y-2">
-      {events.map((event) => (
-        <li key={`${event.kind}-${event.playerId}-${event.minute}-${event.playerName}`} className="flex items-baseline gap-3 rounded-xl border border-white/10 bg-[#10192b] px-3 py-2 text-sm">
-          <span className="font-mono text-xs font-bold text-[#f5c518]">{event.minute}'</span>
-          <span className="text-white/80">
-            {event.kind === 'goal' && 'Goal'}
-            {event.kind === 'yellow' && 'Yellow card'}
-            {event.kind === 'red' && 'Red card'}
-            {event.kind === 'sub' && 'Substitution'}
-            {event.kind === 'note' && (event.detail || 'Note')}
-            {' · '}
-            {event.playerName}
-            {event.assistName ? ` · assist ${event.assistName}` : ''}
-            {event.kind !== 'note' && event.detail ? ` · ${event.detail.replaceAll('_', ' ')}` : ''}
-          </span>
-        </li>
-      ))}
+    <button
+      id={`match-tab-${id}`}
+      role="tab"
+      type="button"
+      aria-selected={active}
+      aria-controls={`match-panel-${id}`}
+      onClick={onSelect}
+      className={`flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518] focus-visible:ring-offset-2 focus-visible:ring-offset-[#10192b] ${
+        active ? 'bg-[#f5c518] text-[#102018] shadow-md font-black' : 'text-white/60 hover:bg-white/5 hover:text-white'
+      }`}
+    >
+      <Icon className={`h-4 w-4 shrink-0 ${active ? 'text-[#102018]' : 'text-white/40'}`} />
+      <span className="truncate">{label}</span>
+    </button>
+  );
+}
+
+function kickoffAt(date: string, time: string) {
+  const clock = /^\d{2}:\d{2}$/.test(time) ? `${time}:00` : time;
+  const value = Date.parse(`${date}T${clock}+03:00`);
+  return Number.isNaN(value) ? null : value;
+}
+
+function pad(value: number) {
+  return String(value).padStart(2, '0');
+}
+
+function KickoffClock({ date, time, detail, compact = false }: { date: string; time: string; detail?: string; compact?: boolean }) {
+  const [now, setNow] = useState(() => Date.now() + clockSync.offset);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now() + clockSync.offset), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const held = detail === 'postponed' || detail === 'cancelled';
+  const kickoff = kickoffAt(date, time);
+  const remaining = kickoff == null ? 0 : kickoff - now;
+  const total = Math.max(0, Math.floor(remaining / 1000));
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  const waiting = held || kickoff == null || remaining <= 0;
+  const headline = held ? (detail === 'cancelled' ? 'Cancelled' : 'Postponed') : waiting ? 'Kickoff' : days > 0 ? `${days}d ${pad(hours)}:${pad(minutes)}:${pad(seconds)}` : `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+
+  if (compact) {
+    return (
+      <div className="text-center">
+        <span className="mb-2 inline-block rounded-full border border-[#f5c518]/30 bg-[#f5c518]/15 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-[#f5c518]">
+          {held ? headline : 'Upcoming'}
+        </span>
+        <p className="font-mono text-xl font-black tracking-tight text-white sm:text-2xl">{held ? time : headline}</p>
+        <p className="mt-1 text-[11px] font-semibold text-white/45">{waiting ? 'Waiting to start' : 'until kickoff'}</p>
+      </div>
+    );
+  }
+
+  const units = [
+    ...(days > 0 ? [{ label: 'Days', value: pad(days) }] : []),
+    { label: 'Hours', value: pad(hours) },
+    { label: 'Minutes', value: pad(minutes) },
+    { label: 'Seconds', value: pad(seconds) },
+  ];
+
+  return (
+    <section className="rounded-3xl border border-white/10 bg-[#10192b] px-4 py-6 text-center shadow-xl">
+      <p className="text-[11px] font-bold tracking-[0.18em] text-[#f5c518]">{held ? headline.toUpperCase() : 'KICKOFF COUNTDOWN'}</p>
+      <p className="mt-1 text-sm text-white/55">{formatKickoff(date, time)} · {time} EAT</p>
+      {waiting ? (
+        <p className="mt-5 text-lg font-black text-white">{held ? 'This match is not on the clock.' : 'Waiting for the whistle.'}</p>
+      ) : (
+        <div className={`mt-5 grid gap-2 ${days > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+          {units.map((unit) => (
+            <div key={unit.label} className="rounded-2xl border border-white/10 bg-[#0c1424] px-2 py-3">
+              <p className="font-mono text-3xl font-black text-white">{unit.value}</p>
+              <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white/40">{unit.label}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function EventTimeline({
+  events,
+  substitutions,
+  homeId,
+}: {
+  events: TimelineEvent[];
+  substitutions: ReturnType<typeof matchSubstitutions>;
+  homeId: string;
+}) {
+  const rows = [
+    ...events.filter((event) => event.kind === 'goal' || event.kind === 'yellow' || event.kind === 'red').map((event) => ({
+      key: `${event.kind}-${event.playerId}-${event.minute}-${event.assistId ?? ''}`,
+      minute: event.minute,
+      teamId: event.teamId,
+      kind: event.kind,
+      title: event.kind === 'goal' ? 'Goal' : event.kind === 'yellow' ? 'Yellow card' : 'Red card',
+      name: event.playerName,
+      extra: event.kind === 'goal' && event.assistName ? `Assist ${event.assistName}` : event.kind === 'goal' && event.detail === 'penalty' ? 'Penalty' : '',
+    })),
+    ...substitutions.map((change) => {
+      const off = players.find((player) => player.id === change.offId);
+      return {
+        key: `sub-${change.offId}-${change.onPlayer.id}-${change.minute}`,
+        minute: change.minute,
+        teamId: change.teamId,
+        kind: 'sub' as const,
+        title: 'Substitution',
+        name: change.onPlayer.name,
+        extra: off ? `On for ${off.name}` : '',
+      };
+    }),
+  ].sort((a, b) => a.minute - b.minute || a.title.localeCompare(b.title));
+
+  if (!rows.length) {
+    return (
+      <p className="rounded-3xl border border-white/10 bg-[#10192b] px-4 py-8 text-center text-sm text-white/55">
+        No goals, cards, or substitutions yet.
+      </p>
+    );
+  }
+
+  return (
+    <ol className="relative space-y-3">
+      <span className="absolute bottom-3 left-1/2 top-3 w-px -translate-x-1/2 bg-white/15" aria-hidden="true" />
+      {rows.map((row) => {
+        const home = row.teamId === homeId;
+        const team = getDepartment(row.teamId);
+        return (
+          <li key={row.key} className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-2">
+            <div className="min-w-0">{home && <TimelineCard row={row} team={team?.shortName} color={team?.color} align="end" />}</div>
+            <span className="relative z-10 mt-2 flex h-7 min-w-8 items-center justify-center rounded-full border border-white/15 bg-[#0c1424] px-1.5 font-mono text-[11px] font-black text-[#f5c518]">
+              {row.minute}&apos;
+            </span>
+            <div className="min-w-0">{!home && <TimelineCard row={row} team={team?.shortName} color={team?.color} align="start" />}</div>
+          </li>
+        );
+      })}
     </ol>
   );
+}
+
+function TimelineCard({
+  row,
+  team,
+  color,
+  align,
+}: {
+  row: { kind: string; title: string; name: string; extra: string };
+  team?: string;
+  color?: string;
+  align: 'start' | 'end';
+}) {
+  return (
+    <article className={`max-w-full rounded-2xl border border-white/10 bg-[#10192b] px-3 py-2 ${align === 'end' ? 'ml-auto text-right' : 'mr-auto text-left'}`}>
+      <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: color || '#f5c518', justifyContent: align === 'end' ? 'flex-end' : 'flex-start' }}>
+        <EventMark kind={row.kind} />
+        {team || row.title}
+      </p>
+      <p className="mt-1 text-sm font-bold text-white">{row.title}</p>
+      <p className="text-xs text-white/70">{row.name}</p>
+      {row.extra && <p className="text-[11px] text-white/45">{row.extra}</p>}
+    </article>
+  );
+}
+
+function EventMark({ kind }: { kind: string }) {
+  if (kind === 'yellow') return <span className="inline-block h-3 w-2.5 rounded-[2px] bg-[#f5c518]" aria-hidden="true" />;
+  if (kind === 'red') return <span className="inline-block h-3 w-2.5 rounded-[2px] bg-[#e11d48]" aria-hidden="true" />;
+  if (kind === 'sub') {
+    return (
+      <span className="inline-flex items-center" aria-hidden="true">
+        <ArrowUp className="h-3 w-3 text-[#1f9d55]" strokeWidth={3} />
+        <ArrowDown className="h-3 w-3 text-[#e11d48]" strokeWidth={3} />
+      </span>
+    );
+  }
+  return <span className="inline-block h-2.5 w-2.5 rounded-full bg-white" aria-hidden="true" />;
 }
 
 function BenchList({ title, color, players }: { title: string; color: string; players: Player[] }) {
