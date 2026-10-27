@@ -383,10 +383,80 @@ function Pitch({
 
   return (
     <section>
-      <div className="relative overflow-hidden rounded-3xl bg-[#3f7a4c]">
-        <TeamBar name={homeName} shortName={homeShort} color={homeColor} crest={homeCrest} formation={homeSheet.formation} />
-        <div className="relative h-[760px]">
+      <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0a1f12] shadow-2xl">
+        <TeamBar name={homeName} shortName={homeShort} color={homeColor} crest={homeCrest} formation={homeSheet.formation} position="top" />
+        <div
+          className="relative h-[760px] overflow-hidden select-none"
+          style={{
+            backgroundColor: '#163b22',
+            backgroundImage: `repeating-linear-gradient(
+              to bottom,
+              #1b4628 0px,
+              #1b4628 48px,
+              #153a20 48px,
+              #153a20 96px
+            )`,
+            boxShadow: 'inset 0 0 70px rgba(5, 20, 10, 0.75), inset 0 0 15px rgba(0, 0, 0, 0.4)',
+          }}
+        >
+          {/* Subtle grass grain texture */}
+          <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-20 mix-blend-overlay" aria-hidden="true">
+            <filter id="pitch-turf-grain">
+              <feTurbulence type="fractalNoise" baseFrequency="0.75" numOctaves="3" stitchTiles="stitch" />
+              <feColorMatrix type="saturate" values="0" />
+            </filter>
+            <rect width="100%" height="100%" filter="url(#pitch-turf-grain)" />
+          </svg>
+
+          {/* Vignette edge depth */}
+          <div
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_35%,rgba(6,22,12,0.65)_100%)]"
+            aria-hidden="true"
+          />
+
+          {/* Pitch Markings */}
           <PitchLines />
+
+          {/* Home team logo watermark (top half -> right side, LiveScore style) */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-1/2 z-[2] flex items-center justify-end pr-3 sm:pr-8 md:pr-10 select-none overflow-hidden">
+            {homeCrest ? (
+              <img
+                src={homeCrest}
+                alt=""
+                aria-hidden="true"
+                className="max-h-[240px] max-w-[240px] sm:max-h-[280px] sm:max-w-[280px] object-contain opacity-15 drop-shadow-xl translate-x-2 sm:translate-x-4"
+              />
+            ) : (
+              <div
+                aria-hidden="true"
+                className="flex h-44 w-44 sm:h-56 sm:w-56 items-center justify-center rounded-3xl border-4 border-current opacity-12 translate-x-2 sm:translate-x-4"
+                style={{ color: homeColor }}
+              >
+                <span className="font-black text-6xl sm:text-7xl tracking-wider">{homeShort}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Away team logo watermark (bottom half -> left side, LiveScore style) */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 z-[2] flex items-center justify-start pl-3 sm:pl-8 md:pl-10 select-none overflow-hidden">
+            {awayCrest ? (
+              <img
+                src={awayCrest}
+                alt=""
+                aria-hidden="true"
+                className="max-h-[240px] max-w-[240px] sm:max-h-[280px] sm:max-w-[280px] object-contain opacity-15 drop-shadow-xl -translate-x-2 sm:-translate-x-4"
+              />
+            ) : (
+              <div
+                aria-hidden="true"
+                className="flex h-44 w-44 sm:h-56 sm:w-56 items-center justify-center rounded-3xl border-4 border-current opacity-12 -translate-x-2 sm:-translate-x-4"
+                style={{ color: awayColor }}
+              >
+                <span className="font-black text-6xl sm:text-7xl tracking-wider">{awayShort}</span>
+              </div>
+            )}
+          </div>
+
           {homeLines.map((players, lineIndex) => players.map((player, index) => (
             <PitchPlayer
               key={player.id}
@@ -415,7 +485,7 @@ function Pitch({
             />
           )))}
         </div>
-        <TeamBar name={awayName} shortName={awayShort} color={awayColor} crest={awayCrest} formation={awaySheet.formation} />
+        <TeamBar name={awayName} shortName={awayShort} color={awayColor} crest={awayCrest} formation={awaySheet.formation} position="bottom" />
       </div>
       <SubList substitutions={substitutions} homeId={homeSheet.starters[0]?.departmentId} awayId={awaySheet.starters[0]?.departmentId} homeShort={homeShort} awayShort={awayShort} />
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -426,14 +496,34 @@ function Pitch({
   );
 }
 
-function TeamBar({ name, shortName, color, crest, formation }: { name: string; shortName: string; color: string; crest?: string; formation: string }) {
+function TeamBar({
+  name,
+  shortName,
+  color,
+  crest,
+  formation,
+  position = 'top',
+}: {
+  name: string;
+  shortName: string;
+  color: string;
+  crest?: string;
+  formation: string;
+  position?: 'top' | 'bottom';
+}) {
   return (
-    <div className="relative flex items-center justify-between gap-3 px-4 py-3">
+    <div
+      className={`relative z-20 flex items-center justify-between gap-3 px-4 py-3 bg-[#0a1f13]/90 backdrop-blur-md ${
+        position === 'top' ? 'border-b border-white/10' : 'border-t border-white/10'
+      }`}
+    >
       <span className="flex min-w-0 items-center gap-2">
         <DepartmentMark shortName={shortName} color={color} size={28} src={crest} />
         <span className="truncate text-sm font-bold text-white">{name}</span>
       </span>
-      <span className="shrink-0 rounded-full bg-[#146b32] px-2.5 py-1 text-[11px] font-bold text-white">{formation}</span>
+      <span className="shrink-0 rounded-full border border-white/15 bg-[#174e2a] px-2.5 py-0.5 text-[11px] font-bold text-white shadow-sm">
+        {formation}
+      </span>
     </div>
   );
 }
@@ -657,7 +747,7 @@ function PitchPlayer({
   const hasEvents = played && (goalCount > 0 || assistCount > 0 || hasYellow || hasRed);
 
   return (
-    <div className={`absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center ${nameAbove ? 'flex-col-reverse' : ''}`} style={{ top, left }}>
+    <div className={`absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center ${nameAbove ? 'flex-col-reverse' : ''}`} style={{ top, left }}>
       <div className={`relative h-11 w-11 ${fresh ? 'animate-pulse' : ''}`}>
         {hasEvents && (
           <div
@@ -697,13 +787,46 @@ function PitchPlayer({
 
 function PitchLines() {
   return (
-    <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-      <div className="absolute left-[20%] right-[20%] top-0 h-[14%] border-x border-b border-white/40" />
-      <div className="absolute left-[34%] right-[34%] top-0 h-[6%] border-x border-b border-white/40" />
-      <div className="absolute left-0 right-0 top-1/2 h-px bg-white/45" />
-      <div className="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/45" />
-      <div className="absolute bottom-0 left-[20%] right-[20%] h-[14%] border-x border-t border-white/40" />
-      <div className="absolute bottom-0 left-[34%] right-[34%] h-[6%] border-x border-t border-white/40" />
+    <div className="pointer-events-none absolute inset-3 z-[1]" aria-hidden="true">
+      {/* Outer touchline boundary */}
+      <div className="relative h-full w-full border border-white/35">
+        {/* Corner arcs */}
+        <div className="absolute -top-px -left-px h-3.5 w-3.5 rounded-br-full border-r border-b border-white/35" />
+        <div className="absolute -top-px -right-px h-3.5 w-3.5 rounded-bl-full border-l border-b border-white/35" />
+        <div className="absolute -bottom-px -left-px h-3.5 w-3.5 rounded-tr-full border-r border-t border-white/35" />
+        <div className="absolute -bottom-px -right-px h-3.5 w-3.5 rounded-tl-full border-l border-t border-white/35" />
+
+        {/* Halfway line */}
+        <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-white/35" />
+
+        {/* Center circle & kickoff spot */}
+        <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/35" />
+        <div className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/50" />
+
+        {/* TOP PENALTY AREA & GOAL */}
+        {/* Top Goal outline (nets) */}
+        <div className="absolute left-[38%] right-[38%] -top-3 h-3 border-t border-x border-white/25 bg-white/[0.03]" />
+        {/* Top 18-yard box */}
+        <div className="absolute left-[18%] right-[18%] top-0 h-[16%] border-x border-b border-white/35" />
+        {/* Top 6-yard box */}
+        <div className="absolute left-[34%] right-[34%] top-0 h-[6%] border-x border-b border-white/35" />
+        {/* Top Penalty spot */}
+        <div className="absolute left-1/2 top-[11.5%] h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-white/50" />
+        {/* Top D-arc */}
+        <div className="absolute left-1/2 top-[16%] h-9 w-20 -translate-x-1/2 rounded-b-full border-b border-x border-white/35" />
+
+        {/* BOTTOM PENALTY AREA & GOAL */}
+        {/* Bottom Goal outline (nets) */}
+        <div className="absolute left-[38%] right-[38%] -bottom-3 h-3 border-b border-x border-white/25 bg-white/[0.03]" />
+        {/* Bottom 18-yard box */}
+        <div className="absolute left-[18%] right-[18%] bottom-0 h-[16%] border-x border-t border-white/35" />
+        {/* Bottom 6-yard box */}
+        <div className="absolute left-[34%] right-[34%] bottom-0 h-[6%] border-x border-t border-white/35" />
+        {/* Bottom Penalty spot */}
+        <div className="absolute left-1/2 bottom-[11.5%] h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-white/50" />
+        {/* Bottom D-arc */}
+        <div className="absolute left-1/2 bottom-[16%] h-9 w-20 -translate-x-1/2 rounded-t-full border-t border-x border-white/35" />
+      </div>
     </div>
   );
 }
