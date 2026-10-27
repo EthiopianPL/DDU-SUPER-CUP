@@ -9,7 +9,7 @@ import { NewsPage } from './pages/NewsPage';
 import { NewsDetailPage } from './pages/NewsDetailPage';
 import { AdminPage } from './pages/AdminPage';
 
-function RedirectToDiscover({ defaultTab }: { defaultTab: 'groups' | 'teams' | 'stats' }) {
+function RedirectToDiscover({ defaultTab }: { defaultTab: 'groups' | 'stats' }) {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   if (!searchParams.has('tab')) {
@@ -26,8 +26,8 @@ function App() {
           <Route index element={<HomePage />} />
           <Route path="discover" element={<DiscoverPage />} />
           <Route path="groups" element={<RedirectToDiscover defaultTab="groups" />} />
-          <Route path="teams" element={<RedirectToDiscover defaultTab="teams" />} />
-          <Route path="departments" element={<RedirectToDiscover defaultTab="teams" />} />
+          <Route path="teams" element={<RedirectToDiscover defaultTab="groups" />} />
+          <Route path="departments" element={<RedirectToDiscover defaultTab="groups" />} />
           <Route path="stats" element={<RedirectToDiscover defaultTab="stats" />} />
           <Route path="statistics" element={<RedirectToDiscover defaultTab="stats" />} />
           <Route path="matches" element={<MatchesPage />} />
