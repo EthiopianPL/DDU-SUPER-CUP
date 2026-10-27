@@ -55,7 +55,28 @@ const TYPES = {
 
 function broadcast(payload) {
   const body = `event: ${payload.type}\ndata: ${JSON.stringify(payload)}\n\n`;
-  for (const response of clients) response.write(body);
+  for (const response of clients) {
+    try {
+      response.write(body);
+    } catch {
+      clients.delete(response);
+    }
+  }
+}
+
+let keepAliveTimer = null;
+function ensureKeepAlive() {
+  if (keepAliveTimer) return;
+  keepAliveTimer = setInterval(() => {
+    if (!clients.size) return;
+    for (const response of clients) {
+      try {
+        response.write(': keepalive\n\n');
+      } catch {
+        clients.delete(response);
+      }
+    }
+  }, 15000);
 }
 
 export function pushClock(db) {
@@ -108,16 +129,18 @@ function serveEvents(request, response, db) {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
     Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
   });
   response.write(`event: hello\ndata: ${JSON.stringify({ type: 'hello', revision: currentRevision(), serverNow: Date.now() })}\n\n`);
   clients.add(response);
+  ensureKeepAlive();
   request.on('close', () => clients.delete(response));
 }
 
 async function serveApi(request, response, db, url) {
   const actor = actorFrom(db, request);
   const path = url.pathname;
-  if (request.method === 'GET' && path === '/api/health') return send(response, 200, { ok: true });
+  if (request.method === 'GET' && path === '/api/health') return send(response, 200, { ok: true, revision: currentRevision(), serverNow: Date.now() });
   if (request.method === 'GET' && path === '/api/snapshot') return send(response, 200, buildSnapshot(db));
   if (request.method === 'GET' && path === '/api/me') return send(response, 200, { user: actor ? publicUser(actor) : null });
   if (request.method === 'POST' && path === '/api/login') return login(request, response, db);

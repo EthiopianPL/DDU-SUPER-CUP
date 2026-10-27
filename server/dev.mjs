@@ -4,7 +4,13 @@ import { openDatabase } from './db.mjs';
 
 const db = openDatabase();
 const { server } = await startServer(db, Number(process.env.PORT || 8787));
-setInterval(() => pushClock(db), 1000);
+setInterval(() => {
+  try {
+    pushClock(db);
+  } catch (error) {
+    console.error('Clock tick error:', error.message);
+  }
+}, 1000);
 
 const vite = spawn(process.execPath, [
   'node_modules/vite/bin/vite.js',
