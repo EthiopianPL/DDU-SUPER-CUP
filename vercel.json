@@ -11,6 +11,10 @@
   },
   "rewrites": [
     {
+      "source": "/api/:segment/:rest*",
+      "destination": "/api/:segment?__ddu=:rest*"
+    },
+    {
       "source": "/((?!api).*)",
       "destination": "/"
     }

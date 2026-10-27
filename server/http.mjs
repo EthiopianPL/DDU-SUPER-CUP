@@ -278,14 +278,26 @@ function serveMedia(response, db, pathname) {
   const match = pathname.match(/^\/api\/media\/(teams|players|news)\/([^/]+)$/);
   if (!match) return send(response, 404, { error: 'Not found.' });
   const row = db.prepare('SELECT content_type, bytes FROM media WHERE id = ?').get(`${match[1]}/${decodeURIComponent(match[2])}`);
-  if (!row?.bytes) return send(response, 404, { error: 'Not found.' });
-  const bytes = Buffer.isBuffer(row.bytes) ? row.bytes : Buffer.from(row.bytes);
+  const bytes = mediaBytes(row?.bytes);
+  if (!bytes?.length) return send(response, 404, { error: 'Not found.' });
   response.writeHead(200, {
     'Content-Type': row.content_type || 'application/octet-stream',
     'Cache-Control': 'public, max-age=86400',
     'Content-Length': bytes.length,
   });
   response.end(bytes);
+}
+
+function mediaBytes(value) {
+  if (!value) return null;
+  if (Buffer.isBuffer(value)) return value;
+  if (value instanceof Uint8Array) return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+  if (typeof value === 'string') {
+    if (value.startsWith('\\x')) return Buffer.from(value.slice(2), 'hex');
+    return Buffer.from(value, 'base64');
+  }
+  if (value?.type === 'Buffer' && Array.isArray(value.data)) return Buffer.from(value.data);
+  return null;
 }
 
 function readRaw(request, limit) {

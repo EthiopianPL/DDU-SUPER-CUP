@@ -17,15 +17,41 @@ function database() {
   return pending;
 }
 
-function normalize(request) {
+function pathText(value) {
+  const text = Array.isArray(value) ? value.join('/') : String(value ?? '');
+  try {
+    return decodeURIComponent(text).replace(/^\/+|\/+$/g, '');
+  } catch {
+    return text.replace(/^\/+|\/+$/g, '');
+  }
+}
+
+export function normalize(request) {
   const raw = request.url || '/';
+  const url = new URL(raw, 'http://127.0.0.1');
+  const rest = pathText(request.query?.__ddu ?? url.searchParams.get('__ddu'));
+  if (rest && !rest.split('/').some((part) => !part || part === '.' || part === '..' || part.includes('\\') || part.includes('\0'))) {
+    let path = url.pathname || '/';
+    if (!path.startsWith('/api')) path = `/api${path.startsWith('/') ? path : `/${path}`}`;
+    const segments = path.split('/').filter(Boolean);
+    if (segments[0] === 'api' && segments.length <= 2) path = `${path.replace(/\/$/, '')}/${rest}`;
+    url.searchParams.delete('__ddu');
+    if (request.query && typeof request.query === 'object') {
+      for (const [key, value] of Object.entries(request.query)) {
+        if (key === '__ddu' || key === 'path' || value == null || Array.isArray(value) || url.searchParams.has(key)) continue;
+        url.searchParams.set(key, String(value));
+      }
+    }
+    const search = url.searchParams.toString();
+    request.url = search ? `${path}?${search}` : path;
+    return;
+  }
   if (/^https?:\/\//.test(raw) || raw.startsWith('/api/') || raw === '/api') return;
   const queryAt = raw.indexOf('?');
   const query = queryAt >= 0 ? raw.slice(queryAt) : '';
   const parts = request.query?.path;
   if (parts) {
-    const path = Array.isArray(parts) ? parts.join('/') : String(parts);
-    request.url = `/api/${path}${query}`;
+    request.url = `/api/${pathText(parts)}${query}`;
     return;
   }
   const path = queryAt >= 0 ? raw.slice(0, queryAt) : raw;
