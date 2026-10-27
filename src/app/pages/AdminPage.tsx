@@ -18,6 +18,7 @@ import {
   squads,
   type GroupId,
 } from '../../data/supercup';
+import { formationPlan, seatPlayers } from '../../data/formation';
 import { STAGE_OPTIONS, stageLabel, tieCount, type Stage } from '../../data/knockout';
 
 type Role = 'super_admin' | 'match_admin' | 'competition_manager' | 'team_manager' | 'reader';
@@ -602,45 +603,122 @@ function LineupSide({
   const current = squads.filter((row) => row.matchId === matchId && row.teamId === teamId);
   const currentIds = new Set(current.map((row) => row.playerId));
   const roster = players.filter((player) => player.departmentId === teamId && player.active !== false && (player.registered !== false || currentIds.has(player.id)));
-  const [starters, setStarters] = useState(current.filter((row) => row.role === 'starter').map((row) => row.playerId));
+  const [shape, setShape] = useState(formation && FORMATIONS.includes(formation) ? formation : '4-2-3-1');
+  const [slots, setSlots] = useState<Array<string | null>>(() => seatPlayers(current.filter((row) => row.role === 'starter').sort((a, b) => a.sort - b.sort).map((row) => row.playerId), formation || '4-2-3-1', roster));
   const [bench, setBench] = useState(current.filter((row) => row.role === 'bench').map((row) => row.playerId));
-  const [shape, setShape] = useState(formation || '4-2-3-1');
-  const place = (playerId: string, role: 'starter' | 'bench' | 'out') => {
-    setStarters((list) => list.filter((id) => id !== playerId));
-    setBench((list) => list.filter((id) => id !== playerId));
-    if (role === 'starter') setStarters((list) => list.length >= 11 ? list : [...list, playerId]);
-    if (role === 'bench') setBench((list) => [...list, playerId]);
+  const [picking, setPicking] = useState<number | null>(null);
+  const plan = formationPlan(shape);
+  const roles = plan.flat();
+  const chosen = new Set(slots.filter((id): id is string => Boolean(id)));
+  const place = (index: number, playerId: string | null) => {
+    setSlots((list) => list.map((id, slot) => (slot === index ? playerId : id === playerId ? null : id)));
+    if (playerId) setBench((list) => list.filter((id) => id !== playerId));
+    setPicking(null);
   };
+  const toggleBench = (playerId: string) => {
+    if (chosen.has(playerId)) return;
+    setBench((list) => list.includes(playerId) ? list.filter((id) => id !== playerId) : [...list, playerId]);
+  };
+  const ready = slots.every(Boolean);
+  const openRole = picking == null ? null : roles[picking];
+  const choices = openRole ? roster.filter((player) => player.position === openRole && !bench.includes(player.id) && (slots[picking!] === player.id || !chosen.has(player.id))) : [];
+  const tops = band(plan.length, 12, 88);
+
   return (
     <form onSubmit={(event) => {
       event.preventDefault();
-      onSave({ teamId, starters, bench, formation: shape });
+      if (!ready) return;
+      onSave({ teamId, starters: slots, bench, formation: shape });
     }}>
       <label className="mt-3 block text-xs font-bold text-white/45">Formation
-        <select className={inputClass} value={FORMATIONS.includes(shape) ? shape : FORMATIONS[0]} onChange={(event) => setShape(event.target.value)}>
+        <select className={inputClass} value={shape} onChange={(event) => {
+          const next = event.target.value;
+          setShape(next);
+          setSlots((list) => seatPlayers(list.filter((id): id is string => Boolean(id)), next, roster));
+          setPicking(null);
+        }}>
           {FORMATIONS.map((item) => <option key={item} value={item}>{item}</option>)}
         </select>
       </label>
-      <ul className="mt-3 max-h-72 space-y-1 overflow-auto">
-        {roster.map((player) => {
-          const role = starters.includes(player.id) ? 'starter' : bench.includes(player.id) ? 'bench' : 'out';
+      <div className="relative mt-3 h-[460px] overflow-hidden rounded-3xl bg-[#3f7a4c]">
+        <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+          <div className="absolute left-[20%] right-[20%] top-0 h-[16%] border-x border-b border-white/40" />
+          <div className="absolute left-0 right-0 top-1/2 h-px bg-white/40" />
+          <div className="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/40" />
+        </div>
+        {plan.map((line, lineIndex) => line.map((role, index) => {
+          const slot = plan.slice(0, lineIndex).reduce((sum, row) => sum + row.length, 0) + index;
+          const player = roster.find((item) => item.id === slots[slot]);
           return (
-            <li key={player.id} className="flex items-center justify-between gap-2 text-sm">
-              <span>{player.number} {player.name}</span>
-              <select className="rounded-lg bg-[#0c1424] px-2 py-1 text-xs font-bold" value={role} onChange={(event) => place(player.id, event.target.value as 'starter' | 'bench' | 'out')}>
-                <option value="starter">Starting XI</option>
-                <option value="bench">Bench</option>
-                <option value="out">Out</option>
-              </select>
-            </li>
+            <button
+              key={`${role}-${slot}`}
+              type="button"
+              onClick={() => setPicking(slot)}
+              className={`absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center ${picking === slot ? 'z-10' : ''}`}
+              style={{ top: tops[lineIndex], left: `${spread(line.length)[index]}%` }}
+            >
+              {player ? (
+                <span className="relative">
+                  {player.photoUrl ? (
+                    <img src={player.photoUrl} alt="" className="h-11 w-11 rounded-full border-2 border-white object-cover" />
+                  ) : (
+                    <span className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-white bg-[#102018] text-xs font-black text-white">{player.number}</span>
+                  )}
+                </span>
+              ) : (
+                <span className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-dashed border-white/80 text-[10px] font-black text-white">{role}</span>
+              )}
+              <span className="mt-1 max-w-16 truncate text-[10px] font-semibold text-white drop-shadow">{player ? player.name.split(' ').slice(-1)[0] : 'Pick'}</span>
+            </button>
           );
-        })}
-        {!roster.length && <li className="text-sm text-white/40">Register players for this team before setting a lineup.</li>}
-      </ul>
-      <p className="mt-2 text-xs text-white/40">{starters.length} starters · {bench.length} substitutes</p>
-      <button type="submit" disabled={disabled || !starters.length} className="mt-3 rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018] disabled:opacity-40">Save lineup</button>
+        }))}
+      </div>
+      {openRole && (
+        <div className="mt-3 rounded-2xl border border-white/10 bg-[#0c1424] p-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">{openRole === 'GK' ? 'Goalkeepers only' : `${openRole} only`}</p>
+          <ul className="mt-2 max-h-40 space-y-1 overflow-auto">
+            {choices.map((player) => (
+              <li key={player.id}>
+                <button type="button" className="flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-sm hover:bg-white/5" onClick={() => place(picking!, player.id)}>
+                  {player.photoUrl ? <img src={player.photoUrl} alt="" className="h-7 w-7 rounded-full object-cover" /> : <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-[10px] font-black">{player.number}</span>}
+                  <span className="min-w-0 flex-1 truncate">{player.name}</span>
+                  <span className="text-[10px] font-bold text-white/40">{player.position}</span>
+                </button>
+              </li>
+            ))}
+            {!choices.length && <li className="text-sm text-white/40">No {openRole} is free for this place.</li>}
+          </ul>
+          <button type="button" className="mt-2 text-xs font-bold text-white/50" onClick={() => { if (picking != null) place(picking, null); }}>Clear this place</button>
+        </div>
+      )}
+      <div className="mt-3">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">Substitutes</p>
+        <ul className="mt-2 flex flex-wrap gap-2">
+          {roster.filter((player) => !chosen.has(player.id)).map((player) => (
+            <li key={player.id}>
+              <button type="button" onClick={() => toggleBench(player.id)} className={`rounded-full px-3 py-1 text-xs font-bold ${bench.includes(player.id) ? 'bg-[#f5c518] text-[#102018]' : 'bg-white/10 text-white/70'}`}>
+                {player.number} {player.name}
+              </button>
+            </li>
+          ))}
+          {!roster.length && <li className="text-sm text-white/40">Register players for this team before setting a lineup.</li>}
+        </ul>
+      </div>
+      <p className="mt-2 text-xs text-white/40">{slots.filter(Boolean).length} of {roles.length} places filled · {bench.length} substitutes</p>
+      <button type="submit" disabled={disabled || !ready} className="mt-3 rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018] disabled:opacity-40">Save lineup</button>
     </form>
   );
+}
+
+function band(count: number, from: number, to: number) {
+  if (count <= 1) return ['50%'];
+  return Array.from({ length: count }, (_, index) => `${from + ((to - from) * index) / (count - 1)}%`);
+}
+
+function spread(count: number) {
+  if (count <= 1) return [50];
+  const inset = count >= 5 ? 12 : count === 4 ? 18 : count === 3 ? 24 : 34;
+  return Array.from({ length: count }, (_, index) => inset + ((100 - inset * 2) * index) / (count - 1));
 }
 
 function GoalCorrect({
