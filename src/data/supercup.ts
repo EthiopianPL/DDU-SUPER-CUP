@@ -407,7 +407,13 @@ export function standingsFor(group: GroupId): Standing[] {
   });
 
   const played = fixtures
-    .filter((fixture) => (fixture.stage ?? 'group') === 'group' && fixture.group === group && fixture.confirmed && fixture.detail === 'finished' && fixture.homeScore != null && fixture.awayScore != null)
+    .filter((fixture) => {
+      if ((fixture.stage ?? 'group') !== 'group' || fixture.group !== group) return false;
+      if (fixture.homeScore == null || fixture.awayScore == null) return false;
+      if (fixture.status === 'live') return true;
+      if (fixture.status !== 'finished') return false;
+      return !fixture.detail || fixture.detail === 'finished';
+    })
     .sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`));
 
   played.forEach((fixture) => {

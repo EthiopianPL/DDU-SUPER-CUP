@@ -1332,7 +1332,7 @@ function RulesAdmin({ role, onMessage, onError }: { role: Role; onMessage: (text
       }
     }}>
       <h1 className="text-3xl font-black">Competition</h1>
-      <p className="mt-1 text-sm text-white/45">Group tables use confirmed results only. Tie-break is points, goal difference, then goals scored.</p>
+      <p className="mt-1 text-sm text-white/45">Live scores count straight away and stay in the table at full time. Confirming locks the result. Tie-break is points, goal difference, then goals scored.</p>
       <label className="mt-4 block text-xs font-bold text-white/45">Half length (minutes)<input className={inputClass} value={halfMinutes} onChange={(event) => setHalfMinutes(event.target.value)} /></label>
       <label className="mt-3 block text-xs font-bold text-white/45">Points for a win<input className={inputClass} value={pointsWin} onChange={(event) => setPointsWin(event.target.value)} /></label>
       <label className="mt-3 block text-xs font-bold text-white/45">Substitutions<input className={inputClass} value={maxSubs} onChange={(event) => setMaxSubs(event.target.value)} /></label>

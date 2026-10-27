@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { MapPin } from 'lucide-react';
-import { formatKickoff, getFixture } from '../../data/supercup';
+import { formatKickoff, formatMatchClock, getFixture } from '../../data/supercup';
+import { useMatchClock } from '../useMatchClock';
 
 interface Team {
   id: string | number;
@@ -55,35 +55,11 @@ export function MatchCard({
   time,
   stadium,
   matchMinute = 0,
-  matchSecond = 0,
   injuryTime = 0,
 }: MatchCardProps) {
   const navigate = useNavigate();
-  const [currentMinute, setCurrentMinute] = useState(matchMinute);
-  const [, setCurrentSecond] = useState(matchSecond);
-
-  // Sync state if props change
-  useEffect(() => {
-    setCurrentMinute(matchMinute);
-    setCurrentSecond(matchSecond);
-  }, [matchMinute, matchSecond]);
-
-  // Live match second ticker
-  useEffect(() => {
-    if (status !== 'live') return;
-
-    const interval = setInterval(() => {
-      setCurrentSecond((prev) => {
-        if (prev >= 59) {
-          setCurrentMinute((m) => m + 1);
-          return 0;
-        }
-        return prev + 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [status]);
+  const clock = useMatchClock(status === 'live' ? id : undefined);
+  const liveMinute = clock?.minute ?? matchMinute;
 
   const fixture = getFixture(id);
   const venue = stadium ?? fixture?.stadium ?? 'DDU Campus Pitch';
@@ -98,7 +74,9 @@ export function MatchCard({
   const isFinished = status === 'finished';
   const isUpcoming = status === 'upcoming';
 
-  const formattedLiveTime = `${currentMinute}'${currentMinute >= 45 && injuryTime > 0 ? ` +${injuryTime}` : ''}`;
+  const formattedLiveTime = clock
+    ? `${formatMatchClock(clock)}${clock.added > 0 ? ` +${clock.added}` : ''}`
+    : `${liveMinute}'${liveMinute >= 45 && injuryTime > 0 ? ` +${injuryTime}` : ''}`;
 
   return (
     <div

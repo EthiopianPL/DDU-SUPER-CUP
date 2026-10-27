@@ -9,6 +9,7 @@ import {
   players,
   clockSync,
   squads,
+  viewClock,
   type Department,
   type Fixture,
   type GroupId,
@@ -114,11 +115,11 @@ export function applySnapshot(data: Snapshot, broadcastCrossTab = true) {
     ...match,
     status: bucket(match.detail),
     group: match.group as GroupId,
-    minute: Math.floor(match.elapsedMs / 60000),
-    elapsedSeconds: match.elapsedMs / 1000,
+    minute: runningMinute(match.elapsedMs, match.runningSince, data.serverNow),
+    elapsedSeconds: Number(match.elapsedMs) / 1000,
+    runningSince: match.runningSince == null ? null : Number(match.runningSince),
     addedSeconds: match.addedMs / 1000,
     halfSeconds: match.halfMs / 1000,
-    runningSince: match.runningSince,
     stage: match.stage || 'group',
     slot: match.slot || 0,
   })));
@@ -143,24 +144,34 @@ function setOffset(value: number) {
   clockSync.offset = value;
 }
 
+function runningMinute(elapsedMs: number, runningSince: number | null, now: number) {
+  const since = runningSince == null ? 0 : Number(runningSince);
+  const elapsed = Number(elapsedMs) + (since ? Math.max(0, now - since) : 0);
+  return Math.floor(elapsed / 60000);
+}
+
 export function applyClock(payload: { serverNow: number; matches: Array<{ id: string; elapsedMs: number; runningSince: number | null; period: string; detail: string; addedMs: number; homeScore: number; awayScore: number; version: number }> }) {
   setOffset(payload.serverNow - Date.now());
   let changed = false;
   for (const row of payload.matches) {
     const fixture = fixtures.find((item) => item.id === row.id);
     if (!fixture) continue;
-    const minute = Math.floor(row.elapsedMs / 60000);
-    if (fixture.minute !== minute || fixture.homeScore !== row.homeScore || fixture.runningSince !== row.runningSince || fixture.period !== row.period) changed = true;
-    fixture.elapsedSeconds = row.elapsedMs / 1000;
-    fixture.runningSince = row.runningSince;
+    const since = row.runningSince == null ? null : Number(row.runningSince);
+    const previousMinute = fixture.minute;
+    const previousScore = `${fixture.homeScore}-${fixture.awayScore}`;
+    const previousPeriod = fixture.period;
+    fixture.elapsedSeconds = Number(row.elapsedMs) / 1000;
+    fixture.runningSince = since;
     fixture.period = row.period;
     fixture.detail = row.detail;
     fixture.status = bucket(row.detail);
-    fixture.addedSeconds = row.addedMs / 1000;
+    fixture.addedSeconds = Number(row.addedMs) / 1000;
     fixture.homeScore = row.homeScore;
     fixture.awayScore = row.awayScore;
     fixture.version = row.version;
+    const minute = viewClock(fixture, Date.now())?.minute ?? runningMinute(row.elapsedMs, since, payload.serverNow);
     fixture.minute = minute;
+    if (previousMinute !== minute || previousScore !== `${row.homeScore}-${row.awayScore}` || previousPeriod !== row.period) changed = true;
   }
   if (changed) emit();
 }
@@ -249,6 +260,19 @@ export async function bootLeague() {
   }
 
   connectSSE();
+
+  setInterval(() => {
+    const now = Date.now();
+    let changed = false;
+    for (const fixture of fixtures) {
+      if (fixture.status !== 'live' || !fixture.runningSince) continue;
+      const minute = viewClock(fixture, now)?.minute;
+      if (minute == null || fixture.minute === minute) continue;
+      fixture.minute = minute;
+      changed = true;
+    }
+    if (changed) emit();
+  }, 1000);
 
   // Listen for tab focus and visibility change to immediately catch any missed updates
   if (typeof window !== 'undefined') {
