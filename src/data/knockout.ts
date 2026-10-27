@@ -104,6 +104,22 @@ const LATER: Array<{ stage: Exclude<Stage, 'group'>; ties: number; feed: Exclude
   { stage: 'final', ties: 1, feed: 'sf', feedName: 'SF' },
 ];
 
+export function thirdPlaceTie(): RoadTie {
+  const left = tieFixture('sf', 1);
+  const right = tieFixture('sf', 2);
+  const loser = (fixture?: Fixture) => {
+    const winner = winnerId(fixture);
+    if (!fixture || !winner) return undefined;
+    return winner === fixture.homeId ? fixture.awayId : fixture.homeId;
+  };
+  return {
+    stage: 'final',
+    slot: 0,
+    home: side('SF 1', loser(left)),
+    away: side('SF 2', loser(right)),
+  };
+}
+
 export function knockoutRoad(): RoadTie[] {
   const thirds = bestThirds();
   const ties: RoadTie[] = R16.map(([homeCode, awayCode], index) => ({
