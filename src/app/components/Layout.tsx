@@ -1,6 +1,7 @@
 import { Outlet, useLocation } from 'react-router';
 import { Header } from './Header';
 import { BottomNav } from './BottomNav';
+import { BrandLockup } from './BrandLockup';
 import { leagueStatus, useLeagueVersion } from '../../data/live';
 
 export function Layout() {
@@ -19,14 +20,28 @@ export function Layout() {
         </div>
       )}
 
-      {!desk && <Header />}
+      {!desk && ready && <Header />}
       <main className="w-full">
-        {!ready && (
-          <p className="px-4 py-16 text-center text-sm text-white/60">{error || 'Connecting to the match server…'}</p>
-        )}
+        {!ready && <MatchLoading error={error} />}
         {ready && <Outlet />}
       </main>
       {!desk && ready && <BottomNav />}
+    </div>
+  );
+}
+
+function MatchLoading({ error }: { error: string }) {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center px-6" role="status" aria-live="polite" aria-label={error || 'Loading'}>
+      <div className="relative flex h-28 w-28 items-center justify-center">
+        <span className="absolute inset-0 animate-spin rounded-full border-2 border-white/10 border-t-[#f5c518]" />
+        <span className="absolute inset-3 animate-spin rounded-full border-2 border-transparent border-b-[#2450c8] [animation-duration:1.4s]" />
+        <img src="/brand/ddu-logo.png" alt="" className="h-14 w-14 object-contain" />
+      </div>
+      <div className="mt-6">
+        <BrandLockup />
+      </div>
+      {error && <p className="mt-4 max-w-xs text-center text-sm text-white/55">{error}</p>}
     </div>
   );
 }
