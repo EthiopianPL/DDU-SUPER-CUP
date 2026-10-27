@@ -5,25 +5,26 @@ import { BottomNav } from './BottomNav';
 import { BrandLockup } from './BrandLockup';
 import { leagueStatus, useLeagueVersion } from '../../data/live';
 
-const INTRO_KEY = 'ddu-first-view';
-
 export function Layout() {
-  const desk = useLocation().pathname.startsWith('/admin');
+  const location = useLocation();
+  const desk = location.pathname.startsWith('/admin');
+  const spot = `${location.pathname}${location.search}`;
   const version = useLeagueVersion();
   const { ready, error } = leagueStatus();
-  const [intro, setIntro] = useState(() => sessionStorage.getItem(INTRO_KEY) !== '1');
+  const [passing, setPassing] = useState(!desk);
   void version;
 
   useEffect(() => {
-    if (!intro || desk) return;
-    const timer = window.setTimeout(() => {
-      sessionStorage.setItem(INTRO_KEY, '1');
-      setIntro(false);
-    }, 3000);
+    if (desk) {
+      setPassing(false);
+      return;
+    }
+    setPassing(true);
+    const timer = window.setTimeout(() => setPassing(false), 1500);
     return () => window.clearTimeout(timer);
-  }, [intro, desk]);
+  }, [spot, desk]);
 
-  const waiting = !desk && (intro || !ready);
+  const waiting = passing || (!desk && !ready);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#070d18] text-white">
@@ -37,7 +38,7 @@ export function Layout() {
 
       {!desk && !waiting && <Header />}
       <main className="w-full">
-        {waiting && <MatchLoading error={intro ? '' : error} />}
+        {waiting && <MatchLoading error={passing ? '' : error} />}
         {!waiting && (desk || ready) && <Outlet />}
       </main>
       {!desk && !waiting && <BottomNav />}
