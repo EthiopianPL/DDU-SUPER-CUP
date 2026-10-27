@@ -84,7 +84,7 @@ export interface Snapshot {
   events: MatchEventRecord[];
   squads: SquadRow[];
   stats: ManualStat[];
-  news: Array<{ id: string; title: string; category: string; time: string; summary: string; body: string; imageUrl?: string }>;
+  news: Array<{ id: string; title: string; category: string; time: string; summary: string; body: string; imageUrl?: string; createdAt?: number }>;
 }
 
 let currentRevision = 0;

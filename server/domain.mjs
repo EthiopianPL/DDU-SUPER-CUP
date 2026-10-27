@@ -334,6 +334,15 @@ function publicPlayer(player, stats) {
   };
 }
 
+export function ensureNewsStamps(db) {
+  const rows = db.prepare('SELECT id FROM news WHERE created_at = 0').all();
+  for (const row of rows) {
+    const audit = db.prepare(`SELECT created_at FROM audit_log WHERE entity = 'news' AND entity_id = ? ORDER BY created_at DESC LIMIT 1`).get(row.id);
+    if (!audit?.created_at) continue;
+    db.prepare('UPDATE news SET created_at = ? WHERE id = ? AND created_at = 0').run(Number(audit.created_at), row.id);
+  }
+}
+
 export function buildSnapshot(db, now = Date.now()) {
   const competition = db.prepare('SELECT * FROM competitions WHERE id = ?').get('super-cup');
   const teams = db.prepare('SELECT * FROM teams ORDER BY name').all();
@@ -342,7 +351,7 @@ export function buildSnapshot(db, now = Date.now()) {
   const events = db.prepare('SELECT * FROM match_events ORDER BY id').all();
   const squads = db.prepare('SELECT * FROM match_squad ORDER BY sort_index').all();
   const stats = db.prepare('SELECT * FROM manual_stats').all();
-  const news = db.prepare('SELECT * FROM news').all();
+  const news = db.prepare('SELECT * FROM news ORDER BY created_at DESC, id DESC').all();
   const names = new Map(players.map((player) => [player.id, player.name]));
 
   const tally = new Map(players.map((player) => [player.id, { goals: 0, assists: 0, yellowCards: 0, redCards: 0, appearances: 0, starts: 0 }]));
@@ -465,6 +474,7 @@ export function buildSnapshot(db, now = Date.now()) {
       summary: article.summary,
       body: article.body,
       imageUrl: article.image_url || '',
+      createdAt: Number(article.created_at) || 0,
     })),
   };
 }
@@ -628,7 +638,7 @@ export function saveNews(db, actor, input, id) {
     const imageUrl = image ? saveMedia(db, 'news', articleId, image) : (before?.image_url ?? '');
     const fields = [title, String(input.category ?? 'News').trim() || 'News', String(input.time ?? 'Today').trim() || 'Today', summary, body, imageUrl];
     if (id) db.prepare('UPDATE news SET title=?, category=?, time_label=?, summary=?, body=?, image_url=? WHERE id=?').run(...fields, id);
-    else db.prepare('INSERT INTO news (title, category, time_label, summary, body, image_url, id) VALUES (?, ?, ?, ?, ?, ?, ?)').run(...fields, articleId);
+    else db.prepare('INSERT INTO news (title, category, time_label, summary, body, image_url, id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(...fields, articleId, Date.now());
     audit(db, actor, id ? 'news.update' : 'news.create', 'news', id || articleId, null, { title });
     return { id: id || articleId };
   });
