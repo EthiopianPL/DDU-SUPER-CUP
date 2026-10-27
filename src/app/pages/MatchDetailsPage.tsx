@@ -23,7 +23,6 @@ import {
   formatMatchClock,
   getDepartment,
   getFixture,
-  goalEvents,
   GROUP_COLLEGES,
   manualStats,
   matchSheet,
@@ -84,7 +83,6 @@ export function MatchDetailsPage() {
   const played = fixture.status !== 'upcoming';
   const isLive = fixture.status === 'live';
 
-  const goals = useMemo(() => goalEvents(fixture), [fixture, version, clock?.minute, fixture.homeScore, fixture.awayScore, fixture.status]);
   const timeline = useMemo(() => matchTimeline(fixture), [fixture, version, clock?.minute, fixture.homeScore, fixture.awayScore, fixture.status]);
   const substitutions = useMemo(() => matchSubstitutions(fixture), [fixture, version, clock?.minute, fixture.status]);
   const homeSheet = useMemo(() => matchSheet(fixture.homeId, fixture.id), [fixture.homeId, fixture.id, version]);
@@ -163,12 +161,7 @@ export function MatchDetailsPage() {
               <span className="mt-2.5 block text-sm font-bold text-white group-hover:underline sm:text-base">
                 {home?.name ?? 'Home Team'}
               </span>
-              {goals.filter((goal) => goal.teamId === fixture.homeId).map((goal) => (
-                <span key={`${goal.playerId}-${goal.minute}`} className="text-[11px] text-white/55">
-                  {goal.minute}&apos; {goal.playerName}
-                </span>
-              ))}
-              <span className="rounded bg-[#2450c8]/25 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-[#9eb6f5]">
+              <span className="mt-1.5 rounded bg-[#2450c8]/25 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-[#9eb6f5]">
                 HOME
               </span>
             </button>
@@ -231,12 +224,7 @@ export function MatchDetailsPage() {
               <span className="mt-2.5 block text-sm font-bold text-white group-hover:underline sm:text-base">
                 {away?.name ?? 'Away Team'}
               </span>
-              {goals.filter((goal) => goal.teamId === fixture.awayId).map((goal) => (
-                <span key={`${goal.playerId}-${goal.minute}`} className="text-[11px] text-white/55">
-                  {goal.minute}&apos; {goal.playerName}
-                </span>
-              ))}
-              <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-white/70">
+              <span className="mt-1.5 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-white/70">
                 AWAY
               </span>
             </button>
