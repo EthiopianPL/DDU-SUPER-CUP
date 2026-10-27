@@ -840,38 +840,38 @@ function EventTimeline({
 
   if (!rows.length) {
     return (
-      <p className="mx-auto max-w-sm py-4 text-center text-xs text-white/50">
+      <p className="mx-auto max-w-md py-6 text-center text-sm text-white/50">
         No goals, cards, or substitutions yet.
       </p>
     );
   }
 
   return (
-    <ol className="relative mx-auto max-w-sm space-y-1.5 py-1">
-      <span className="absolute bottom-1 left-1/2 top-1 w-px -translate-x-1/2 bg-white/15" aria-hidden="true" />
+    <ol className="relative mx-auto max-w-md space-y-2.5 py-2">
+      <span className="absolute bottom-1.5 left-1/2 top-1.5 w-px -translate-x-1/2 bg-white/20" aria-hidden="true" />
       {rows.map((row) => {
         const home = row.teamId === homeId;
         return (
-          <li key={row.key} className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+          <li key={row.key} className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
             <div className="min-w-0 flex items-center justify-end">
               {home && (
                 <div
                   title={row.extra ? `${row.title} · ${row.extra}` : row.title}
-                  className="flex items-center gap-1.5 truncate text-xs font-semibold text-white/90"
+                  className="flex items-center gap-2 truncate text-sm font-semibold text-white transition-opacity hover:opacity-80"
                 >
                   <span className="truncate">{row.name}</span>
                   <EventMark kind={row.kind} />
                 </div>
               )}
             </div>
-            <span className="relative z-10 flex h-5 min-w-6 items-center justify-center rounded-full bg-[#0c1424] px-1 font-mono text-[10px] font-bold text-[#f5c518] shadow-sm">
+            <span className="relative z-10 flex h-6 min-w-7 items-center justify-center rounded-full border border-white/15 bg-[#0c1424] px-1.5 font-mono text-[11px] font-bold text-[#f5c518] shadow-md">
               {row.minute}&apos;
             </span>
             <div className="min-w-0 flex items-center justify-start">
               {!home && (
                 <div
                   title={row.extra ? `${row.title} · ${row.extra}` : row.title}
-                  className="flex items-center gap-1.5 truncate text-xs font-semibold text-white/90"
+                  className="flex items-center gap-2 truncate text-sm font-semibold text-white transition-opacity hover:opacity-80"
                 >
                   <EventMark kind={row.kind} />
                   <span className="truncate">{row.name}</span>
@@ -889,7 +889,7 @@ function EventMark({ kind }: { kind: string }) {
   if (kind === 'yellow') {
     return (
       <span
-        className="inline-block h-3 w-2 shrink-0 rounded-[1.5px] bg-[#f5c518] shadow-[0_1px_2px_rgba(0,0,0,0.8)] ring-1 ring-black/40"
+        className="inline-block h-3.5 w-2.5 shrink-0 rounded-[1.5px] bg-[#f5c518] shadow-[0_1px_2px_rgba(0,0,0,0.8)] ring-1 ring-black/40"
         title="Yellow card"
         aria-label="Yellow card"
       />
@@ -898,7 +898,7 @@ function EventMark({ kind }: { kind: string }) {
   if (kind === 'red') {
     return (
       <span
-        className="inline-block h-3 w-2 shrink-0 rounded-[1.5px] bg-[#e11d48] shadow-[0_1px_2px_rgba(0,0,0,0.8)] ring-1 ring-black/40"
+        className="inline-block h-3.5 w-2.5 shrink-0 rounded-[1.5px] bg-[#e11d48] shadow-[0_1px_2px_rgba(0,0,0,0.8)] ring-1 ring-black/40"
         title="Red card"
         aria-label="Red card"
       />
@@ -906,16 +906,16 @@ function EventMark({ kind }: { kind: string }) {
   }
   if (kind === 'sub') {
     return (
-      <span className="inline-flex shrink-0 items-center" aria-label="Substitution">
-        <ArrowUp className="h-3 w-3 text-[#1f9d55]" strokeWidth={3} />
-        <ArrowDown className="-ml-1 h-3 w-3 text-[#e11d48]" strokeWidth={3} />
+      <span className="inline-flex shrink-0 items-center" aria-label="Substitution" title="Substitution">
+        <ArrowUp className="h-3.5 w-3.5 text-[#1f9d55]" strokeWidth={3} />
+        <ArrowDown className="-ml-1 h-3.5 w-3.5 text-[#e11d48]" strokeWidth={3} />
       </span>
     );
   }
   return (
     <svg
       viewBox="0 0 24 24"
-      className="h-3 w-3 shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+      className="h-3.5 w-3.5 shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
       fill="none"
       aria-label="Goal"
     >
