@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router';
 import { ChevronRight, Flame, Calendar, Newspaper } from 'lucide-react';
 import { MatchCard } from '../components/MatchCard';
-import { cardTeam, fixtures, getTournamentTodayString, topScorers, sortFixturesByPriority } from '../../data/supercup';
+import { cardTeam, competitionName, fixtures, getTournamentTodayString, latestResults, topScorers, sortFixturesByPriority } from '../../data/supercup';
 import { newsArticles } from '../../data/news';
 import { useLeagueVersion } from '../../data/live';
 import { DepartmentMark } from '../components/DepartmentMark';
@@ -16,6 +16,7 @@ export function HomePage() {
     fixtures.filter((fixture) => fixture.status === 'upcoming' && fixture.date === today),
   );
   const leader = topScorers(1)[0];
+  const results = latestResults(2);
   const stories = [...newsArticles].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)).slice(0, 2);
 
   return (
@@ -54,6 +55,29 @@ export function HomePage() {
           {!live.length && <p className="rounded-2xl border border-white/10 bg-[#10192b] px-4 py-6 text-sm text-white/50">No games are live.</p>}
         </div>
       </section>
+
+      {results.length > 0 && (
+        <section className="mb-6">
+          <h2 className="mb-3 text-lg font-black tracking-wide text-white">Latest results</h2>
+          <div className="space-y-3">
+            {results.map((fixture) => (
+              <MatchCard
+                key={fixture.id}
+                id={fixture.id}
+                homeTeam={cardTeam(fixture.homeId)}
+                awayTeam={cardTeam(fixture.awayId)}
+                homeScore={fixture.homeScore}
+                awayScore={fixture.awayScore}
+                status="finished"
+                stadium={fixture.stadium}
+                showDate
+                date={fixture.date}
+                competition={competitionName}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {leader?.department && (
         <button

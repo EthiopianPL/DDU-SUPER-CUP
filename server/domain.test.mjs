@@ -122,7 +122,34 @@ test('match events, permissions, clock, and standings stay consistent', async ()
     assert.equal(own.status, 200, own.data.error);
     version = own.data.snapshot.matches.find((match) => match.id === matchId).version;
     assert.equal(own.data.snapshot.matches.find((match) => match.id === matchId).homeScore, 2);
+    assert.equal(own.data.snapshot.matches.find((match) => match.id === matchId).awayScore, 0);
+    const ownEvent = own.data.snapshot.events.find((event) => event.matchId === matchId && event.type === 'goal' && event.goalType === 'own_goal' && !event.voided);
+    assert.equal(ownEvent.creditedTeamId, 'software-engineering');
+    assert.equal(ownEvent.teamId, 'computer-science');
+    assert.equal(ownEvent.assistId, null);
     assert.equal(own.data.snapshot.players.find((player) => player.id === awayStarter.playerId).goals, beforeOwn);
+    assert.equal(own.data.snapshot.players.find((player) => player.id === awayStarter.playerId).ownGoals, 1);
+    version = own.data.snapshot.matches.find((match) => match.id === matchId).version;
+    const penalty = await call(`/api/matches/${matchId}/events`, {
+      method: 'POST',
+      cookie: admin,
+      body: { type: 'goal', side: 'away', playerId: awayStarter.playerId, goalType: 'penalty', clientKey: 'pen-1', version },
+    });
+    assert.equal(penalty.status, 200, penalty.data.error);
+    const penaltyEvent = penalty.data.snapshot.events.find((event) => event.matchId === matchId && event.type === 'goal' && event.goalType === 'penalty' && !event.voided);
+    assert.equal(penaltyEvent.goalType, 'penalty');
+    assert.equal(penalty.data.snapshot.matches.find((match) => match.id === matchId).awayScore, 1);
+    assert.equal(penalty.data.snapshot.players.find((player) => player.id === awayStarter.playerId).goals, beforeOwn + 1);
+    version = penalty.data.snapshot.matches.find((match) => match.id === matchId).version;
+    const voidPenalty = await call(`/api/matches/${matchId}/events/${penalty.data.id}/void`, {
+      method: 'POST',
+      cookie: admin,
+      body: { reason: 'Penalty check', version },
+    });
+    assert.equal(voidPenalty.status, 200, voidPenalty.data.error);
+    assert.equal(voidPenalty.data.snapshot.matches.find((match) => match.id === matchId).awayScore, 0);
+    assert.equal(voidPenalty.data.snapshot.players.find((player) => player.id === awayStarter.playerId).goals, beforeOwn);
+    version = voidPenalty.data.snapshot.matches.find((match) => match.id === matchId).version;
 
     const missed = await call(`/api/matches/${matchId}/events`, {
       method: 'POST',
@@ -246,6 +273,10 @@ test('match events, permissions, clock, and standings stay consistent', async ()
     const secondHalf = await call(`/api/matches/${matchId}/clock`, { method: 'POST', cookie: admin, body: { action: 'second_half', version } });
     assert.equal(secondHalf.status, 200, secondHalf.data.error);
     version = secondHalf.data.snapshot.matches.find((match) => match.id === matchId).version;
+    const firstHalfGoals = secondHalf.data.snapshot.events.filter((event) => event.matchId === matchId && event.type === 'goal' && !event.voided && event.period === 'first_half');
+    assert.equal(firstHalfGoals.length, 1);
+    assert.equal(firstHalfGoals.filter((event) => event.creditedTeamId === 'software-engineering').length, 1);
+    assert.equal(firstHalfGoals.filter((event) => event.creditedTeamId === 'computer-science').length, 0);
     const deep = await call(`/api/matches/${matchId}/clock`, {
       method: 'POST',
       cookie: admin,
@@ -265,6 +296,8 @@ test('match events, permissions, clock, and standings stay consistent', async ()
       body: { type: 'goal', side: 'home', playerId: homeAssist.playerId, goalType: 'open_play', minute: 93, clientKey: 'late-2', version },
     });
     assert.equal(lateSecond.status, 200, lateSecond.data.error);
+    const stillFirstHalf = lateSecond.data.snapshot.events.filter((event) => event.matchId === matchId && event.type === 'goal' && !event.voided && event.period === 'first_half');
+    assert.equal(stillFirstHalf.length, 1);
     const secondStoppage = lateSecond.data.snapshot.events.find((event) => event.matchId === matchId && !event.voided && event.type === 'goal' && event.addedMinute === 3);
     assert.equal(secondStoppage.minute, 90);
     version = lateSecond.data.snapshot.matches.find((match) => match.id === matchId).version;
@@ -291,6 +324,8 @@ test('match events, permissions, clock, and standings stay consistent', async ()
     version = fresh.data.matches.find((match) => match.id === matchId).version;
     const ended = await call(`/api/matches/${matchId}/clock`, { method: 'POST', cookie: admin, body: { action: 'full_time', version } });
     assert.equal(ended.data.snapshot.matches.find((match) => match.id === matchId).confirmed, false);
+    const finishedAt = ended.data.snapshot.matches.find((match) => match.id === matchId).finishedAt;
+    assert.ok(finishedAt);
     assert.equal(groupPoints(ended.data.snapshot.matches, 'software-engineering'), before);
     const lockedEdit = await call(`/api/matches/${matchId}/events`, {
       method: 'POST',
@@ -301,6 +336,7 @@ test('match events, permissions, clock, and standings stay consistent', async ()
     version = ended.data.snapshot.matches.find((match) => match.id === matchId).version;
     const confirmed = await call(`/api/matches/${matchId}/clock`, { method: 'POST', cookie: admin, body: { action: 'confirm', version } });
     assert.equal(confirmed.status, 200, confirmed.data.error);
+    assert.equal(confirmed.data.snapshot.matches.find((match) => match.id === matchId).finishedAt, finishedAt);
     assert.equal(groupPoints(confirmed.data.snapshot.matches, 'software-engineering'), before + 3);
 
     const audit = await call('/api/audit', { cookie: admin });

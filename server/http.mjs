@@ -15,6 +15,7 @@ import {
   createUser,
   currentRevision,
   deleteNews,
+  ensureFinishedStamps,
   ensureNewsStamps,
   deleteTeam,
   listAudit,
@@ -385,10 +386,12 @@ export function prepareDatabase(db) {
   if (process.env.DDU_DEMO === '1' && db.dialect !== 'postgres') {
     return loadLeagueSource().then((league) => {
       seedDatabase(db, league, password);
+      ensureFinishedStamps(db);
     });
   }
   seedDatabase(db, null, password);
   ensureNewsStamps(db);
+  ensureFinishedStamps(db);
   return Promise.resolve();
 }
 

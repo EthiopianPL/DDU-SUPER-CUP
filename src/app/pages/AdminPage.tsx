@@ -534,7 +534,7 @@ function AddedTime({ period, announced, disabled, onSave }: { period?: string; a
     <form className="mt-3 flex items-end gap-2" onSubmit={(event) => {
       event.preventDefault();
       const minutes = Number(value);
-      if (!Number.isInteger(minutes) || minutes < 0 || minutes > 15) return;
+      if (!Number.isInteger(minutes) || minutes < 0 || minutes > 30) return;
       onSave(minutes);
     }}>
       <label className="text-xs font-bold text-white/45">{label}
@@ -744,6 +744,13 @@ function spread(count: number) {
   return Array.from({ length: count }, (_, index) => inset + ((100 - inset * 2) * index) / (count - 1));
 }
 
+const goalTypes = [
+  { id: 'open_play', label: 'Normal goal' },
+  { id: 'penalty', label: 'Penalty goal' },
+  { id: 'free_kick', label: 'Direct free-kick goal' },
+  { id: 'own_goal', label: 'Own goal' },
+];
+
 function GoalCorrect({
   event,
   matchId,
@@ -763,6 +770,7 @@ function GoalCorrect({
   const [assistId, setAssistId] = useState(event.assistId || '');
   const [minute, setMinute] = useState(String(event.minute));
   const [addedMinute, setAddedMinute] = useState(String(event.addedMinute || 0));
+  const [detail, setDetail] = useState(event.detail || '');
   if (!fixture) return null;
   const credited = side === 'home' ? fixture.homeId : fixture.awayId;
   const scorerTeam = goalType === 'own_goal' ? (side === 'home' ? fixture.awayId : fixture.homeId) : credited;
@@ -772,14 +780,16 @@ function GoalCorrect({
   return (
     <form className="mt-2 grid w-full grid-cols-2 gap-2" onSubmit={(submit) => {
       submit.preventDefault();
-      onSave({ side, goalType, playerId, assistId: goalType === 'own_goal' ? '' : assistId, minute: Number(minute), addedMinute: Number(addedMinute) });
+      onSave({ side, goalType, playerId, assistId: goalType === 'own_goal' ? '' : assistId, minute: Number(minute), addedMinute: Number(addedMinute), detail });
     }}>
-      <Select label="Team" value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={sidesOf(fixture)} />
-      <Select label="Type" value={goalType} onChange={setGoalType} options={[{ id: 'open_play', label: 'Open play' }, { id: 'penalty', label: 'Penalty' }, { id: 'free_kick', label: 'Free kick' }, { id: 'own_goal', label: 'Own goal' }]} />
-      <Select label="Scorer" value={playerId} onChange={setPlayerId} options={scorers.map((id) => ({ id, label: playerName(id) }))} />
+      <Select label={goalType === 'own_goal' ? 'Team credited' : 'Team'} value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={sidesOf(fixture)} />
+      <Select label="Type" value={goalType} onChange={setGoalType} options={goalTypes} />
+      <Select label={goalType === 'own_goal' ? 'Own-goal scorer' : 'Scorer'} value={playerId} onChange={setPlayerId} options={scorers.map((id) => ({ id, label: playerName(id) }))} />
       {goalType !== 'own_goal' && <Select label="Assist" value={assistId} onChange={setAssistId} options={[{ id: '', label: 'No assist' }, ...assisters.map((id) => ({ id, label: playerName(id) }))]} />}
       <label className="text-xs font-bold text-white/45">Minute<input className={inputClass} value={minute} onChange={(input) => setMinute(input.target.value)} /></label>
       <label className="text-xs font-bold text-white/45">Added<input className={inputClass} value={addedMinute} onChange={(input) => setAddedMinute(input.target.value)} /></label>
+      <label className="col-span-2 text-xs font-bold text-white/45">Note<input className={inputClass} value={detail} onChange={(input) => setDetail(input.target.value)} /></label>
+      {goalType === 'own_goal' && <p className="col-span-2 text-xs font-semibold text-[#f5c518]">The selected team receives the goal. The scorer is on the other team, and no assist is recorded.</p>}
       <button type="submit" disabled={disabled || !playerId} className="col-span-2 rounded-xl bg-[#f5c518] px-3 py-2 text-sm font-black text-[#102018] disabled:opacity-40">Save correction</button>
     </form>
   );
@@ -868,6 +878,7 @@ function GoalForm({ matchId, disabled, onSubmit, bare = false }: { matchId: stri
   const [assistId, setAssistId] = useState('');
   const [minute, setMinute] = useState(String(clock?.minute ?? fixture?.minute ?? 0));
   const [addedMinute, setAddedMinute] = useState('0');
+  const [detail, setDetail] = useState('');
   const minuteTouched = useRef(false);
   const addedTouched = useRef(false);
   useEffect(() => {
@@ -883,16 +894,18 @@ function GoalForm({ matchId, disabled, onSubmit, bare = false }: { matchId: stri
   return (
     <form className={bare ? '' : 'rounded-2xl border border-white/10 bg-[#10192b] p-4'} onSubmit={(event) => {
       event.preventDefault();
-      onSubmit({ type: 'goal', side, goalType, playerId, assistId: goalType === 'own_goal' ? '' : assistId, minute: Number(minute), addedMinute: Number(addedMinute), clientKey: crypto.randomUUID() });
+      onSubmit({ type: 'goal', side, goalType, playerId, assistId: goalType === 'own_goal' ? '' : assistId, minute: Number(minute), addedMinute: Number(addedMinute), detail, clientKey: crypto.randomUUID() });
     }}>
       {!bare && <h2 className="font-black">Goal</h2>}
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <Select label="Team" value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={sidesOf(fixture)} />
-        <Select label="Type" value={goalType} onChange={setGoalType} options={[{ id: 'open_play', label: 'Open play' }, { id: 'penalty', label: 'Penalty' }, { id: 'free_kick', label: 'Free kick' }, { id: 'own_goal', label: 'Own goal' }]} />
-        <Select label="Scorer" value={playerId} onChange={setPlayerId} options={[{ id: '', label: 'Choose' }, ...scorers.map((id) => ({ id, label: playerName(id) }))]} />
+        <Select label={goalType === 'own_goal' ? 'Team credited' : 'Team'} value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={sidesOf(fixture)} />
+        <Select label="Type" value={goalType} onChange={setGoalType} options={goalTypes} />
+        <Select label={goalType === 'own_goal' ? 'Own-goal scorer' : 'Scorer'} value={playerId} onChange={setPlayerId} options={[{ id: '', label: 'Choose' }, ...scorers.map((id) => ({ id, label: playerName(id) }))]} />
         {goalType !== 'own_goal' && <Select label="Assist (optional)" value={assistId} onChange={setAssistId} options={[{ id: '', label: 'No assist' }, ...assisters.map((id) => ({ id, label: playerName(id) }))]} />}
         <label className="text-xs font-bold text-white/45">Minute<input className={inputClass} value={minute} onChange={(event) => { minuteTouched.current = true; setMinute(event.target.value); }} /></label>
         <label className="text-xs font-bold text-white/45">Added minute<input className={inputClass} value={addedMinute} onChange={(event) => { addedTouched.current = true; setAddedMinute(event.target.value); }} /></label>
+        <label className="col-span-2 text-xs font-bold text-white/45">Note<input className={inputClass} value={detail} onChange={(event) => setDetail(event.target.value)} /></label>
+        {goalType === 'own_goal' && <p className="col-span-2 text-xs font-semibold text-[#f5c518]">The selected team receives the goal. The scorer is on the other team, and no assist is recorded.</p>}
       </div>
       <button type="submit" disabled={disabled || !playerId} className="mt-3 rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018] disabled:opacity-40">Record goal</button>
     </form>
@@ -995,7 +1008,11 @@ function historyLine(event: (typeof matchEvents)[number]) {
   const stamp = `${event.minute}${event.addedMinute ? `+${event.addedMinute}` : ''}'`;
   const team = getDepartment(event.creditedTeamId || event.teamId || '')?.name;
   const who = team ? `${team} · ` : '';
-  if (event.type === 'goal') return `${stamp} Goal · ${who}${event.playerName}${event.assistName ? ` (assist ${event.assistName})` : ''}`;
+  if (event.type === 'goal') {
+    const kind = event.goalType === 'penalty' ? 'Penalty goal' : event.goalType === 'own_goal' ? 'Own goal' : event.goalType === 'free_kick' ? 'Direct free kick' : 'Goal';
+    const assist = event.goalType === 'own_goal' || !event.assistName ? '' : ` (assist ${event.assistName})`;
+    return `${stamp} ${kind} · ${who}${event.playerName}${assist}`;
+  }
   if (event.type === 'card') return `${stamp} ${event.cardType === 'yellow' ? 'Yellow card' : 'Red card'} · ${who}${event.playerName}`;
   if (event.type === 'substitution') return `${stamp} Substitution · ${who}${event.playerName} off, ${event.relatedName} on`;
   if (event.type === 'added_time') return `${stamp} Added time +${event.addedMinute}`;
@@ -1237,7 +1254,7 @@ function PlayerAdmin({ onMessage, onError }: { onMessage: (text: string) => void
           <li key={player.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#10192b] px-3 py-2.5 text-sm">
             <span className="flex min-w-0 items-center gap-3"><Portrait name={player.name} src={player.photoUrl || undefined} size={40} /><span className="min-w-0"><span className="block truncate font-bold">{player.number} {player.name}</span><span className="block text-xs text-white/40">{player.position}</span></span></span>
             <span className="flex items-center gap-3 text-white/40">
-              <span>{player.goals}G {player.assists}A {player.yellowCards ?? 0}Y {player.redCards ?? 0}R · {player.appearances ?? 0} apps</span>
+              <span>{player.goals}G {player.assists}A {player.ownGoals ? `${player.ownGoals} OG ` : ''}{player.yellowCards ?? 0}Y {player.redCards ?? 0}R · {player.appearances ?? 0} apps</span>
               <select
                 className="rounded-lg bg-[#0c1424] px-2 py-1 text-xs text-white"
                 value={player.departmentId}

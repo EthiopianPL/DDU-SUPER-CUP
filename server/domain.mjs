@@ -174,8 +174,8 @@ function periodEndMinute(match) {
   return null;
 }
 
-function splitPlayedMinute(match, minute, addedMinute) {
-  const end = periodEndMinute(match);
+function splitPlayedMinute(match, minute, addedMinute, period = match.period) {
+  const end = periodEndMinute({ ...match, period });
   const at = Number(minute) || 0;
   const added = Number(addedMinute) || 0;
   if (end == null) return { minute: at, addedMinute: added };
@@ -348,11 +348,16 @@ function publicPlayer(player, stats) {
     photoUrl: player.photo_url,
     goals: stats.goals,
     assists: stats.assists,
+    ownGoals: stats.ownGoals,
     yellowCards: stats.yellowCards,
     redCards: stats.redCards,
     appearances: stats.appearances,
     starts: stats.starts,
   };
+}
+
+export function ensureFinishedStamps(db) {
+  db.prepare(`UPDATE matches SET finished_at = updated_at WHERE status = 'finished' AND finished_at IS NULL`).run();
 }
 
 export function ensureNewsStamps(db) {
@@ -375,11 +380,14 @@ export function buildSnapshot(db, now = Date.now()) {
   const news = db.prepare('SELECT * FROM news ORDER BY created_at DESC, id DESC').all();
   const names = new Map(players.map((player) => [player.id, player.name]));
 
-  const tally = new Map(players.map((player) => [player.id, { goals: 0, assists: 0, yellowCards: 0, redCards: 0, appearances: 0, starts: 0 }]));
+  const tally = new Map(players.map((player) => [player.id, { goals: 0, assists: 0, ownGoals: 0, yellowCards: 0, redCards: 0, appearances: 0, starts: 0 }]));
   for (const event of events) {
     if (event.voided) continue;
     if (event.type === 'goal' && event.counts_for_score && event.goal_type !== 'own_goal' && tally.has(event.player_id)) {
       tally.get(event.player_id).goals += 1;
+    }
+    if (event.type === 'goal' && event.counts_for_score && event.goal_type === 'own_goal' && tally.has(event.player_id)) {
+      tally.get(event.player_id).ownGoals += 1;
     }
     if (event.type === 'goal' && event.counts_for_score && event.assist_id && tally.has(event.assist_id)) {
       tally.get(event.assist_id).assists += 1;
@@ -453,6 +461,7 @@ export function buildSnapshot(db, now = Date.now()) {
       stage: match.stage || 'group',
       slot: Number(match.slot) || 0,
       version: match.version,
+      finishedAt: match.finished_at == null ? null : Number(match.finished_at),
       updatedAt: match.updated_at,
     })),
     events: events.map((event) => ({
@@ -1167,7 +1176,8 @@ export function correctEvent(db, actor, matchId, eventId, input) {
     if (!event || event.voided) throw new RuleError('Event not found.', 404);
     const before = { ...event };
     if (event.type === 'goal') {
-      const minute = Number(input.minute ?? event.minute);
+      const stamped = splitPlayedMinute(match, Number(input.minute ?? event.minute), Number(input.addedMinute ?? event.added_minute) || 0, event.period);
+      const minute = stamped.minute;
       const goalType = String(input.goalType ?? event.goal_type);
       if (!GOAL_TYPES.has(goalType)) throw new RuleError('Choose a goal type.');
       const creditedTeamId = input.side ? sideTeam(match, input.side) : event.credited_team_id;
@@ -1181,7 +1191,7 @@ export function correctEvent(db, actor, matchId, eventId, input) {
         onPitch(db, match, assistId, creditedTeamId, event.id);
       }
       db.prepare(`UPDATE match_events SET team_id=?, credited_team_id=?, player_id=?, assist_id=?, minute=?, added_minute=?, goal_type=?, detail=? WHERE id=?`).run(
-        scorerTeamId, creditedTeamId, playerId, assistId, minute, Number(input.addedMinute ?? event.added_minute), goalType, String(input.detail ?? event.detail), event.id,
+        scorerTeamId, creditedTeamId, playerId, assistId, minute, stamped.addedMinute, goalType, String(input.detail ?? event.detail), event.id,
       );
     } else if (event.type === 'card' || event.type === 'substitution') {
       db.prepare('UPDATE match_events SET minute=?, added_minute=?, detail=? WHERE id=?').run(
@@ -1356,8 +1366,8 @@ export function controlMatch(db, actor, matchId, input) {
       throw new RuleError('Unknown clock action.');
     }
 
-    db.prepare(`UPDATE matches SET status=?, period=?, elapsed_ms=?, running_since=?, added_ms=?, confirmed=?, version=version+1, updated_at=? WHERE id=?`).run(
-      patch.status, patch.period, Math.round(patch.elapsed_ms), patch.running_since, patch.added_ms, patch.confirmed ? 1 : 0, now, matchId,
+    db.prepare(`UPDATE matches SET status=?, period=?, elapsed_ms=?, running_since=?, added_ms=?, confirmed=?, finished_at=COALESCE(finished_at, ?), version=version+1, updated_at=? WHERE id=?`).run(
+      patch.status, patch.period, Math.round(patch.elapsed_ms), patch.running_since, patch.added_ms, patch.confirmed ? 1 : 0, action === 'full_time' ? now : null, now, matchId,
     );
     audit(db, actor, `clock.${action}`, 'match', matchId, { status: match.status, period: match.period, elapsed: match.elapsed_ms }, patch);
     return { id: matchId, status: patch.status, period: patch.period };
