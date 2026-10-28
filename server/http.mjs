@@ -1,9 +1,9 @@
 import { createServer } from 'node:http';
 import { createReadStream, existsSync, mkdtempSync } from 'node:fs';
-import { extname, join, normalize } from 'node:path';
+import { extname, join, normalize, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { can, newToken, verifyPassword } from './auth.mjs';
+import { can, hashPassword, newToken, verifyPassword } from './auth.mjs';
 import { openDatabase } from './db.mjs';
 import {
   buildSnapshot,
@@ -40,7 +40,21 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const uploads = process.env.VERCEL ? join(tmpdir(), 'ddu-uploads') : join(root, 'data', 'uploads');
 const clients = new Set();
 const loginAttempts = new Map();
+const LIVE_CLIENT_LIMIT = 400;
+const JSON_LIMIT = 2_500_000;
+const SNAPSHOT_TTL = 2000;
+const DUMMY_PASSWORD = hashPassword('not-a-real-password');
+let snapshotCache = null;
+let snapshotFlight = null;
 let clockTimer = null;
+
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'Content-Security-Policy': "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+};
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -127,6 +141,11 @@ export function createApp(db) {
 }
 
 function serveEvents(request, response, db) {
+  if (clients.size >= LIVE_CLIENT_LIMIT) {
+    send(response, 503, { error: 'Too many live viewers. Try again shortly.' });
+    return;
+  }
+  applySecurity(response);
   response.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
@@ -143,7 +162,7 @@ async function serveApi(request, response, db, url) {
   const actor = actorFrom(db, request);
   const path = url.pathname;
   if (request.method === 'GET' && path === '/api/health') return send(response, 200, { ok: true, revision: currentRevision(), serverNow: Date.now() });
-  if (request.method === 'GET' && path === '/api/snapshot') return send(response, 200, buildSnapshot(db));
+  if (request.method === 'GET' && path === '/api/snapshot') return send(response, 200, await publicSnapshot(db));
   if (request.method === 'GET' && path === '/api/me') return send(response, 200, { user: actor ? publicUser(actor) : null });
   if (request.method === 'POST' && path === '/api/login') return login(request, response, db);
   if (!guardMutation(request, response)) return;
@@ -198,6 +217,7 @@ async function serveApi(request, response, db, url) {
 
 function mutate(response, db, work) {
   const result = withRevision(work);
+  snapshotCache = null;
   send(response, 200, { ok: true, ...result, snapshot: buildSnapshot(db) });
 }
 
@@ -220,31 +240,38 @@ function actorFrom(db, request) {
 
 async function login(request, response, db) {
   if (!guardMutation(request, response)) return;
-  const ip = request.socket.remoteAddress || 'local';
-  const attempt = loginAttempts.get(ip) ?? { count: 0, reset: Date.now() + 10 * 60 * 1000 };
-  if (Date.now() > attempt.reset) {
+  const now = Date.now();
+  if (loginAttempts.size > 500) {
+    for (const [key, value] of loginAttempts) {
+      if (now > value.reset) loginAttempts.delete(key);
+    }
+  }
+  const ip = clientAddress(request);
+  const attempt = loginAttempts.get(ip) ?? { count: 0, reset: now + 10 * 60 * 1000 };
+  if (now > attempt.reset) {
     attempt.count = 0;
-    attempt.reset = Date.now() + 10 * 60 * 1000;
+    attempt.reset = now + 10 * 60 * 1000;
   }
   if (attempt.count >= 8) return send(response, 429, { error: 'Too many sign-in attempts. Wait a few minutes.' });
   attempt.count += 1;
   loginAttempts.set(ip, attempt);
   const body = await readJson(request);
   const user = db.prepare('SELECT * FROM users WHERE username = ?').get(String(body.username ?? '').trim().toLowerCase());
-  if (!user || !verifyPassword(String(body.password ?? ''), user.password_hash)) {
-    return send(response, 401, { error: 'Those sign-in details are not valid.' });
-  }
+  const password = String(body.password ?? '');
+  const valid = user ? verifyPassword(password, user.password_hash) : false;
+  if (!user) verifyPassword(password, DUMMY_PASSWORD);
+  if (!valid) return send(response, 401, { error: 'Those sign-in details are not valid.' });
   loginAttempts.delete(ip);
   const token = newToken();
   db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)').run(token, user.id, Date.now() + 12 * 60 * 60 * 1000);
-  response.setHeader('Set-Cookie', sessionCookie(token, 12 * 60 * 60));
+  response.setHeader('Set-Cookie', sessionCookie(token, 12 * 60 * 60, request));
   send(response, 200, { user: publicUser(user) });
 }
 
 function logout(request, response, db) {
   const token = cookies(request).ddu_session;
   if (token) db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
-  response.setHeader('Set-Cookie', sessionCookie('', 0));
+  response.setHeader('Set-Cookie', sessionCookie('', 0, request));
   send(response, 200, { ok: true });
 }
 
@@ -257,9 +284,17 @@ function guardMutation(request, response) {
   return true;
 }
 
-function sessionCookie(token, maxAge) {
-  const secure = process.env.VERCEL ? '; Secure' : '';
-  return `ddu_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secure}`;
+function sessionCookie(token, maxAge, request) {
+  const https = Boolean(process.env.VERCEL) || request?.headers['x-forwarded-proto'] === 'https';
+  const secure = https ? '; Secure' : '';
+  return `ddu_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secure}`;
+}
+
+function clientAddress(request) {
+  const real = String(request.headers['x-real-ip'] ?? '').trim();
+  if (real) return real;
+  const forwarded = String(request.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
+  return forwarded || request.socket?.remoteAddress || 'local';
 }
 
 function cookies(request) {
@@ -271,12 +306,12 @@ function cookies(request) {
 }
 
 async function readJson(request) {
-  const chunks = [];
-  for await (const chunk of request) chunks.push(chunk);
-  if (!chunks.length) return {};
+  const buffer = await readRaw(request, JSON_LIMIT);
+  if (!buffer.length) return {};
   try {
-    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
-  } catch {
+    return JSON.parse(buffer.toString('utf8'));
+  } catch (error) {
+    if (error instanceof RuleError) throw error;
     throw new RuleError('The request body is not valid.');
   }
 }
@@ -305,6 +340,7 @@ function serveMedia(response, db, pathname) {
   const row = db.prepare('SELECT content_type, bytes FROM media WHERE id = ?').get(`${match[1]}/${decodeURIComponent(match[2])}`);
   const bytes = mediaBytes(row?.bytes);
   if (!bytes?.length) return send(response, 404, { error: 'Not found.' });
+  applySecurity(response);
   response.writeHead(200, {
     'Content-Type': row.content_type || 'application/octet-stream',
     'Cache-Control': 'public, max-age=86400',
@@ -329,17 +365,24 @@ function readRaw(request, limit) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
+    let failed = false;
     request.on('data', (chunk) => {
+      if (failed) return;
       size += chunk.length;
       if (size > limit) {
-        reject(new RuleError('That image is larger than 1.5 MB.'));
-        request.destroy();
+        failed = true;
+        request.pause();
+        reject(new RuleError('That request is too large.'));
         return;
       }
       chunks.push(chunk);
     });
-    request.on('end', () => resolve(Buffer.concat(chunks)));
-    request.on('error', reject);
+    request.on('end', () => {
+      if (!failed) resolve(Buffer.concat(chunks));
+    });
+    request.on('error', (error) => {
+      if (!failed) reject(error);
+    });
   });
 }
 
@@ -347,7 +390,8 @@ function serveUpload(response, pathname) {
   const relative = normalize(pathname.replace(/^\/uploads\//, ''));
   if (relative.startsWith('..') || relative.includes('\0')) return send(response, 404, { error: 'Not found.' });
   const file = join(uploads, relative);
-  if (!file.startsWith(uploads) || !existsSync(file)) return send(response, 404, { error: 'Not found.' });
+  if (!inside(uploads, file) || !existsSync(file)) return send(response, 404, { error: 'Not found.' });
+  applySecurity(response);
   response.writeHead(200, { 'Content-Type': TYPES[extname(file)] || 'application/octet-stream', 'Cache-Control': 'public, max-age=3600' });
   createReadStream(file).pipe(response);
 }
@@ -356,15 +400,43 @@ function serveStatic(response, pathname) {
   const dist = join(root, 'dist');
   const requested = pathname === '/' ? '/index.html' : pathname;
   const file = normalize(join(dist, requested));
-  const target = file.startsWith(dist) && existsSync(file) ? file : join(dist, 'index.html');
+  const target = inside(dist, file) && existsSync(file) ? file : join(dist, 'index.html');
   if (!existsSync(target)) return send(response, 404, { error: 'Build the site before starting it.' });
+  applySecurity(response);
   response.writeHead(200, { 'Content-Type': TYPES[extname(target)] || 'text/html; charset=utf-8' });
   createReadStream(target).pipe(response);
 }
 
 function send(response, status, body) {
+  applySecurity(response);
   response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   response.end(JSON.stringify(body));
+}
+
+function inside(rootDir, file) {
+  const root = rootDir.endsWith(sep) ? rootDir : `${rootDir}${sep}`;
+  return file === rootDir || file.startsWith(root);
+}
+
+function applySecurity(response) {
+  for (const [key, value] of Object.entries(SECURITY_HEADERS)) response.setHeader(key, value);
+}
+
+async function publicSnapshot(db) {
+  const now = Date.now();
+  if (snapshotCache && snapshotCache.revision === currentRevision() && now - snapshotCache.at < SNAPSHOT_TTL) {
+    return snapshotCache.body;
+  }
+  if (!snapshotFlight) {
+    snapshotFlight = Promise.resolve().then(() => {
+      const body = buildSnapshot(db);
+      snapshotCache = { at: Date.now(), revision: body.revision ?? currentRevision(), body };
+      return body;
+    }).finally(() => {
+      snapshotFlight = null;
+    });
+  }
+  return snapshotFlight;
 }
 
 export async function loadLeagueSource() {

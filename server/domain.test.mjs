@@ -42,6 +42,20 @@ test('match events, permissions, clock, and standings stay consistent', async ()
   try {
     const opened = await call('/api/snapshot');
     assert.equal(opened.status, 200);
+    const guarded = await fetch(`${base}/api/health`);
+    assert.equal(guarded.status, 200);
+    assert.equal(guarded.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(guarded.headers.get('x-frame-options'), 'DENY');
+    const oversized = await fetch(`${base}/api/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-DDU-Request': '1' },
+      body: 'x'.repeat(2_600_000),
+    });
+    assert.equal(oversized.status, 400);
+    const burstStarted = Date.now();
+    const burst = await Promise.all(Array.from({ length: 400 }, () => fetch(`${base}/api/health`)));
+    assert.ok(burst.every((item) => item.status === 200));
+    assert.ok(Date.now() - burstStarted < 15000);
     const live = opened.data.matches.find((match) => match.detail === 'live');
     assert.ok(live);
     assert.equal(live.homeScore, 1);
