@@ -513,6 +513,7 @@ export interface TimelineEvent {
   assistName?: string;
   detail?: string;
   addedMinute?: number;
+  period?: string;
 }
 
 const GOAL_MINUTES = [9, 18, 27, 36, 44, 52, 61, 70, 77, 84];
@@ -657,6 +658,7 @@ export interface MatchSheet {
 export interface Substitution {
   minute: number;
   addedMinute?: number;
+  period?: string;
   teamId: string;
   offId: string;
   onPlayer: Player;
@@ -801,6 +803,7 @@ export function matchTimeline(fixture: Fixture): TimelineEvent[] {
         return {
           minute: event.minute,
           addedMinute: event.addedMinute || undefined,
+          period: event.period,
           teamId: event.creditedTeamId || event.teamId || '',
           playerId: event.playerId || '',
           playerName: event.goalType === 'own_goal' ? `${event.playerName} (OG)` : event.playerName,
@@ -814,6 +817,7 @@ export function matchTimeline(fixture: Fixture): TimelineEvent[] {
         return {
           minute: event.minute,
           addedMinute: event.addedMinute || undefined,
+          period: event.period,
           teamId: event.teamId || '',
           playerId: event.playerId || '',
           playerName: event.playerName,
@@ -825,6 +829,7 @@ export function matchTimeline(fixture: Fixture): TimelineEvent[] {
         return {
           minute: event.minute,
           addedMinute: event.addedMinute || undefined,
+          period: event.period,
           teamId: event.teamId || '',
           playerId: event.playerId || '',
           playerName: `${event.playerName} for ${event.relatedName}`,
@@ -875,6 +880,7 @@ export function matchSubstitutions(fixture: Fixture): Substitution[] {
     .map((event) => ({
       minute: event.minute,
       addedMinute: event.addedMinute || undefined,
+      period: event.period,
       teamId: event.teamId || '',
       offId: event.playerId || '',
       onPlayer: players.find((player) => player.id === event.relatedPlayerId) ?? {
