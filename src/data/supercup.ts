@@ -514,6 +514,7 @@ export interface TimelineEvent {
   detail?: string;
   addedMinute?: number;
   period?: string;
+  cardType?: string | null;
 }
 
 const GOAL_MINUTES = [9, 18, 27, 36, 44, 52, 61, 70, 77, 84];
@@ -822,6 +823,7 @@ export function matchTimeline(fixture: Fixture): TimelineEvent[] {
           playerId: event.playerId || '',
           playerName: event.playerName,
           kind: event.cardType === 'yellow' ? 'yellow' as const : 'red' as const,
+          cardType: event.cardType,
           detail: event.detail,
         };
       }
