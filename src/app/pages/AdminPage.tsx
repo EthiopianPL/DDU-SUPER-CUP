@@ -465,7 +465,7 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
           onSave={(body) => act(`/api/matches/${id}`, body, 'PATCH')}
         />
       )}
-      {!finished && <LineupEditor matchId={id} disabled={busy || !canRun} onSave={(body) => act(`/api/matches/${id}/lineup`, body)} />}
+      {!finished && !live && <LineupEditor matchId={id} disabled={busy || !canRun} onSave={(body) => act(`/api/matches/${id}/lineup`, body)} />}
       {!finished && canRun && (
         <EventPicker
           matchId={id}
