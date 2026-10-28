@@ -248,6 +248,8 @@ export function MatchDetailsPage() {
               events={timeline}
               substitutions={substitutions}
               homeId={fixture.homeId}
+              reachedHalf={Boolean(fixture.period && fixture.period !== 'pre' && fixture.period !== 'first_half')}
+              halfMinute={Math.round((fixture.halfSeconds ?? 45 * 60) / 60)}
             />
           )}
         </section>
@@ -909,20 +911,30 @@ function KickoffClock({ date, time, detail, compact = false }: { date: string; t
   );
 }
 
+function afterHalf(period: string | undefined, minute: number, halfMinute: number) {
+  if (period === 'first_half' || period === 'pre' || period === 'halftime') return false;
+  return minute > halfMinute;
+}
+
 function EventTimeline({
   events,
   substitutions,
   homeId,
+  reachedHalf,
+  halfMinute,
 }: {
   events: TimelineEvent[];
   substitutions: ReturnType<typeof matchSubstitutions>;
   homeId: string;
+  reachedHalf: boolean;
+  halfMinute: number;
 }) {
   const rows = [
     ...events.filter((event) => event.kind === 'goal' || event.kind === 'yellow' || event.kind === 'red').map((event) => ({
       key: `${event.kind}-${event.playerId}-${event.minute}-${event.addedMinute ?? 0}-${event.assistId ?? ''}`,
       minute: event.minute,
       added: event.addedMinute ?? 0,
+      later: afterHalf(event.period, event.minute, halfMinute),
       teamId: event.teamId,
       kind: event.kind,
       title: event.kind === 'goal' ? 'Goal' : event.kind === 'yellow' ? 'Yellow card' : 'Red card',
@@ -935,6 +947,7 @@ function EventTimeline({
         key: `sub-${change.offId}-${change.onPlayer.id}-${change.minute}-${change.addedMinute ?? 0}`,
         minute: change.minute,
         added: change.addedMinute ?? 0,
+        later: afterHalf(change.period, change.minute, halfMinute),
         teamId: change.teamId,
         kind: 'sub' as const,
         title: 'Substitution',
@@ -942,9 +955,12 @@ function EventTimeline({
         extra: off ? `On for ${off.name}` : '',
       };
     }),
-  ].sort((a, b) => a.minute - b.minute || a.added - b.added || a.title.localeCompare(b.title));
+  ].sort((a, b) => Number(a.later) - Number(b.later) || a.minute - b.minute || a.added - b.added || a.title.localeCompare(b.title));
 
-  if (!rows.length) {
+  const first = rows.filter((row) => !row.later);
+  const second = rows.filter((row) => row.later);
+
+  if (!rows.length && !reachedHalf) {
     return (
       <p className="mx-auto max-w-md py-6 text-center text-sm text-white/50">
         No goals, cards, or substitutions yet.
@@ -952,41 +968,49 @@ function EventTimeline({
     );
   }
 
+  const renderRow = (row: (typeof rows)[number]) => {
+    const home = row.teamId === homeId;
+    return (
+      <li key={row.key} className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+        <div className="min-w-0 flex items-center justify-end">
+          {home && (
+            <div
+              title={row.extra ? `${row.title} · ${row.extra}` : row.title}
+              className="flex items-center gap-2 truncate text-sm font-semibold text-white transition-opacity hover:opacity-80"
+            >
+              <span className="truncate">{row.name}</span>
+              <EventMark kind={row.kind} />
+            </div>
+          )}
+        </div>
+        <span className="relative z-10 flex h-6 min-w-7 items-center justify-center rounded-full border border-white/15 bg-[#0c1424] px-1.5 font-mono text-[11px] font-bold text-[#f5c518] shadow-md">
+          {row.added ? `${row.minute}+${row.added}` : row.minute}&apos;
+        </span>
+        <div className="min-w-0 flex items-center justify-start">
+          {!home && (
+            <div
+              title={row.extra ? `${row.title} · ${row.extra}` : row.title}
+              className="flex items-center gap-2 truncate text-sm font-semibold text-white transition-opacity hover:opacity-80"
+            >
+              <EventMark kind={row.kind} />
+              <span className="truncate">{row.name}</span>
+            </div>
+          )}
+        </div>
+      </li>
+    );
+  };
+
   return (
     <ol className="relative mx-auto max-w-md space-y-2.5 py-2">
       <span className="absolute bottom-1.5 left-1/2 top-1.5 w-px -translate-x-1/2 bg-white/20" aria-hidden="true" />
-      {rows.map((row) => {
-        const home = row.teamId === homeId;
-        return (
-          <li key={row.key} className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
-            <div className="min-w-0 flex items-center justify-end">
-              {home && (
-                <div
-                  title={row.extra ? `${row.title} · ${row.extra}` : row.title}
-                  className="flex items-center gap-2 truncate text-sm font-semibold text-white transition-opacity hover:opacity-80"
-                >
-                  <span className="truncate">{row.name}</span>
-                  <EventMark kind={row.kind} />
-                </div>
-              )}
-            </div>
-            <span className="relative z-10 flex h-6 min-w-7 items-center justify-center rounded-full border border-white/15 bg-[#0c1424] px-1.5 font-mono text-[11px] font-bold text-[#f5c518] shadow-md">
-              {row.added ? `${row.minute}+${row.added}` : row.minute}&apos;
-            </span>
-            <div className="min-w-0 flex items-center justify-start">
-              {!home && (
-                <div
-                  title={row.extra ? `${row.title} · ${row.extra}` : row.title}
-                  className="flex items-center gap-2 truncate text-sm font-semibold text-white transition-opacity hover:opacity-80"
-                >
-                  <EventMark kind={row.kind} />
-                  <span className="truncate">{row.name}</span>
-                </div>
-              )}
-            </div>
-          </li>
-        );
-      })}
+      {first.map(renderRow)}
+      {reachedHalf && (
+        <li className="my-5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center">
+          <span className="relative z-10 col-start-2 rounded-full border border-white/20 bg-[#10192b] px-2.5 py-1 text-[10px] font-black tracking-[0.18em] text-white/75">HT</span>
+        </li>
+      )}
+      {second.map(renderRow)}
     </ol>
   );
 }
