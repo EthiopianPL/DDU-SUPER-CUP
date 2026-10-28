@@ -15,7 +15,7 @@ import {
 import { DepartmentMark } from '../components/DepartmentMark';
 import { RedCards } from '../components/RedCards';
 import { formationPlan } from '../../data/formation';
-import { useLeagueVersion } from '../../data/live';
+import { refreshLeague, useLeagueVersion } from '../../data/live';
 import { useMatchClock } from '../useMatchClock';
 import { GroupTable } from '../components/GroupTable';
 import {
@@ -56,6 +56,24 @@ export function MatchDetailsPage() {
   const fixture = id ? getFixture(id) : undefined;
   const clock = useMatchClock(fixture?.status === 'live' ? fixture.id : undefined);
   const version = useLeagueVersion();
+
+  useEffect(() => {
+    if (!id) return;
+    const pull = () => {
+      if (document.visibilityState === 'hidden') return;
+      refreshLeague().catch(() => {});
+    };
+    pull();
+    const timer = window.setInterval(pull, 3000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') pull();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [id]);
 
   // Unknown match ID handling
   if (!fixture) {
