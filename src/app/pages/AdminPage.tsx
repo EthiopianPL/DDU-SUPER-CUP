@@ -23,6 +23,7 @@ import { STAGE_OPTIONS, stageLabel, tieCount, type Stage } from '../../data/knoc
 
 type Role = 'super_admin' | 'match_admin' | 'competition_manager' | 'team_manager' | 'reader';
 type Section = 'overview' | 'matches' | 'teams' | 'players' | 'news' | 'users' | 'audit' | 'rules';
+type DeskTab = 'clock' | 'events' | 'lineup' | 'fixture';
 
 interface DeskUser {
   id: string;
@@ -112,7 +113,7 @@ export function AdminPage() {
         {section === 'overview' && <Overview version={version} onOpen={openMatch} />}
         {section === 'matches' && !matchId && <MatchList version={version} onOpen={openMatch} onMessage={setNotice} onError={setError} />}
         {section === 'matches' && matchId && (
-          <MatchDesk id={matchId} role={user.role} onClose={() => setMatchId(null)} onMessage={setNotice} onError={setError} />
+          <MatchDesk key={matchId} id={matchId} role={user.role} onClose={() => setMatchId(null)} onMessage={setNotice} onError={setError} />
         )}
         {section === 'teams' && <TeamAdmin onMessage={setNotice} onError={setError} />}
         {section === 'players' && <PlayerAdmin onMessage={setNotice} onError={setError} />}
@@ -387,6 +388,12 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<{ label: string; action: string } | null>(null);
   const [editingGoal, setEditingGoal] = useState<number | null>(null);
+  const [tab, setTab] = useState<DeskTab>(() => {
+    const current = getFixture(id);
+    if (!current || current.status === 'live' || (current.detail === 'finished' && current.confirmed)) return 'events';
+    if (current.detail === 'finished') return 'clock';
+    return 'lineup';
+  });
   void version;
   if (!fixture) return <p className="text-sm text-white/50">That match is no longer on the server.</p>;
   const home = getDepartment(fixture.homeId);
@@ -396,6 +403,12 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
   const canRun = role === 'super_admin' || role === 'match_admin' || role === 'competition_manager';
   const finished = fixture.detail === 'finished';
   const live = fixture.status === 'live' || fixture.detail === 'suspended';
+  const deskTabs: { id: DeskTab; label: string }[] = [
+    { id: 'clock', label: 'Clock' },
+    { id: 'events', label: 'Events' },
+  ];
+  if (!finished && !live) deskTabs.push({ id: 'lineup', label: 'Lineup' }, { id: 'fixture', label: 'Fixture' });
+  const activeTab = deskTabs.some((item) => item.id === tab) ? tab : deskTabs[0].id;
 
   const act = async (path: string, body: Record<string, unknown>, method = 'POST') => {
     setBusy(true);
@@ -428,45 +441,66 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
           <TeamBlock team={away} align="end" />
         </div>
         <p className="mt-3 text-center text-xs text-white/35">{fixture.stage && fixture.stage !== 'group' ? `${stageLabel(fixture.stage)} · Tie ${fixture.slot}` : `Group ${fixture.group} · MD${fixture.matchday}`} · {fixture.stadium} · {fixture.date} {fixture.time}{fixture.referee ? ` · Ref ${fixture.referee}` : ''}{fixture.confirmed ? ' · Confirmed' : ''}</p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {finished && <p className="w-full text-sm text-white/50">This match is finished. The score, lineup, and events stay as recorded.</p>}
-          {!finished && (fixture.detail === 'scheduled' || fixture.detail === 'postponed') ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'kickoff' })}>Kick off</Action> : null}
-          {!finished && clock?.running ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'pause' })}>Pause</Action> : null}
-          {!finished && fixture.status === 'live' && !clock?.running && fixture.period !== 'halftime' && fixture.period !== 'penalties' ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'resume' })}>Resume</Action> : null}
-          {!finished && fixture.period === 'first_half' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'halftime' })}>Half time</Action>}
-          {!finished && fixture.period === 'halftime' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'second_half' })}>Second half</Action>}
-          {!finished && (fixture.allowExtra || leagueRules.allowExtraTime) && fixture.period === 'second_half' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_first' })}>Extra time</Action>}
-          {!finished && fixture.period === 'extra_first' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_break' })}>Extra break</Action>}
-          {!finished && fixture.period === 'extra_break' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_second' })}>Second extra</Action>}
-          {!finished && fixture.allowExtra && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'penalties' })}>Penalties</Action>}
-          {!finished && fixture.status === 'live' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'suspend' })}>Suspend</Action>}
-          {!finished && fixture.detail === 'suspended' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'resume' })}>Resume match</Action>}
-          {!finished && ['scheduled', 'postponed', 'suspended'].includes(fixture.detail || '') && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'postpone' })}>Postpone</Action>}
-          {!finished && !fixture.confirmed && fixture.detail !== 'cancelled' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'Cancel this match?', action: 'cancel' })}>Cancel</Action>}
-          {!finished && fixture.status === 'live' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'Abandon this match? It will not count in the table.', action: 'abandon' })}>Abandon</Action>}
-          {!finished && fixture.status !== 'upcoming' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'End the match? The result stays unconfirmed until you confirm it.', action: 'full_time' })}>Full time</Action>}
-          {fixture.detail === 'finished' && !fixture.confirmed && canCorrect && <Action disabled={busy} onClick={() => setConfirm({ label: 'Confirm this result and add it to the table?', action: 'confirm' })}>Confirm result</Action>}
-        </div>
-        {confirm && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-white/5 px-3 py-2 text-sm">
-            <span>{confirm.label}</span>
-            <button type="button" disabled={busy} onClick={() => act(`/api/matches/${id}/clock`, { action: confirm.action })} className="rounded-lg bg-red-500 px-3 py-1.5 font-bold">Confirm</button>
-            <button type="button" onClick={() => setConfirm(null)} className="text-white/50">Back</button>
-          </div>
-        )}
-        {!finished && live && <AddedTime period={fixture.period} announced={clock?.added ?? Math.floor((fixture.addedSeconds ?? 0) / 60)} disabled={busy || !canRun} onSave={(minutes) => act(`/api/matches/${id}/events`, { type: 'added_time', addedMinute: minutes, clientKey: crypto.randomUUID() })} />}
-        {!finished && <ClockCorrection disabled={busy || !canRun} onSave={(seconds) => act(`/api/matches/${id}/clock`, { action: 'set_clock', seconds })} />}
+        {finished && <p className="mt-3 text-center text-sm text-white/50">This match is finished. The score, lineup, and events stay as recorded.</p>}
       </div>
 
-      {!finished && !live && (
+      <nav role="tablist" aria-label="Match desk" className={`mt-4 grid gap-1 rounded-2xl border border-white/10 bg-[#10192b] p-1.5 ${deskTabs.length > 2 ? 'grid-cols-4' : 'grid-cols-2'}`}>
+        {deskTabs.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === item.id}
+            onClick={() => setTab(item.id)}
+            className={`rounded-xl px-2 py-2.5 text-center text-xs font-bold sm:text-sm ${activeTab === item.id ? 'bg-[#f5c518] text-[#102018]' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
+
+      {activeTab === 'clock' && (
+        <section className="mt-4 rounded-2xl border border-white/10 bg-[#10192b] p-4" role="tabpanel">
+          <div className="flex flex-wrap gap-2">
+            {!finished && (fixture.detail === 'scheduled' || fixture.detail === 'postponed') ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'kickoff' })}>Kick off</Action> : null}
+            {!finished && clock?.running ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'pause' })}>Pause</Action> : null}
+            {!finished && fixture.status === 'live' && !clock?.running && fixture.period !== 'halftime' && fixture.period !== 'penalties' ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'resume' })}>Resume</Action> : null}
+            {!finished && fixture.period === 'first_half' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'halftime' })}>Half time</Action>}
+            {!finished && fixture.period === 'halftime' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'second_half' })}>Second half</Action>}
+            {!finished && (fixture.allowExtra || leagueRules.allowExtraTime) && fixture.period === 'second_half' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_first' })}>Extra time</Action>}
+            {!finished && fixture.period === 'extra_first' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_break' })}>Extra break</Action>}
+            {!finished && fixture.period === 'extra_break' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_second' })}>Second extra</Action>}
+            {!finished && fixture.allowExtra && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'penalties' })}>Penalties</Action>}
+            {!finished && fixture.status === 'live' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'suspend' })}>Suspend</Action>}
+            {!finished && fixture.detail === 'suspended' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'resume' })}>Resume match</Action>}
+            {!finished && ['scheduled', 'postponed', 'suspended'].includes(fixture.detail || '') && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'postpone' })}>Postpone</Action>}
+            {!finished && !fixture.confirmed && fixture.detail !== 'cancelled' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'Cancel this match?', action: 'cancel' })}>Cancel</Action>}
+            {!finished && fixture.status === 'live' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'Abandon this match? It will not count in the table.', action: 'abandon' })}>Abandon</Action>}
+            {!finished && fixture.status !== 'upcoming' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'End the match? The result stays unconfirmed until you confirm it.', action: 'full_time' })}>Full time</Action>}
+            {fixture.detail === 'finished' && !fixture.confirmed && canCorrect && <Action disabled={busy} onClick={() => setConfirm({ label: 'Confirm this result and add it to the table?', action: 'confirm' })}>Confirm result</Action>}
+          </div>
+          {confirm && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-white/5 px-3 py-2 text-sm">
+              <span>{confirm.label}</span>
+              <button type="button" disabled={busy} onClick={() => act(`/api/matches/${id}/clock`, { action: confirm.action })} className="rounded-lg bg-red-500 px-3 py-1.5 font-bold">Confirm</button>
+              <button type="button" onClick={() => setConfirm(null)} className="text-white/50">Back</button>
+            </div>
+          )}
+          {!finished && live && <AddedTime period={fixture.period} announced={clock?.added ?? Math.floor((fixture.addedSeconds ?? 0) / 60)} disabled={busy || !canRun} onSave={(minutes) => act(`/api/matches/${id}/events`, { type: 'added_time', addedMinute: minutes, clientKey: crypto.randomUUID() })} />}
+          {!finished && <ClockCorrection disabled={busy || !canRun} onSave={(seconds) => act(`/api/matches/${id}/clock`, { action: 'set_clock', seconds })} />}
+          {finished && fixture.confirmed && <p className="text-sm text-white/50">Nothing left to change on the clock.</p>}
+        </section>
+      )}
+
+      {activeTab === 'lineup' && !finished && !live && <LineupEditor matchId={id} disabled={busy || !canRun} onSave={(body) => act(`/api/matches/${id}/lineup`, body)} />}
+      {activeTab === 'fixture' && !finished && !live && (
         <FixtureMeta
           fixture={fixture}
           disabled={busy || !canRun}
           onSave={(body) => act(`/api/matches/${id}`, body, 'PATCH')}
         />
       )}
-      {!finished && !live && <LineupEditor matchId={id} disabled={busy || !canRun} onSave={(body) => act(`/api/matches/${id}/lineup`, body)} />}
-      {!finished && canRun && (
+      {activeTab === 'events' && !finished && canRun && (
         <EventPicker
           matchId={id}
           period={fixture.period}
@@ -475,7 +509,7 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
         />
       )}
 
-      <section className="mt-4 rounded-2xl border border-white/10 bg-[#10192b] p-4">
+      {activeTab === 'events' && <section className="mt-4 rounded-2xl border border-white/10 bg-[#10192b] p-4">
         <h2 className="font-black">Event history</h2>
         <ul className="mt-3 space-y-2">
           {events.filter(shownEvent).map((event) => (
@@ -503,7 +537,7 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
           ))}
           {!events.some(shownEvent) && <li className="text-sm text-white/40">No goals, cards, or substitutions yet.</li>}
         </ul>
-      </section>
+      </section>}
     </div>
   );
 }
