@@ -13,6 +13,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { DepartmentMark } from '../components/DepartmentMark';
+import { RedCards } from '../components/RedCards';
 import { formationPlan } from '../../data/formation';
 import { useLeagueVersion } from '../../data/live';
 import { useMatchClock } from '../useMatchClock';
@@ -29,6 +30,7 @@ import {
   matchSubstitutions,
   matchTimeline,
   periodText,
+  teamRedCards,
   players,
   type Player,
   type TimelineEvent,
@@ -84,8 +86,8 @@ export function MatchDetailsPage() {
   const isLive = fixture.status === 'live';
 
   const timeline = useMemo(() => matchTimeline(fixture), [fixture, version, clock?.minute, fixture.homeScore, fixture.awayScore, fixture.status]);
-  const homeReds = timeline.filter((event) => event.kind === 'red' && event.teamId === fixture.homeId).length;
-  const awayReds = timeline.filter((event) => event.kind === 'red' && event.teamId === fixture.awayId).length;
+  const homeReds = teamRedCards(fixture.id, fixture.homeId);
+  const awayReds = teamRedCards(fixture.id, fixture.awayId);
   const substitutions = useMemo(() => matchSubstitutions(fixture), [fixture, version, clock?.minute, fixture.status]);
   const homeSheet = useMemo(() => matchSheet(fixture.homeId, fixture.id), [fixture.homeId, fixture.id, version]);
   const awaySheet = useMemo(() => matchSheet(fixture.awayId, fixture.id), [fixture.awayId, fixture.id, version]);
@@ -1048,15 +1050,6 @@ function EventSide({
         </span>
       )}
     </div>
-  );
-}
-
-function RedCards({ count }: { count: number }) {
-  return (
-    <span className="inline-flex shrink-0 items-center gap-1" aria-label={`${count} red ${count === 1 ? 'card' : 'cards'}`}>
-      <span className="inline-block h-3.5 w-2.5 rounded-[1.5px] bg-[#e11d48] shadow-[0_1px_2px_rgba(0,0,0,0.8)] ring-1 ring-black/40" />
-      <span className="text-xs font-black text-[#e11d48]">{count}</span>
-    </span>
   );
 }
 

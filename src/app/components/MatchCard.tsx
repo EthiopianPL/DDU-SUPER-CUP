@@ -1,6 +1,9 @@
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { MapPin } from 'lucide-react';
-import { formatKickoff, formatLiveTime, getFixture } from '../../data/supercup';
+import { formatKickoff, formatLiveTime, getFixture, teamRedCards } from '../../data/supercup';
+import { useLeagueVersion } from '../../data/live';
+import { RedCards } from './RedCards';
 import { useMatchClock } from '../useMatchClock';
 
 interface Team {
@@ -58,7 +61,10 @@ export function MatchCard({
   injuryTime = 0,
 }: MatchCardProps) {
   const navigate = useNavigate();
+  const version = useLeagueVersion();
   const clock = useMatchClock(status === 'live' ? id : undefined);
+  const homeReds = useMemo(() => teamRedCards(id, String(homeTeam.id)), [id, homeTeam.id, version]);
+  const awayReds = useMemo(() => teamRedCards(id, String(awayTeam.id)), [id, awayTeam.id, version]);
   const liveMinute = clock?.minute ?? matchMinute;
 
   const fixture = getFixture(id);
@@ -101,11 +107,14 @@ export function MatchCard({
           {/* Circular Badge (40–48px) */}
           <TeamBadge team={homeTeam} />
           {/* Department Name Centered Directly Below */}
-          <span
-            className="mt-2 block max-w-[110px] sm:max-w-[150px] truncate text-xs font-bold leading-tight text-white group-hover:text-[#f5c518] sm:text-sm transition-colors"
-            title={homeTeam.name}
-          >
-            {homeTeam.name}
+          <span className="mt-2 inline-flex max-w-full items-center justify-center gap-1">
+            {homeReds > 0 && <RedCards count={homeReds} />}
+            <span
+              className="block max-w-[110px] truncate text-xs font-bold leading-tight text-white transition-colors group-hover:text-[#f5c518] sm:max-w-[150px] sm:text-sm"
+              title={homeTeam.name}
+            >
+              {homeTeam.name}
+            </span>
           </span>
         </div>
 
@@ -157,11 +166,14 @@ export function MatchCard({
           {/* Circular Badge (40–48px) */}
           <TeamBadge team={awayTeam} />
           {/* Department Name Centered Directly Below */}
-          <span
-            className="mt-2 block max-w-[110px] sm:max-w-[150px] truncate text-xs font-bold leading-tight text-white group-hover:text-[#f5c518] sm:text-sm transition-colors"
-            title={awayTeam.name}
-          >
-            {awayTeam.name}
+          <span className="mt-2 inline-flex max-w-full items-center justify-center gap-1">
+            <span
+              className="block max-w-[110px] truncate text-xs font-bold leading-tight text-white transition-colors group-hover:text-[#f5c518] sm:max-w-[150px] sm:text-sm"
+              title={awayTeam.name}
+            >
+              {awayTeam.name}
+            </span>
+            {awayReds > 0 && <RedCards count={awayReds} />}
           </span>
         </div>
       </div>

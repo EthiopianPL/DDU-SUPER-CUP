@@ -782,6 +782,16 @@ export function sampleTimeline(fixture: Fixture): TimelineEvent[] {
   return events.filter((event) => event.minute <= limit).sort((a, b) => a.minute - b.minute || a.playerName.localeCompare(b.playerName));
 }
 
+export function teamRedCards(matchId: string, teamId: string) {
+  return matchEvents.filter((event) =>
+    event.matchId === matchId
+    && !event.voided
+    && event.type === 'card'
+    && event.teamId === teamId
+    && event.cardType !== 'yellow'
+  ).length;
+}
+
 export function matchTimeline(fixture: Fixture): TimelineEvent[] {
   const labels: Record<string, string> = {
     penalty_awarded: 'Penalty awarded',
