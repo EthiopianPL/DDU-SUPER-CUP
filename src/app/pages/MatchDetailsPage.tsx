@@ -1008,10 +1008,11 @@ function EventTimeline({
         teamId: event.teamId,
         kind: event.kind,
         cardType: event.cardType,
+        goalType,
         title: event.kind === 'goal'
           ? goalType === 'penalty' ? 'Penalty' : goalType === 'own_goal' ? 'Own goal' : goalType === 'free_kick' ? 'Free kick' : 'Goal'
           : event.cardType === 'second_yellow' ? 'Second yellow, red card' : event.kind === 'yellow' ? 'Yellow card' : 'Red card',
-        name: event.kind === 'goal' && goalType === 'penalty' ? `${event.playerName} (P)` : event.playerName,
+        name: event.kind === 'goal' && goalType === 'penalty' ? `${event.playerName.replace(/ \(OG\)$/, '')} (P)` : event.playerName.replace(/ \(OG\)$/, ''),
         detail: bits.join(' · '),
       };
     }),
@@ -1025,6 +1026,7 @@ function EventTimeline({
         teamId: change.teamId,
         kind: 'sub' as const,
         cardType: null,
+        goalType: '',
         title: 'Substitution',
         name: change.onPlayer.name,
         detail: off?.name ?? '',
@@ -1055,13 +1057,13 @@ function EventTimeline({
     return (
       <li key={row.key} className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
         <div className="min-w-0 flex items-center justify-end">
-          {home && <EventSide home name={row.name} note={note} kind={row.kind} cardType={row.cardType} title={row.title} />}
+          {home && <EventSide home name={row.name} note={note} kind={row.kind} cardType={row.cardType} goalType={row.goalType} title={row.title} />}
         </div>
         <span className="relative z-10 flex h-6 min-w-7 items-center justify-center rounded-full border border-white/15 bg-[#0c1424] px-1.5 font-mono text-[11px] font-bold text-[#f5c518] shadow-md">
           {row.added ? `${row.minute}+${row.added}` : row.minute}&apos;
         </span>
         <div className="min-w-0 flex items-center justify-start">
-          {!home && <EventSide name={row.name} note={note} kind={row.kind} cardType={row.cardType} title={row.title} />}
+          {!home && <EventSide name={row.name} note={note} kind={row.kind} cardType={row.cardType} goalType={row.goalType} title={row.title} />}
         </div>
       </li>
     );
@@ -1098,6 +1100,7 @@ function EventSide({
   note,
   kind,
   cardType,
+  goalType,
   title,
 }: {
   home?: boolean;
@@ -1105,11 +1108,12 @@ function EventSide({
   note: string;
   kind: string;
   cardType?: string | null;
+  goalType?: string | null;
   title: string;
 }) {
   const mark = kind === 'sub'
     ? <ArrowUp className="h-3.5 w-3.5 shrink-0 text-[#1f9d55]" strokeWidth={3} aria-label="Player on" />
-    : <EventMark kind={kind} cardType={cardType} />;
+    : <EventMark kind={kind} cardType={cardType} goalType={goalType} />;
   const player = <span className="truncate text-sm font-semibold text-white">{name}</span>;
   return (
     <div title={note ? `${title} · ${note}` : title} className={`flex min-w-0 flex-col ${home ? 'items-end' : 'items-start'}`}>
@@ -1137,7 +1141,7 @@ function CardFace({ color, label }: { color: string; label: string }) {
   );
 }
 
-function EventMark({ kind, cardType }: { kind: string; cardType?: string | null }) {
+function EventMark({ kind, cardType, goalType }: { kind: string; cardType?: string | null; goalType?: string | null }) {
   if (kind === 'red' && cardType === 'second_yellow') {
     return (
       <span className="inline-flex shrink-0 items-center gap-0.5" aria-label="Second yellow, red card" title="Second yellow, red card">
@@ -1173,27 +1177,7 @@ function EventMark({ kind, cardType }: { kind: string; cardType?: string | null 
       </span>
     );
   }
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-3.5 w-3.5 shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
-      fill="none"
-      aria-label="Goal"
-    >
-      <circle cx="12" cy="12" r="10" fill="#ffffff" stroke="#102018" strokeWidth="1.2" />
-      <polygon points="12,7.2 16.5,10.5 14.8,15.8 9.2,15.8 7.5,10.5" fill="#102018" />
-      <line x1="12" y1="7.2" x2="12" y2="2" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
-      <line x1="16.5" y1="10.5" x2="21.5" y2="8.9" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
-      <line x1="14.8" y1="15.8" x2="17.9" y2="20.1" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
-      <line x1="9.2" y1="15.8" x2="6.1" y2="20.1" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
-      <line x1="7.5" y1="10.5" x2="2.5" y2="8.9" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M10 2.2A10 10 0 0 1 14 2.2L12 7.2Z" fill="#102018" />
-      <path d="M21.7 10.3A10 10 0 0 1 20.3 14.6L16.5 10.5Z" fill="#102018" />
-      <path d="M15.4 21.2A10 10 0 0 1 11.5 22L14.8 15.8Z" fill="#102018" />
-      <path d="M8.6 15.8L12.5 22A10 10 0 0 1 8.6 21.2Z" fill="#102018" />
-      <path d="M7.5 10.5L3.7 14.6A10 10 0 0 1 2.3 10.3Z" fill="#102018" />
-    </svg>
-  );
+  return <FootballIcon own={goalType === 'own_goal'} />;
 }
 
 function BenchList({ title, color, players }: { title: string; color: string; players: Player[] }) {

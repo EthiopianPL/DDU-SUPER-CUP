@@ -833,7 +833,7 @@ export function matchTimeline(fixture: Fixture): TimelineEvent[] {
           period: event.period,
           teamId: event.creditedTeamId || event.teamId || '',
           playerId: event.playerId || '',
-          playerName: event.goalType === 'own_goal' ? `${event.playerName} (OG)` : event.playerName,
+          playerName: event.playerName,
           kind: 'goal' as const,
           assistId: event.goalType === 'own_goal' ? undefined : event.assistId || undefined,
           assistName: event.goalType === 'own_goal' ? undefined : event.assistName || undefined,
