@@ -84,6 +84,8 @@ export function MatchDetailsPage() {
   const isLive = fixture.status === 'live';
 
   const timeline = useMemo(() => matchTimeline(fixture), [fixture, version, clock?.minute, fixture.homeScore, fixture.awayScore, fixture.status]);
+  const homeReds = timeline.filter((event) => event.kind === 'red' && event.teamId === fixture.homeId).length;
+  const awayReds = timeline.filter((event) => event.kind === 'red' && event.teamId === fixture.awayId).length;
   const substitutions = useMemo(() => matchSubstitutions(fixture), [fixture, version, clock?.minute, fixture.status]);
   const homeSheet = useMemo(() => matchSheet(fixture.homeId, fixture.id), [fixture.homeId, fixture.id, version]);
   const awaySheet = useMemo(() => matchSheet(fixture.awayId, fixture.id), [fixture.awayId, fixture.id, version]);
@@ -144,11 +146,11 @@ export function MatchDetailsPage() {
         {/* Teams and Scoreboard Grid */}
         <div className="relative mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-6">
           {/* Home Team */}
-          <div className="text-center sm:text-right">
+          <div className="min-w-0 text-center sm:text-right">
             <button
               type="button"
               onClick={() => home && navigate(`/team/${home.id}`)}
-              className="group mx-auto flex flex-col items-center sm:ml-auto sm:mr-0 sm:items-end"
+              className="group mx-auto flex w-full min-w-0 flex-col items-center sm:ml-auto sm:mr-0 sm:items-end"
             >
               <div className="transition-transform group-hover:scale-105">
                 <DepartmentMark
@@ -158,8 +160,11 @@ export function MatchDetailsPage() {
                   src={home?.crestUrl || undefined}
                 />
               </div>
-              <span className="mt-2.5 block text-sm font-bold text-white group-hover:underline sm:text-base">
-                {home?.name ?? home?.shortName ?? 'Team'}
+              <span className="mt-2.5 inline-flex max-w-full items-center justify-center gap-1.5 sm:justify-end">
+                {homeReds > 0 && <RedCards count={homeReds} />}
+                <span className="min-w-0 text-sm font-bold leading-tight text-white group-hover:underline sm:text-base">
+                  {home?.name ?? home?.shortName ?? 'Team'}
+                </span>
               </span>
             </button>
           </div>
@@ -204,11 +209,11 @@ export function MatchDetailsPage() {
           </div>
 
           {/* Away Team */}
-          <div className="text-center sm:text-left">
+          <div className="min-w-0 text-center sm:text-left">
             <button
               type="button"
               onClick={() => away && navigate(`/team/${away.id}`)}
-              className="group mx-auto flex flex-col items-center sm:ml-0 sm:mr-auto sm:items-start"
+              className="group mx-auto flex w-full min-w-0 flex-col items-center sm:ml-0 sm:mr-auto sm:items-start"
             >
               <div className="transition-transform group-hover:scale-105">
                 <DepartmentMark
@@ -218,8 +223,11 @@ export function MatchDetailsPage() {
                   src={away?.crestUrl || undefined}
                 />
               </div>
-              <span className="mt-2.5 block text-sm font-bold text-white group-hover:underline sm:text-base">
-                {away?.name ?? away?.shortName ?? 'Team'}
+              <span className="mt-2.5 inline-flex max-w-full items-center justify-center gap-1.5 sm:justify-start">
+                <span className="min-w-0 text-sm font-bold leading-tight text-white group-hover:underline sm:text-base">
+                  {away?.name ?? away?.shortName ?? 'Team'}
+                </span>
+                {awayReds > 0 && <RedCards count={awayReds} />}
               </span>
             </button>
           </div>
@@ -937,9 +945,10 @@ function EventTimeline({
       later: afterHalf(event.period, event.minute, halfMinute),
       teamId: event.teamId,
       kind: event.kind,
-      title: event.kind === 'goal' ? 'Goal' : event.kind === 'yellow' ? 'Yellow card' : 'Red card',
+      cardType: event.cardType,
+      title: event.kind === 'goal' ? 'Goal' : event.cardType === 'second_yellow' ? 'Second yellow, red card' : event.kind === 'yellow' ? 'Yellow card' : 'Red card',
       name: event.playerName,
-      extra: event.kind === 'goal' && event.assistName ? `Assist ${event.assistName}` : event.kind === 'goal' && event.detail === 'penalty' ? 'Penalty' : '',
+      detail: event.kind === 'goal' && event.assistName ? event.assistName : event.kind === 'goal' && event.detail === 'penalty' ? 'Penalty' : '',
     })),
     ...substitutions.map((change) => {
       const off = players.find((player) => player.id === change.offId);
@@ -950,9 +959,10 @@ function EventTimeline({
         later: afterHalf(change.period, change.minute, halfMinute),
         teamId: change.teamId,
         kind: 'sub' as const,
+        cardType: null,
         title: 'Substitution',
         name: change.onPlayer.name,
-        extra: off ? `On for ${off.name}` : '',
+        detail: off?.name ?? '',
       };
     }),
   ].sort((a, b) => Number(a.later) - Number(b.later) || a.minute - b.minute || a.added - b.added || a.title.localeCompare(b.title));
@@ -970,32 +980,23 @@ function EventTimeline({
 
   const renderRow = (row: (typeof rows)[number]) => {
     const home = row.teamId === homeId;
+    const note = row.kind === 'goal' && row.detail && row.detail !== 'Penalty'
+      ? `Assist ${row.detail}`
+      : row.kind === 'sub' && row.detail
+        ? row.detail
+        : row.kind === 'goal' && row.detail === 'Penalty'
+          ? 'Penalty'
+          : '';
     return (
       <li key={row.key} className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
         <div className="min-w-0 flex items-center justify-end">
-          {home && (
-            <div
-              title={row.extra ? `${row.title} · ${row.extra}` : row.title}
-              className="flex items-center gap-2 truncate text-sm font-semibold text-white transition-opacity hover:opacity-80"
-            >
-              <span className="truncate">{row.name}</span>
-              <EventMark kind={row.kind} />
-            </div>
-          )}
+          {home && <EventSide home name={row.name} note={note} kind={row.kind} cardType={row.cardType} title={row.title} />}
         </div>
         <span className="relative z-10 flex h-6 min-w-7 items-center justify-center rounded-full border border-white/15 bg-[#0c1424] px-1.5 font-mono text-[11px] font-bold text-[#f5c518] shadow-md">
           {row.added ? `${row.minute}+${row.added}` : row.minute}&apos;
         </span>
         <div className="min-w-0 flex items-center justify-start">
-          {!home && (
-            <div
-              title={row.extra ? `${row.title} · ${row.extra}` : row.title}
-              className="flex items-center gap-2 truncate text-sm font-semibold text-white transition-opacity hover:opacity-80"
-            >
-              <EventMark kind={row.kind} />
-              <span className="truncate">{row.name}</span>
-            </div>
-          )}
+          {!home && <EventSide name={row.name} note={note} kind={row.kind} cardType={row.cardType} title={row.title} />}
         </div>
       </li>
     );
@@ -1015,7 +1016,70 @@ function EventTimeline({
   );
 }
 
-function EventMark({ kind }: { kind: string }) {
+function EventSide({
+  home = false,
+  name,
+  note,
+  kind,
+  cardType,
+  title,
+}: {
+  home?: boolean;
+  name: string;
+  note: string;
+  kind: string;
+  cardType?: string | null;
+  title: string;
+}) {
+  const mark = kind === 'sub'
+    ? <ArrowUp className="h-3.5 w-3.5 shrink-0 text-[#1f9d55]" strokeWidth={3} aria-label="Player on" />
+    : <EventMark kind={kind} cardType={cardType} />;
+  const player = <span className="truncate text-sm font-semibold text-white">{name}</span>;
+  return (
+    <div title={note ? `${title} · ${note}` : title} className={`flex min-w-0 flex-col ${home ? 'items-end' : 'items-start'}`}>
+      <div className="flex min-w-0 items-center gap-1.5">
+        {home ? player : mark}
+        {home ? mark : player}
+      </div>
+      {note && (
+        <span className={`mt-0.5 flex max-w-full items-center gap-1 text-[11px] font-medium text-white/55 ${home ? 'flex-row-reverse' : ''}`}>
+          {kind === 'sub' && <ArrowDown className="h-3 w-3 shrink-0 text-[#e11d48]" strokeWidth={3} />}
+          <span className="truncate">{note}</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+function RedCards({ count }: { count: number }) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1" aria-label={`${count} red ${count === 1 ? 'card' : 'cards'}`}>
+      <span className="inline-block h-3.5 w-2.5 rounded-[1.5px] bg-[#e11d48] shadow-[0_1px_2px_rgba(0,0,0,0.8)] ring-1 ring-black/40" />
+      <span className="text-xs font-black text-[#e11d48]">{count}</span>
+    </span>
+  );
+}
+
+function CardFace({ color, label }: { color: string; label: string }) {
+  return (
+    <span
+      className="inline-block h-3.5 w-2.5 shrink-0 rounded-[1.5px] shadow-[0_1px_2px_rgba(0,0,0,0.8)] ring-1 ring-black/40"
+      style={{ background: color }}
+      title={label}
+    />
+  );
+}
+
+function EventMark({ kind, cardType }: { kind: string; cardType?: string | null }) {
+  if (kind === 'red' && cardType === 'second_yellow') {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-0.5" aria-label="Second yellow, red card" title="Second yellow, red card">
+        <CardFace color="#f5c518" label="Yellow card" />
+        <CardFace color="#f5c518" label="Yellow card" />
+        <CardFace color="#e11d48" label="Red card" />
+      </span>
+    );
+  }
   if (kind === 'yellow') {
     return (
       <span
