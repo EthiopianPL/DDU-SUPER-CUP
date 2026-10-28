@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS matches (
   stage VARCHAR(16) NOT NULL DEFAULT 'group',
   slot INT NOT NULL DEFAULT 0,
   version INT NOT NULL DEFAULT 1,
+  finished_at BIGINT NULL,
   updated_at BIGINT NOT NULL,
   CONSTRAINT fk_matches_home FOREIGN KEY (home_id) REFERENCES teams(id),
   CONSTRAINT fk_matches_away FOREIGN KEY (away_id) REFERENCES teams(id)

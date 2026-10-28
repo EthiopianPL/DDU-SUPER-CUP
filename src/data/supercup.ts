@@ -24,6 +24,7 @@ export interface Player {
   assists: number;
   yellowCards?: number;
   redCards?: number;
+  ownGoals?: number;
   appearances?: number;
   starts?: number;
   nationality?: string;
@@ -65,6 +66,7 @@ export interface Fixture {
   stage?: 'group' | 'r16' | 'qf' | 'sf' | 'final';
   slot?: number;
   version?: number;
+  finishedAt?: number | null;
   updatedAt?: number;
 }
 
@@ -111,6 +113,12 @@ export interface ManualStat {
 export const matchEvents: MatchEventRecord[] = [];
 export const squads: SquadRow[] = [];
 export const manualStats: ManualStat[] = [];
+export let competitionName = 'Dire Dawa University Super Cup';
+
+export function setCompetitionName(name: string) {
+  competitionName = name || competitionName;
+}
+
 export let leagueRules = {
   pointsWin: 3,
   pointsDraw: 1,
@@ -474,6 +482,13 @@ export function standingsFor(group: GroupId): Standing[] {
   return table.map((row, index) => ({ ...row, position: index + 1 }));
 }
 
+export function latestResults(limit = 2) {
+  return fixtures
+    .filter((fixture) => fixture.detail === 'finished')
+    .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0) || b.date.localeCompare(a.date) || b.time.localeCompare(a.time))
+    .slice(0, limit);
+}
+
 export function topScorers(limit = 5) {
   return players
     .filter((player) => player.registered !== false)
@@ -515,6 +530,7 @@ export interface TimelineEvent {
   addedMinute?: number;
   period?: string;
   cardType?: string | null;
+  goalType?: string | null;
 }
 
 const GOAL_MINUTES = [9, 18, 27, 36, 44, 52, 61, 70, 77, 84];
@@ -819,8 +835,9 @@ export function matchTimeline(fixture: Fixture): TimelineEvent[] {
           playerId: event.playerId || '',
           playerName: event.goalType === 'own_goal' ? `${event.playerName} (OG)` : event.playerName,
           kind: 'goal' as const,
-          assistId: event.assistId || undefined,
-          assistName: event.assistName || undefined,
+          assistId: event.goalType === 'own_goal' ? undefined : event.assistId || undefined,
+          assistName: event.goalType === 'own_goal' ? undefined : event.assistName || undefined,
+          goalType: event.goalType,
           detail: event.goalType || '',
         };
       }

@@ -141,6 +141,7 @@ function migrate(db) {
       stage TEXT NOT NULL DEFAULT 'group',
       slot INTEGER NOT NULL DEFAULT 0,
       version INTEGER NOT NULL DEFAULT 1,
+      finished_at INTEGER,
       updated_at INTEGER NOT NULL
     );
     CREATE TABLE IF NOT EXISTS match_squad (
@@ -218,6 +219,9 @@ function migrate(db) {
   }
   if (matchColumns.length && !matchColumns.some((column) => column.name === 'slot')) {
     db.exec(`ALTER TABLE matches ADD COLUMN slot INTEGER NOT NULL DEFAULT 0`);
+  }
+  if (matchColumns.length && !matchColumns.some((column) => column.name === 'finished_at')) {
+    db.exec('ALTER TABLE matches ADD COLUMN finished_at INTEGER');
   }
 }
 
@@ -325,6 +329,11 @@ function finishPostgres(worker, port1, url) {
     } catch (error) {
       if (error.code !== '42P07' && error.code !== '42710') throw error;
     }
+  }
+  try {
+    db.exec('ALTER TABLE matches ADD COLUMN IF NOT EXISTS finished_at BIGINT NULL');
+  } catch (error) {
+    if (error.code !== '42701') throw error;
   }
   return db;
 }

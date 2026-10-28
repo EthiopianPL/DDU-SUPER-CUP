@@ -258,7 +258,13 @@ export function MatchDetailsPage() {
               events={timeline}
               substitutions={substitutions}
               homeId={fixture.homeId}
+              awayId={fixture.awayId}
               reachedHalf={Boolean(fixture.period && fixture.period !== 'pre' && fixture.period !== 'first_half')}
+              finished={fixture.detail === 'finished'}
+              homeScore={fixture.homeScore ?? 0}
+              awayScore={fixture.awayScore ?? 0}
+              pensHome={fixture.pensHome ?? null}
+              pensAway={fixture.pensAway ?? null}
               halfMinute={Math.round((fixture.halfSeconds ?? 45 * 60) / 60)}
             />
           )}
@@ -565,8 +571,13 @@ function LiveNotice({ events, live }: { events: TimelineEvent[]; live: boolean }
     const first = seen.current === '';
     seen.current = key;
     if (first) return;
-    const label = latest.kind === 'goal' ? 'Goal' : latest.kind === 'yellow' ? 'Yellow card' : 'Red card';
-    const assist = latest.kind === 'goal' && latest.assistName ? ` · Assist ${latest.assistName}` : '';
+    const label = latest.kind !== 'goal'
+      ? latest.kind === 'yellow' ? 'Yellow card' : 'Red card'
+      : latest.goalType === 'penalty' ? 'Penalty'
+        : latest.goalType === 'own_goal' ? 'Own goal'
+          : latest.goalType === 'free_kick' ? 'Free kick'
+            : 'Goal';
+    const assist = latest.kind === 'goal' && latest.goalType !== 'own_goal' && latest.assistName ? ` · Assist ${latest.assistName}` : '';
     setText(`${label} · ${latest.playerName}${assist}`);
     const timer = window.setTimeout(() => setText(''), 4500);
     return () => window.clearTimeout(timer);
@@ -733,11 +744,12 @@ function PitchPlayer({
   played: boolean;
 }) {
   const marks = timeline.filter((event) => event.playerId === player.id);
-  const goalCount = marks.filter((event) => event.kind === 'goal').length;
+  const goalCount = marks.filter((event) => event.kind === 'goal' && event.goalType !== 'own_goal').length;
+  const ownCount = marks.filter((event) => event.kind === 'goal' && event.goalType === 'own_goal').length;
   const assistCount = timeline.filter((event) => event.kind === 'goal' && event.assistId === player.id).length;
   const hasYellow = marks.some((event) => event.kind === 'yellow');
   const hasRed = marks.some((event) => event.kind === 'red');
-  const hasEvents = played && (goalCount > 0 || assistCount > 0 || hasYellow || hasRed);
+  const hasEvents = played && (goalCount > 0 || ownCount > 0 || assistCount > 0 || hasYellow || hasRed);
 
   return (
     <div className={`absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center ${nameAbove ? 'flex-col-reverse' : ''}`} style={{ top, left }}>
@@ -750,6 +762,7 @@ function PitchPlayer({
             {hasYellow && <YellowCardIcon />}
             {hasRed && <RedCardIcon />}
             {goalCount > 0 && <FootballIcon count={goalCount} />}
+            {ownCount > 0 && <span className="text-[9px] font-black text-white/80">OG{ownCount > 1 ? ownCount : ''}</span>}
             {assistCount > 0 && <BootIcon count={assistCount} />}
           </div>
         )}
@@ -921,44 +934,75 @@ function KickoffClock({ date, time, detail, compact = false }: { date: string; t
   );
 }
 
-function afterHalf(period: string | undefined, minute: number, halfMinute: number) {
-  if (period === 'first_half' || period === 'pre' || period === 'halftime') return false;
-  return minute > halfMinute;
+function isFirstHalf(period: string | undefined, minute: number, halfMinute: number) {
+  if (period === 'first_half') return true;
+  if (period) return false;
+  return minute <= halfMinute;
+}
+
+function isExtra(period: string | undefined) {
+  return period === 'extra_first' || period === 'extra_break' || period === 'extra_second';
+}
+
+function sideGoals(events: TimelineEvent[], teamId: string, pick: (event: TimelineEvent) => boolean) {
+  return events.filter((event) => event.kind === 'goal' && event.teamId === teamId && pick(event)).length;
 }
 
 function EventTimeline({
   events,
   substitutions,
   homeId,
+  awayId,
   reachedHalf,
+  finished,
+  homeScore,
+  awayScore,
+  pensHome,
+  pensAway,
   halfMinute,
 }: {
   events: TimelineEvent[];
   substitutions: ReturnType<typeof matchSubstitutions>;
   homeId: string;
+  awayId: string;
   reachedHalf: boolean;
+  finished: boolean;
+  homeScore: number;
+  awayScore: number;
+  pensHome: number | null;
+  pensAway: number | null;
   halfMinute: number;
 }) {
   const rows = [
-    ...events.filter((event) => event.kind === 'goal' || event.kind === 'yellow' || event.kind === 'red').map((event) => ({
-      key: `${event.kind}-${event.playerId}-${event.minute}-${event.addedMinute ?? 0}-${event.assistId ?? ''}`,
-      minute: event.minute,
-      added: event.addedMinute ?? 0,
-      later: afterHalf(event.period, event.minute, halfMinute),
-      teamId: event.teamId,
-      kind: event.kind,
-      cardType: event.cardType,
-      title: event.kind === 'goal' ? 'Goal' : event.cardType === 'second_yellow' ? 'Second yellow, red card' : event.kind === 'yellow' ? 'Yellow card' : 'Red card',
-      name: event.playerName,
-      detail: event.kind === 'goal' && event.assistName ? event.assistName : event.kind === 'goal' && event.detail === 'penalty' ? 'Penalty' : '',
-    })),
+    ...events.filter((event) => event.kind === 'goal' || event.kind === 'yellow' || event.kind === 'red').map((event) => {
+      const goalType = event.goalType || '';
+      const bits = [
+        goalType === 'penalty' ? 'Penalty' : '',
+        goalType === 'free_kick' ? 'Free kick' : '',
+        goalType !== 'own_goal' && event.assistName ? `Assist ${event.assistName}` : '',
+      ].filter(Boolean);
+      return {
+        key: `${event.kind}-${event.playerId}-${event.minute}-${event.addedMinute ?? 0}-${event.assistId ?? ''}-${goalType}`,
+        minute: event.minute,
+        added: event.addedMinute ?? 0,
+        period: event.period,
+        teamId: event.teamId,
+        kind: event.kind,
+        cardType: event.cardType,
+        title: event.kind === 'goal'
+          ? goalType === 'penalty' ? 'Penalty' : goalType === 'own_goal' ? 'Own goal' : goalType === 'free_kick' ? 'Free kick' : 'Goal'
+          : event.cardType === 'second_yellow' ? 'Second yellow, red card' : event.kind === 'yellow' ? 'Yellow card' : 'Red card',
+        name: event.kind === 'goal' && goalType === 'penalty' ? `${event.playerName} (P)` : event.playerName,
+        detail: bits.join(' · '),
+      };
+    }),
     ...substitutions.map((change) => {
       const off = players.find((player) => player.id === change.offId);
       return {
         key: `sub-${change.offId}-${change.onPlayer.id}-${change.minute}-${change.addedMinute ?? 0}`,
         minute: change.minute,
         added: change.addedMinute ?? 0,
-        later: afterHalf(change.period, change.minute, halfMinute),
+        period: change.period,
         teamId: change.teamId,
         kind: 'sub' as const,
         cardType: null,
@@ -967,12 +1011,18 @@ function EventTimeline({
         detail: off?.name ?? '',
       };
     }),
-  ].sort((a, b) => Number(a.later) - Number(b.later) || a.minute - b.minute || a.added - b.added || a.title.localeCompare(b.title));
+  ].sort((a, b) => Number(isExtra(a.period)) - Number(isExtra(b.period)) || Number(!isFirstHalf(a.period, a.minute, halfMinute)) - Number(!isFirstHalf(b.period, b.minute, halfMinute)) || a.minute - b.minute || a.added - b.added || a.title.localeCompare(b.title));
 
-  const first = rows.filter((row) => !row.later);
-  const second = rows.filter((row) => row.later);
+  const first = rows.filter((row) => isFirstHalf(row.period, row.minute, halfMinute));
+  const extra = rows.filter((row) => isExtra(row.period));
+  const second = rows.filter((row) => !isFirstHalf(row.period, row.minute, halfMinute) && !isExtra(row.period));
+  const halfHome = sideGoals(events, homeId, (event) => isFirstHalf(event.period, event.minute, halfMinute));
+  const halfAway = sideGoals(events, awayId, (event) => isFirstHalf(event.period, event.minute, halfMinute));
+  const regulationHome = sideGoals(events, homeId, (event) => !isExtra(event.period));
+  const regulationAway = sideGoals(events, awayId, (event) => !isExtra(event.period));
+  const shootout = pensHome != null && pensAway != null;
 
-  if (!rows.length && !reachedHalf) {
+  if (!rows.length && !reachedHalf && !finished) {
     return (
       <p className="mx-auto max-w-md py-6 text-center text-sm text-white/50">
         No goals, cards, or substitutions yet.
@@ -982,13 +1032,7 @@ function EventTimeline({
 
   const renderRow = (row: (typeof rows)[number]) => {
     const home = row.teamId === homeId;
-    const note = row.kind === 'goal' && row.detail && row.detail !== 'Penalty'
-      ? `Assist ${row.detail}`
-      : row.kind === 'sub' && row.detail
-        ? row.detail
-        : row.kind === 'goal' && row.detail === 'Penalty'
-          ? 'Penalty'
-          : '';
+    const note = row.kind === 'sub' && row.detail ? row.detail : row.kind === 'goal' ? row.detail : '';
     return (
       <li key={row.key} className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
         <div className="min-w-0 flex items-center justify-end">
@@ -1008,13 +1052,24 @@ function EventTimeline({
     <ol className="relative mx-auto max-w-md space-y-2.5 py-2">
       <span className="absolute bottom-1.5 left-1/2 top-1.5 w-px -translate-x-1/2 bg-white/20" aria-hidden="true" />
       {first.map(renderRow)}
-      {reachedHalf && (
-        <li className="my-5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center">
-          <span className="relative z-10 col-start-2 rounded-full border border-white/20 bg-[#10192b] px-2.5 py-1 text-[10px] font-black tracking-[0.18em] text-white/75">HT</span>
-        </li>
-      )}
+      {reachedHalf && <PeriodMark label="HT" home={halfHome} away={halfAway} />}
       {second.map(renderRow)}
+      {extra.length > 0 && <PeriodMark label="ET" home={regulationHome} away={regulationAway} />}
+      {extra.map(renderRow)}
+      {shootout && <PeriodMark label="Pens" home={pensHome} away={pensAway} />}
+      {finished && <PeriodMark label="FT" home={homeScore} away={awayScore} />}
     </ol>
+  );
+}
+
+function PeriodMark({ label, home, away }: { label: string; home: number; away: number }) {
+  return (
+    <li className="my-5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center">
+      <span className="relative z-10 col-start-2 inline-flex items-center gap-2 rounded-full border border-white/20 bg-[#10192b] px-2.5 py-1 text-[10px] font-black tracking-[0.18em] text-white/75">
+        {label}
+        <span className="font-mono text-[11px] font-black tracking-normal text-[#f5c518]">{home} - {away}</span>
+      </span>
+    </li>
   );
 }
 

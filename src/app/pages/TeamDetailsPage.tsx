@@ -94,7 +94,7 @@ export function TeamDetailsPage() {
                 <p className="text-xs text-white/40">{player.position}</p>
               </div>
             </div>
-            <p className="text-sm text-white/70">{player.goals} {player.goals === 1 ? 'goal' : 'goals'}</p>
+            <p className="text-sm text-white/70">{player.goals} {player.goals === 1 ? 'goal' : 'goals'}{player.ownGoals ? ` · ${player.ownGoals} OG` : ''}</p>
           </div>
         ))}
       </div>

@@ -28,7 +28,7 @@ export interface MatchCardProps {
   matchSecond?: number;
   injuryTime?: number;
   showDate?: boolean;
-
+  competition?: string;
 }
 
 function TeamBadge({ team }: { team: Team }) {
@@ -59,6 +59,9 @@ export function MatchCard({
   stadium,
   matchMinute = 0,
   injuryTime = 0,
+  showDate = false,
+  date,
+  competition,
 }: MatchCardProps) {
   const navigate = useNavigate();
   const version = useLeagueVersion();
@@ -136,9 +139,16 @@ export function MatchCard({
                   LIVE {formattedLiveTime}
                 </span>
               ) : (
-                <span className="mt-1 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/50">
-                  FT
-                </span>
+                <>
+                  <span className="mt-1 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/50">
+                    FT
+                  </span>
+                  {showDate && (
+                    <span className="mt-1 max-w-[140px] text-[10px] font-semibold leading-tight text-white/45">
+                      {date}{competition ? ` · ${competition}` : ''}
+                    </span>
+                  )}
+                </>
               )}
             </>
           ) : (
