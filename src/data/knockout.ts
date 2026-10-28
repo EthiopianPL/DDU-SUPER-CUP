@@ -50,20 +50,35 @@ export function tieCount(stage: Stage) {
   return STAGE_OPTIONS.find((item) => item.id === stage)?.ties ?? 0;
 }
 
-function bestThirds() {
+function bestThirds(settledOnly = false) {
   return GROUPS
+    .filter((group) => !settledOnly || groupSettled(group))
     .map((group) => standingsFor(group)[2])
-    .filter((row) => row && row.played > 0)
+    .filter((row) => row && (settledOnly || row.played > 0))
     .sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference || b.goalsFor - a.goalsFor || a.department.name.localeCompare(b.department.name))
     .slice(0, 4)
     .map((row) => row.department);
 }
 
-function teamFromCode(code: string, thirds: Department[]) {
+function groupSettled(group: GroupId) {
+  const table = standingsFor(group);
+  if (table.length < 2 || table.some((row) => row.played < table.length - 1)) return false;
+  return !fixtures.some((fixture) =>
+    (fixture.stage ?? 'group') === 'group'
+    && fixture.group === group
+    && fixture.detail !== 'finished'
+    && fixture.detail !== 'cancelled'
+    && fixture.detail !== 'abandoned'
+  );
+}
+
+function teamFromCode(code: string, thirds: Department[], settledOnly = false) {
   const place = code.match(/^([12])([A-F])$/);
   if (place) {
-    const row = standingsFor(place[2] as GroupId)[Number(place[1]) - 1];
-    return row && row.played > 0 ? row.department : undefined;
+    const group = place[2] as GroupId;
+    if (settledOnly && !groupSettled(group)) return undefined;
+    const row = standingsFor(group)[Number(place[1]) - 1];
+    return row && (settledOnly || row.played > 0) ? row.department : undefined;
   }
   const third = code.match(/^3-(\d)$/);
   return third ? thirds[Number(third[1]) - 1] : undefined;
@@ -121,12 +136,20 @@ export function thirdPlaceTie(): RoadTie {
 }
 
 export function knockoutRoad(): RoadTie[] {
-  const thirds = bestThirds();
+  return buildRoad(false);
+}
+
+export function scheduleTie(stage: Exclude<Stage, 'group'>, slot: number): RoadTie | undefined {
+  return buildRoad(stage === 'r16').find((tie) => tie.stage === stage && tie.slot === slot);
+}
+
+function buildRoad(settledOnly: boolean): RoadTie[] {
+  const thirds = bestThirds(settledOnly);
   const ties: RoadTie[] = R16.map(([homeCode, awayCode], index) => ({
     stage: 'r16',
     slot: index + 1,
-    home: { label: codeLabel(homeCode), team: teamFromCode(homeCode, thirds) },
-    away: { label: codeLabel(awayCode), team: teamFromCode(awayCode, thirds) },
+    home: { label: codeLabel(homeCode), team: teamFromCode(homeCode, thirds, settledOnly) },
+    away: { label: codeLabel(awayCode), team: teamFromCode(awayCode, thirds, settledOnly) },
     fixture: tieFixture('r16', index + 1),
   }));
 

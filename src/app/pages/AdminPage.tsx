@@ -19,7 +19,7 @@ import {
   type GroupId,
 } from '../../data/supercup';
 import { formationPlan, seatPlayers } from '../../data/formation';
-import { STAGE_OPTIONS, stageLabel, tieCount, type Stage } from '../../data/knockout';
+import { STAGE_OPTIONS, scheduleTie, stageLabel, tieCount, type Stage } from '../../data/knockout';
 
 type Role = 'super_admin' | 'match_admin' | 'competition_manager' | 'team_manager' | 'reader';
 type Section = 'overview' | 'matches' | 'teams' | 'players' | 'news' | 'users' | 'audit' | 'rules';
@@ -261,11 +261,12 @@ function MatchList({ version, onOpen, onMessage, onError }: { version: number; o
 }
 
 function MatchForm({ onDone, onError }: { onDone: (text: string) => void; onError: (text: string) => void }) {
+  const version = useLeagueVersion();
   const [stage, setStage] = useState<Stage>('group');
   const [group, setGroup] = useState<GroupId>('A');
   const [slot, setSlot] = useState('1');
   const [matchday, setMatchday] = useState('1');
-  const pool = stage === 'group' ? departments.filter((team) => team.group === group) : departments;
+  const pool = departments.filter((team) => team.group === group);
   const [homeId, setHomeId] = useState(pool[0]?.id ?? '');
   const [awayId, setAwayId] = useState(pool[1]?.id ?? '');
   const [date, setDate] = useState('2026-11-07');
@@ -273,10 +274,15 @@ function MatchForm({ onDone, onError }: { onDone: (text: string) => void; onErro
   const [venue, setVenue] = useState('DDU Main Pitch');
   const [referee, setReferee] = useState('');
   const [allowExtra, setAllowExtra] = useState(false);
+  void version;
   const home = pool.find((team) => team.id === homeId) ?? pool[0];
   const awayOptions = pool.filter((team) => team.id !== home?.id);
   const away = awayOptions.find((team) => team.id === awayId) ?? awayOptions[0];
   const ties = tieCount(stage);
+  const tie = stage === 'group' ? undefined : scheduleTie(stage, Math.min(Number(slot) || 1, ties));
+  const knockoutHome = tie?.home.team;
+  const knockoutAway = tie?.away.team;
+  const ready = stage === 'group' ? Boolean(home && away) : Boolean(tie && !tie.fixture && knockoutHome && knockoutAway);
 
   return (
     <form
@@ -284,14 +290,14 @@ function MatchForm({ onDone, onError }: { onDone: (text: string) => void; onErro
       onSubmit={async (event) => {
         event.preventDefault();
         try {
-          if (!home || !away) throw new Error('Add two teams before scheduling a match.');
+          if (!ready) throw new Error(stage === 'group' ? 'Add two teams before scheduling a match.' : 'Both places in this tie need a qualified team.');
           await desk('/api/matches', {
             body: {
               stage,
               slot: stage === 'group' ? 0 : Math.min(Number(slot) || 1, ties),
               matchday: Number(matchday) || 1,
-              homeId: home.id,
-              awayId: away.id,
+              homeId: stage === 'group' ? home?.id : knockoutHome?.id,
+              awayId: stage === 'group' ? away?.id : knockoutAway?.id,
               date,
               time,
               venue,
@@ -321,9 +327,18 @@ function MatchForm({ onDone, onError }: { onDone: (text: string) => void; onErro
         ) : (
           <ChoiceRow label="Tie" value={String(Math.min(Number(slot) || 1, ties))} options={Array.from({ length: ties }, (_, index) => String(index + 1))} onChange={setSlot} />
         )}
+        {stage === 'group' ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Select label="Home" value={home?.id ?? ''} onChange={setHomeId} options={pool.map((team) => ({ id: team.id, label: `${team.shortName} · ${team.name}` }))} />
+            <Select label="Away" value={away?.id ?? ''} onChange={setAwayId} options={awayOptions.map((team) => ({ id: team.id, label: `${team.shortName} · ${team.name}` }))} />
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <TiePlace label={tie?.home.label ?? 'Home'} team={knockoutHome?.name} />
+            <TiePlace label={tie?.away.label ?? 'Away'} team={knockoutAway?.name} />
+          </div>
+        )}
         <div className="grid gap-3 sm:grid-cols-2">
-          <Select label="Home" value={home?.id ?? ''} onChange={setHomeId} options={pool.map((team) => ({ id: team.id, label: `${team.shortName} · ${team.name}` }))} />
-          <Select label="Away" value={away?.id ?? ''} onChange={setAwayId} options={awayOptions.map((team) => ({ id: team.id, label: `${team.shortName} · ${team.name}` }))} />
           {stage === 'group' && <Field label="Matchday" value={matchday} onChange={setMatchday} placeholder="1" inputMode="numeric" />}
           <label className="text-[11px] font-bold uppercase tracking-wide text-white/40">Date
             <input className={inputClass} type="date" value={date} required onChange={(event) => setDate(event.target.value)} />
@@ -340,10 +355,25 @@ function MatchForm({ onDone, onError }: { onDone: (text: string) => void; onErro
             Allow extra time and penalties
           </label>
         )}
-        {stage !== 'group' && <p className="text-xs text-white/40">Knockout ties allow extra time and penalties. The winner fills the next round on Discover once the result is confirmed.</p>}
+        {stage !== 'group' && (
+          <p className="text-xs text-white/40">
+            {tie?.fixture
+              ? 'This tie is already on the calendar.'
+              : 'The two teams come from the knockout. A group place fills only after that group table is finished. Later rounds take the confirmed winner of the previous tie.'}
+          </p>
+        )}
       </div>
-      <button type="submit" className="mt-5 w-full rounded-xl bg-[#f5c518] px-4 py-3 text-sm font-black text-[#102018] sm:w-auto">Schedule match</button>
+      <button type="submit" disabled={!ready} className="mt-5 w-full rounded-xl bg-[#f5c518] px-4 py-3 text-sm font-black text-[#102018] disabled:opacity-40 sm:w-auto">Schedule match</button>
     </form>
+  );
+}
+
+function TiePlace({ label, team }: { label: string; team?: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#0c1424] px-3 py-3">
+      <p className="text-[11px] font-bold uppercase tracking-wide text-white/40">{label}</p>
+      <p className={`mt-1 text-sm font-black ${team ? 'text-white' : 'text-white/35'}`}>{team ?? 'Not through yet'}</p>
+    </div>
   );
 }
 
