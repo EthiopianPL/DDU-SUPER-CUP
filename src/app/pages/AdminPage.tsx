@@ -5,6 +5,7 @@ import { useLeagueVersion } from '../../data/live';
 import { newsArticles } from '../../data/news';
 import { useMatchClock } from '../useMatchClock';
 import { DepartmentMark, Portrait } from '../components/DepartmentMark';
+import { MatchLoading } from '../components/Layout';
 import {
   departments,
   fixtures,
@@ -68,7 +69,7 @@ export function AdminPage() {
     return () => window.clearTimeout(timer);
   }, [notice, error]);
 
-  if (!ready) return <p className="px-6 py-16 text-sm text-white/50">Opening the desk…</p>;
+  if (!ready) return <MatchLoading />;
   if (!user) return <Login onSuccess={setUser} />;
 
   const openMatch = (id: string) => {
