@@ -659,16 +659,17 @@ function spread(count: number) {
   return Array.from({ length: count }, (_, index) => inset + ((100 - inset * 2) * index) / (count - 1));
 }
 
-function FootballIcon({ count = 1 }: { count?: number }) {
+function FootballIcon({ count = 1, own = false }: { count?: number; own?: boolean }) {
+  const label = own ? (count > 1 ? `${count} own goals` : 'Own goal') : (count > 1 ? `${count} goals` : 'Goal');
   return (
-    <span className="relative inline-flex items-center justify-center" title={count > 1 ? `${count} Goals` : 'Goal'}>
+    <span className="relative inline-flex items-center justify-center" title={label} aria-label={label}>
       <svg
         viewBox="0 0 24 24"
         className="h-3.5 w-3.5 shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
         fill="none"
         aria-hidden="true"
       >
-        <circle cx="12" cy="12" r="10" fill="#ffffff" stroke="#102018" strokeWidth="1.2" />
+        <circle cx="12" cy="12" r="10" fill={own ? '#e11d48' : '#ffffff'} stroke="#102018" strokeWidth="1.2" />
         <polygon points="12,7.2 16.5,10.5 14.8,15.8 9.2,15.8 7.5,10.5" fill="#102018" />
         <line x1="12" y1="7.2" x2="12" y2="2" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
         <line x1="16.5" y1="10.5" x2="21.5" y2="8.9" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
@@ -780,7 +781,7 @@ function PitchPlayer({
             {hasYellow && <YellowCardIcon />}
             {hasRed && <RedCardIcon />}
             {goalCount > 0 && <FootballIcon count={goalCount} />}
-            {ownCount > 0 && <span className="text-[9px] font-black text-white/80">OG{ownCount > 1 ? ownCount : ''}</span>}
+            {ownCount > 0 && <FootballIcon count={ownCount} own />}
             {assistCount > 0 && <BootIcon count={assistCount} />}
           </div>
         )}
