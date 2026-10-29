@@ -1,4 +1,4 @@
-import { Home, Compass, Calendar, Newspaper } from 'lucide-react';
+import { Home, Compass, Calendar, Newspaper, Users } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router';
 
 export function BottomNav() {
@@ -10,6 +10,7 @@ export function BottomNav() {
     { id: 'matches', label: 'Matches', icon: Calendar, path: '/matches' },
     { id: 'discover', label: 'Discover', icon: Compass, path: '/discover' },
     { id: 'news', label: 'News', icon: Newspaper, path: '/news' },
+    { id: 'contributors', label: 'Contributors', icon: Users, path: '/contributors' },
   ];
 
   const isItemActive = (path: string) => {
@@ -31,12 +32,15 @@ export function BottomNav() {
     if (path === '/news') {
       return location.pathname === '/news' || location.pathname.startsWith('/news/');
     }
+    if (path === '/contributors') {
+      return location.pathname === '/contributors';
+    }
     return location.pathname === path;
   };
 
   return (
     <nav
-      className="fixed left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-md sm:hidden pointer-events-none"
+      className="fixed left-1/2 -translate-x-1/2 z-50 w-[calc(100%-1.5rem)] max-w-md sm:hidden pointer-events-none"
       style={{ bottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
       aria-label="Mobile navigation"
     >
@@ -50,15 +54,15 @@ export function BottomNav() {
               key={item.id}
               type="button"
               onClick={() => navigate(item.path)}
-              className={`flex flex-1 flex-col items-center justify-center gap-1.5 py-2 px-1 rounded-full transition-all duration-200 cursor-pointer ${
+              className={`flex flex-1 flex-col items-center justify-center gap-1 py-1.5 px-0.5 rounded-full transition-all duration-200 cursor-pointer ${
                 isActive
                   ? 'bg-[#f5c518] text-[#102018] shadow-md font-bold'
                   : 'bg-transparent text-white/50 hover:text-white/80 active:scale-95 font-medium'
               }`}
               aria-current={isActive ? 'page' : undefined}
             >
-              <Icon className={`h-5 w-5 shrink-0 transition-colors ${isActive ? 'text-[#102018]' : 'text-white/50'}`} />
-              <span className={`text-[11px] leading-none font-bold transition-colors ${isActive ? 'text-[#102018]' : 'text-white/50'}`}>
+              <Icon className={`h-4.5 w-4.5 shrink-0 transition-colors ${isActive ? 'text-[#102018]' : 'text-white/50'}`} />
+              <span className={`text-[10px] leading-tight font-bold transition-colors truncate max-w-[62px] text-center ${isActive ? 'text-[#102018]' : 'text-white/50'}`}>
                 {item.label}
               </span>
             </button>
@@ -68,4 +72,3 @@ export function BottomNav() {
     </nav>
   );
 }
-
