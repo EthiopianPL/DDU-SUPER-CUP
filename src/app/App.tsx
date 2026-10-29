@@ -8,6 +8,7 @@ import { TeamDetailsPage } from './pages/TeamDetailsPage';
 import { NewsPage } from './pages/NewsPage';
 import { NewsDetailPage } from './pages/NewsDetailPage';
 import { AdminPage } from './pages/AdminPage';
+import { ContributorsPage } from './pages/ContributorsPage';
 
 function RedirectToDiscover({ defaultTab }: { defaultTab: 'groups' | 'stats' }) {
   const location = useLocation();
@@ -35,6 +36,7 @@ function App() {
           <Route path="team/:id" element={<TeamDetailsPage />} />
           <Route path="news" element={<NewsPage />} />
           <Route path="news/:id" element={<NewsDetailPage />} />
+          <Route path="contributors" element={<ContributorsPage />} />
           <Route path="admin" element={<AdminPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
