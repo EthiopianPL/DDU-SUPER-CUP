@@ -24,6 +24,7 @@ export interface Player {
   assists: number;
   yellowCards?: number;
   redCards?: number;
+  ownGoals?: number;
   appearances?: number;
   starts?: number;
   nationality?: string;
@@ -51,6 +52,8 @@ export interface Fixture {
   runningSince?: number | null;
   addedSeconds?: number;
   halfSeconds?: number;
+  regulationSeconds?: number;
+  extraHalfSeconds?: number;
   allowExtra?: boolean;
   pensHome?: number | null;
   pensAway?: number | null;
@@ -63,6 +66,7 @@ export interface Fixture {
   stage?: 'group' | 'r16' | 'qf' | 'sf' | 'final';
   slot?: number;
   version?: number;
+  finishedAt?: number | null;
   updatedAt?: number;
 }
 
@@ -109,6 +113,12 @@ export interface ManualStat {
 export const matchEvents: MatchEventRecord[] = [];
 export const squads: SquadRow[] = [];
 export const manualStats: ManualStat[] = [];
+export let competitionName = 'Dire Dawa University Super Cup';
+
+export function setCompetitionName(name: string) {
+  competitionName = name || competitionName;
+}
+
 export let leagueRules = {
   pointsWin: 3,
   pointsDraw: 1,
@@ -472,6 +482,13 @@ export function standingsFor(group: GroupId): Standing[] {
   return table.map((row, index) => ({ ...row, position: index + 1 }));
 }
 
+export function latestResults(limit = 2) {
+  return fixtures
+    .filter((fixture) => fixture.detail === 'finished')
+    .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0) || b.date.localeCompare(a.date) || b.time.localeCompare(a.time))
+    .slice(0, limit);
+}
+
 export function topScorers(limit = 5) {
   return players
     .filter((player) => player.registered !== false)
@@ -510,6 +527,10 @@ export interface TimelineEvent {
   assistId?: string;
   assistName?: string;
   detail?: string;
+  addedMinute?: number;
+  period?: string;
+  cardType?: string | null;
+  goalType?: string | null;
 }
 
 const GOAL_MINUTES = [9, 18, 27, 36, 44, 52, 61, 70, 77, 84];
@@ -653,6 +674,8 @@ export interface MatchSheet {
 
 export interface Substitution {
   minute: number;
+  addedMinute?: number;
+  period?: string;
   teamId: string;
   offId: string;
   onPlayer: Player;
@@ -775,6 +798,16 @@ export function sampleTimeline(fixture: Fixture): TimelineEvent[] {
   return events.filter((event) => event.minute <= limit).sort((a, b) => a.minute - b.minute || a.playerName.localeCompare(b.playerName));
 }
 
+export function teamRedCards(matchId: string, teamId: string) {
+  return matchEvents.filter((event) =>
+    event.matchId === matchId
+    && !event.voided
+    && event.type === 'card'
+    && event.teamId === teamId
+    && event.cardType !== 'yellow'
+  ).length;
+}
+
 export function matchTimeline(fixture: Fixture): TimelineEvent[] {
   const labels: Record<string, string> = {
     penalty_awarded: 'Penalty awarded',
@@ -796,28 +829,36 @@ export function matchTimeline(fixture: Fixture): TimelineEvent[] {
       if (event.type === 'goal') {
         return {
           minute: event.minute,
+          addedMinute: event.addedMinute || undefined,
+          period: event.period,
           teamId: event.creditedTeamId || event.teamId || '',
           playerId: event.playerId || '',
-          playerName: event.goalType === 'own_goal' ? `${event.playerName} (OG)` : event.playerName,
+          playerName: event.playerName,
           kind: 'goal' as const,
-          assistId: event.assistId || undefined,
-          assistName: event.assistName || undefined,
+          assistId: event.goalType === 'own_goal' ? undefined : event.assistId || undefined,
+          assistName: event.goalType === 'own_goal' ? undefined : event.assistName || undefined,
+          goalType: event.goalType,
           detail: event.goalType || '',
         };
       }
       if (event.type === 'card') {
         return {
           minute: event.minute,
+          addedMinute: event.addedMinute || undefined,
+          period: event.period,
           teamId: event.teamId || '',
           playerId: event.playerId || '',
           playerName: event.playerName,
           kind: event.cardType === 'yellow' ? 'yellow' as const : 'red' as const,
+          cardType: event.cardType,
           detail: event.detail,
         };
       }
       if (event.type === 'substitution') {
         return {
           minute: event.minute,
+          addedMinute: event.addedMinute || undefined,
+          period: event.period,
           teamId: event.teamId || '',
           playerId: event.playerId || '',
           playerName: `${event.playerName} for ${event.relatedName}`,
@@ -867,6 +908,8 @@ export function matchSubstitutions(fixture: Fixture): Substitution[] {
     .filter((event) => event.matchId === fixture.id && event.type === 'substitution' && !event.voided)
     .map((event) => ({
       minute: event.minute,
+      addedMinute: event.addedMinute || undefined,
+      period: event.period,
       teamId: event.teamId || '',
       offId: event.playerId || '',
       onPlayer: players.find((player) => player.id === event.relatedPlayerId) ?? {
@@ -885,18 +928,40 @@ export function formatMatchClock(clock: { minute: number; seconds: number }) {
   return `${String(clock.minute).padStart(2, '0')}:${String(clock.seconds).padStart(2, '0')}`;
 }
 
+export function formatLiveTime(clock: { minute: number; seconds: number; stoppage?: number }) {
+  if (!clock.stoppage) return formatMatchClock(clock);
+  const extraMinutes = Math.floor(clock.stoppage / 60);
+  const extraSeconds = clock.stoppage % 60;
+  return `${String(clock.minute).padStart(2, '0')}:00 +${String(extraMinutes).padStart(2, '0')}:${String(extraSeconds).padStart(2, '0')}`;
+}
+
+function periodEndSeconds(period: string | undefined, half: number, regulation: number, extra: number) {
+  if (period === 'first_half') return half;
+  if (period === 'second_half') return regulation;
+  if (period === 'extra_first') return regulation + extra;
+  if (period === 'extra_second') return regulation + extra * 2;
+  return null;
+}
+
 export function viewClock(fixture: Fixture | undefined, now = Date.now()) {
   if (!fixture || fixture.status !== 'live') return null;
   const base = (fixture.elapsedSeconds ?? 0) * 1000;
   const elapsed = base + (fixture.runningSince ? Math.max(0, now + clockSync.offset - fixture.runningSince) : 0);
   const total = Math.max(0, Math.floor(elapsed / 1000));
+  const half = fixture.halfSeconds ?? leagueRules.halfMinutes * 60;
+  const regulation = fixture.regulationSeconds ?? half * 2;
+  const extra = fixture.extraHalfSeconds ?? leagueRules.extraHalfMinutes * 60;
+  const end = periodEndSeconds(fixture.period, half, regulation, extra);
+  const stoppage = end == null ? 0 : Math.max(0, total - end);
+  const shown = end == null ? total : Math.min(total, end);
   return {
     total,
-    minute: Math.floor(total / 60),
-    seconds: total % 60,
+    minute: Math.floor(shown / 60),
+    seconds: shown % 60,
     running: Boolean(fixture.runningSince),
     period: fixture.period ?? '',
     added: Math.floor((fixture.addedSeconds ?? 0) / 60),
+    stoppage,
   };
 }
 

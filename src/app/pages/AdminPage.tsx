@@ -5,10 +5,11 @@ import { useLeagueVersion } from '../../data/live';
 import { newsArticles } from '../../data/news';
 import { useMatchClock } from '../useMatchClock';
 import { DepartmentMark, Portrait } from '../components/DepartmentMark';
+import { MatchLoading } from '../components/Layout';
 import {
   departments,
   fixtures,
-  formatMatchClock,
+  formatLiveTime,
   getDepartment,
   getFixture,
   leagueRules,
@@ -19,10 +20,11 @@ import {
   type GroupId,
 } from '../../data/supercup';
 import { formationPlan, seatPlayers } from '../../data/formation';
-import { STAGE_OPTIONS, stageLabel, tieCount, type Stage } from '../../data/knockout';
+import { STAGE_OPTIONS, scheduleTie, stageLabel, tieCount, type Stage } from '../../data/knockout';
 
 type Role = 'super_admin' | 'match_admin' | 'competition_manager' | 'team_manager' | 'reader';
 type Section = 'overview' | 'matches' | 'teams' | 'players' | 'news' | 'users' | 'audit' | 'rules';
+type DeskTab = 'clock' | 'events' | 'lineup' | 'fixture';
 
 interface DeskUser {
   id: string;
@@ -67,7 +69,7 @@ export function AdminPage() {
     return () => window.clearTimeout(timer);
   }, [notice, error]);
 
-  if (!ready) return <p className="px-6 py-16 text-sm text-white/50">Opening the desk…</p>;
+  if (!ready) return <MatchLoading />;
   if (!user) return <Login onSuccess={setUser} />;
 
   const openMatch = (id: string) => {
@@ -112,7 +114,7 @@ export function AdminPage() {
         {section === 'overview' && <Overview version={version} onOpen={openMatch} />}
         {section === 'matches' && !matchId && <MatchList version={version} onOpen={openMatch} onMessage={setNotice} onError={setError} />}
         {section === 'matches' && matchId && (
-          <MatchDesk id={matchId} role={user.role} onClose={() => setMatchId(null)} onMessage={setNotice} onError={setError} />
+          <MatchDesk key={matchId} id={matchId} role={user.role} onClose={() => setMatchId(null)} onMessage={setNotice} onError={setError} />
         )}
         {section === 'teams' && <TeamAdmin onMessage={setNotice} onError={setError} />}
         {section === 'players' && <PlayerAdmin onMessage={setNotice} onError={setError} />}
@@ -260,11 +262,12 @@ function MatchList({ version, onOpen, onMessage, onError }: { version: number; o
 }
 
 function MatchForm({ onDone, onError }: { onDone: (text: string) => void; onError: (text: string) => void }) {
+  const version = useLeagueVersion();
   const [stage, setStage] = useState<Stage>('group');
   const [group, setGroup] = useState<GroupId>('A');
   const [slot, setSlot] = useState('1');
   const [matchday, setMatchday] = useState('1');
-  const pool = stage === 'group' ? departments.filter((team) => team.group === group) : departments;
+  const pool = departments.filter((team) => team.group === group);
   const [homeId, setHomeId] = useState(pool[0]?.id ?? '');
   const [awayId, setAwayId] = useState(pool[1]?.id ?? '');
   const [date, setDate] = useState('2026-11-07');
@@ -272,10 +275,15 @@ function MatchForm({ onDone, onError }: { onDone: (text: string) => void; onErro
   const [venue, setVenue] = useState('DDU Main Pitch');
   const [referee, setReferee] = useState('');
   const [allowExtra, setAllowExtra] = useState(false);
+  void version;
   const home = pool.find((team) => team.id === homeId) ?? pool[0];
   const awayOptions = pool.filter((team) => team.id !== home?.id);
   const away = awayOptions.find((team) => team.id === awayId) ?? awayOptions[0];
   const ties = tieCount(stage);
+  const tie = stage === 'group' ? undefined : scheduleTie(stage, Math.min(Number(slot) || 1, ties));
+  const knockoutHome = tie?.home.team;
+  const knockoutAway = tie?.away.team;
+  const ready = stage === 'group' ? Boolean(home && away) : Boolean(tie && !tie.fixture && knockoutHome && knockoutAway);
 
   return (
     <form
@@ -283,14 +291,14 @@ function MatchForm({ onDone, onError }: { onDone: (text: string) => void; onErro
       onSubmit={async (event) => {
         event.preventDefault();
         try {
-          if (!home || !away) throw new Error('Add two teams before scheduling a match.');
+          if (!ready) throw new Error(stage === 'group' ? 'Add two teams before scheduling a match.' : 'Both places in this tie need a qualified team.');
           await desk('/api/matches', {
             body: {
               stage,
               slot: stage === 'group' ? 0 : Math.min(Number(slot) || 1, ties),
               matchday: Number(matchday) || 1,
-              homeId: home.id,
-              awayId: away.id,
+              homeId: stage === 'group' ? home?.id : knockoutHome?.id,
+              awayId: stage === 'group' ? away?.id : knockoutAway?.id,
               date,
               time,
               venue,
@@ -320,9 +328,18 @@ function MatchForm({ onDone, onError }: { onDone: (text: string) => void; onErro
         ) : (
           <ChoiceRow label="Tie" value={String(Math.min(Number(slot) || 1, ties))} options={Array.from({ length: ties }, (_, index) => String(index + 1))} onChange={setSlot} />
         )}
+        {stage === 'group' ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Select label="Home" value={home?.id ?? ''} onChange={setHomeId} options={pool.map((team) => ({ id: team.id, label: `${team.shortName} · ${team.name}` }))} />
+            <Select label="Away" value={away?.id ?? ''} onChange={setAwayId} options={awayOptions.map((team) => ({ id: team.id, label: `${team.shortName} · ${team.name}` }))} />
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <TiePlace label={tie?.home.label ?? 'Home'} team={knockoutHome?.name} />
+            <TiePlace label={tie?.away.label ?? 'Away'} team={knockoutAway?.name} />
+          </div>
+        )}
         <div className="grid gap-3 sm:grid-cols-2">
-          <Select label="Home" value={home?.id ?? ''} onChange={setHomeId} options={pool.map((team) => ({ id: team.id, label: `${team.shortName} · ${team.name}` }))} />
-          <Select label="Away" value={away?.id ?? ''} onChange={setAwayId} options={awayOptions.map((team) => ({ id: team.id, label: `${team.shortName} · ${team.name}` }))} />
           {stage === 'group' && <Field label="Matchday" value={matchday} onChange={setMatchday} placeholder="1" inputMode="numeric" />}
           <label className="text-[11px] font-bold uppercase tracking-wide text-white/40">Date
             <input className={inputClass} type="date" value={date} required onChange={(event) => setDate(event.target.value)} />
@@ -339,10 +356,25 @@ function MatchForm({ onDone, onError }: { onDone: (text: string) => void; onErro
             Allow extra time and penalties
           </label>
         )}
-        {stage !== 'group' && <p className="text-xs text-white/40">Knockout ties allow extra time and penalties. The winner fills the next round on Discover once the result is confirmed.</p>}
+        {stage !== 'group' && (
+          <p className="text-xs text-white/40">
+            {tie?.fixture
+              ? 'This tie is already on the calendar.'
+              : 'The two teams come from the knockout. A group place fills only after that group table is finished. Later rounds take the confirmed winner of the previous tie.'}
+          </p>
+        )}
       </div>
-      <button type="submit" className="mt-5 w-full rounded-xl bg-[#f5c518] px-4 py-3 text-sm font-black text-[#102018] sm:w-auto">Schedule match</button>
+      <button type="submit" disabled={!ready} className="mt-5 w-full rounded-xl bg-[#f5c518] px-4 py-3 text-sm font-black text-[#102018] disabled:opacity-40 sm:w-auto">Schedule match</button>
     </form>
+  );
+}
+
+function TiePlace({ label, team }: { label: string; team?: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#0c1424] px-3 py-3">
+      <p className="text-[11px] font-bold uppercase tracking-wide text-white/40">{label}</p>
+      <p className={`mt-1 text-sm font-black ${team ? 'text-white' : 'text-white/35'}`}>{team ?? 'Not through yet'}</p>
+    </div>
   );
 }
 
@@ -387,6 +419,12 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<{ label: string; action: string } | null>(null);
   const [editingGoal, setEditingGoal] = useState<number | null>(null);
+  const [tab, setTab] = useState<DeskTab>(() => {
+    const current = getFixture(id);
+    if (!current || current.status === 'live' || (current.detail === 'finished' && current.confirmed)) return 'events';
+    if (current.detail === 'finished') return 'clock';
+    return 'lineup';
+  });
   void version;
   if (!fixture) return <p className="text-sm text-white/50">That match is no longer on the server.</p>;
   const home = getDepartment(fixture.homeId);
@@ -396,6 +434,12 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
   const canRun = role === 'super_admin' || role === 'match_admin' || role === 'competition_manager';
   const finished = fixture.detail === 'finished';
   const live = fixture.status === 'live' || fixture.detail === 'suspended';
+  const deskTabs: { id: DeskTab; label: string }[] = [
+    { id: 'clock', label: 'Clock' },
+    { id: 'events', label: 'Events' },
+  ];
+  if (!finished && !live) deskTabs.push({ id: 'lineup', label: 'Lineup' }, { id: 'fixture', label: 'Fixture' });
+  const activeTab = deskTabs.some((item) => item.id === tab) ? tab : deskTabs[0].id;
 
   const act = async (path: string, body: Record<string, unknown>, method = 'POST') => {
     setBusy(true);
@@ -419,69 +463,90 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
           <TeamBlock team={home} />
           <div className="text-center">
             <p className={`font-mono text-4xl font-black ${clock?.running ? 'text-[#7ddea0]' : 'text-white'}`}>
-              {fixture.detail === 'finished' ? 'FT' : clock ? formatMatchClock(clock) : '00:00'}
+              {fixture.detail === 'finished' ? 'FT' : clock ? formatLiveTime(clock) : '00:00'}
             </p>
-            <p className="text-xs font-bold text-white/45">{periodText(fixture.period, clock?.running)}{clock && clock.added > 0 ? ` · +${clock.added}` : ''}</p>
+            <p className="text-xs font-bold text-white/45">{periodText(fixture.period, clock?.running)}{clock && clock.added > 0 ? ` · +${clock.added} added` : ''}</p>
             <p className="mt-1 text-3xl font-black">{fixture.homeScore ?? 0}–{fixture.awayScore ?? 0}</p>
             {fixture.pensHome != null && <p className="text-xs font-bold text-[#f5c518]">Pens {fixture.pensHome}-{fixture.pensAway}</p>}
           </div>
           <TeamBlock team={away} align="end" />
         </div>
         <p className="mt-3 text-center text-xs text-white/35">{fixture.stage && fixture.stage !== 'group' ? `${stageLabel(fixture.stage)} · Tie ${fixture.slot}` : `Group ${fixture.group} · MD${fixture.matchday}`} · {fixture.stadium} · {fixture.date} {fixture.time}{fixture.referee ? ` · Ref ${fixture.referee}` : ''}{fixture.confirmed ? ' · Confirmed' : ''}</p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {finished && <p className="w-full text-sm text-white/50">This match is finished. The score, lineup, and events stay as recorded.</p>}
-          {!finished && (fixture.detail === 'scheduled' || fixture.detail === 'postponed') ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'kickoff' })}>Kick off</Action> : null}
-          {!finished && clock?.running ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'pause' })}>Pause</Action> : null}
-          {!finished && fixture.status === 'live' && !clock?.running && fixture.period !== 'halftime' && fixture.period !== 'penalties' ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'resume' })}>Resume</Action> : null}
-          {!finished && fixture.period === 'first_half' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'halftime' })}>Half time</Action>}
-          {!finished && fixture.period === 'halftime' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'second_half' })}>Second half</Action>}
-          {!finished && (fixture.allowExtra || leagueRules.allowExtraTime) && fixture.period === 'second_half' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_first' })}>Extra time</Action>}
-          {!finished && fixture.period === 'extra_first' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_break' })}>Extra break</Action>}
-          {!finished && fixture.period === 'extra_break' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_second' })}>Second extra</Action>}
-          {!finished && fixture.allowExtra && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'penalties' })}>Penalties</Action>}
-          {!finished && fixture.status === 'live' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'suspend' })}>Suspend</Action>}
-          {!finished && fixture.detail === 'suspended' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'resume' })}>Resume match</Action>}
-          {!finished && ['scheduled', 'postponed', 'suspended'].includes(fixture.detail || '') && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'postpone' })}>Postpone</Action>}
-          {!finished && !fixture.confirmed && fixture.detail !== 'cancelled' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'Cancel this match?', action: 'cancel' })}>Cancel</Action>}
-          {!finished && fixture.status === 'live' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'Abandon this match? It will not count in the table.', action: 'abandon' })}>Abandon</Action>}
-          {!finished && fixture.status !== 'upcoming' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'End the match? The result stays unconfirmed until you confirm it.', action: 'full_time' })}>Full time</Action>}
-          {fixture.detail === 'finished' && !fixture.confirmed && canCorrect && <Action disabled={busy} onClick={() => setConfirm({ label: 'Confirm this result and add it to the table?', action: 'confirm' })}>Confirm result</Action>}
-        </div>
-        {confirm && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-white/5 px-3 py-2 text-sm">
-            <span>{confirm.label}</span>
-            <button type="button" disabled={busy} onClick={() => act(`/api/matches/${id}/clock`, { action: confirm.action })} className="rounded-lg bg-red-500 px-3 py-1.5 font-bold">Confirm</button>
-            <button type="button" onClick={() => setConfirm(null)} className="text-white/50">Back</button>
-          </div>
-        )}
-        {!finished && <ClockCorrection disabled={busy || !canRun} onSave={(seconds) => act(`/api/matches/${id}/clock`, { action: 'set_clock', seconds })} />}
+        {finished && <p className="mt-3 text-center text-sm text-white/50">This match is finished. The score, lineup, and events stay as recorded.</p>}
       </div>
 
-      {!finished && !live && (
+      <nav role="tablist" aria-label="Match desk" className={`mt-4 grid gap-1 rounded-2xl border border-white/10 bg-[#10192b] p-1.5 ${deskTabs.length > 2 ? 'grid-cols-4' : 'grid-cols-2'}`}>
+        {deskTabs.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === item.id}
+            onClick={() => setTab(item.id)}
+            className={`rounded-xl px-2 py-2.5 text-center text-xs font-bold sm:text-sm ${activeTab === item.id ? 'bg-[#f5c518] text-[#102018]' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
+
+      {activeTab === 'clock' && (
+        <section className="mt-4 rounded-2xl border border-white/10 bg-[#10192b] p-4" role="tabpanel">
+          <div className="flex flex-wrap gap-2">
+            {!finished && (fixture.detail === 'scheduled' || fixture.detail === 'postponed') ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'kickoff' })}>Kick off</Action> : null}
+            {!finished && clock?.running ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'pause' })}>Pause</Action> : null}
+            {!finished && fixture.status === 'live' && !clock?.running && fixture.period !== 'halftime' && fixture.period !== 'penalties' ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'resume' })}>Resume</Action> : null}
+            {!finished && fixture.period === 'first_half' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'halftime' })}>Half time</Action>}
+            {!finished && fixture.period === 'halftime' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'second_half' })}>Second half</Action>}
+            {!finished && (fixture.allowExtra || leagueRules.allowExtraTime) && fixture.period === 'second_half' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_first' })}>Extra time</Action>}
+            {!finished && fixture.period === 'extra_first' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_break' })}>Extra break</Action>}
+            {!finished && fixture.period === 'extra_break' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_second' })}>Second extra</Action>}
+            {!finished && fixture.allowExtra && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'penalties' })}>Penalties</Action>}
+            {!finished && fixture.status === 'live' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'suspend' })}>Suspend</Action>}
+            {!finished && fixture.detail === 'suspended' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'resume' })}>Resume match</Action>}
+            {!finished && ['scheduled', 'postponed', 'suspended'].includes(fixture.detail || '') && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'postpone' })}>Postpone</Action>}
+            {!finished && !fixture.confirmed && fixture.detail !== 'cancelled' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'Cancel this match?', action: 'cancel' })}>Cancel</Action>}
+            {!finished && fixture.status === 'live' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'Abandon this match? It will not count in the table.', action: 'abandon' })}>Abandon</Action>}
+            {!finished && fixture.status !== 'upcoming' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'End the match? The result stays unconfirmed until you confirm it.', action: 'full_time' })}>Full time</Action>}
+            {fixture.detail === 'finished' && !fixture.confirmed && canCorrect && <Action disabled={busy} onClick={() => setConfirm({ label: 'Confirm this result and add it to the table?', action: 'confirm' })}>Confirm result</Action>}
+          </div>
+          {confirm && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-white/5 px-3 py-2 text-sm">
+              <span>{confirm.label}</span>
+              <button type="button" disabled={busy} onClick={() => act(`/api/matches/${id}/clock`, { action: confirm.action })} className="rounded-lg bg-red-500 px-3 py-1.5 font-bold">Confirm</button>
+              <button type="button" onClick={() => setConfirm(null)} className="text-white/50">Back</button>
+            </div>
+          )}
+          {!finished && live && <AddedTime period={fixture.period} announced={clock?.added ?? Math.floor((fixture.addedSeconds ?? 0) / 60)} disabled={busy || !canRun} onSave={(minutes) => act(`/api/matches/${id}/events`, { type: 'added_time', addedMinute: minutes, clientKey: crypto.randomUUID() })} />}
+          {!finished && <ClockCorrection disabled={busy || !canRun} onSave={(seconds) => act(`/api/matches/${id}/clock`, { action: 'set_clock', seconds })} />}
+          {finished && fixture.confirmed && <p className="text-sm text-white/50">Nothing left to change on the clock.</p>}
+        </section>
+      )}
+
+      {activeTab === 'lineup' && !finished && !live && <LineupEditor matchId={id} disabled={busy || !canRun} onSave={(body) => act(`/api/matches/${id}/lineup`, body)} />}
+      {activeTab === 'fixture' && !finished && !live && (
         <FixtureMeta
           fixture={fixture}
           disabled={busy || !canRun}
           onSave={(body) => act(`/api/matches/${id}`, body, 'PATCH')}
         />
       )}
-      {!finished && <LineupEditor matchId={id} disabled={busy || !canRun} onSave={(body) => act(`/api/matches/${id}/lineup`, body)} />}
-      {!finished && canRun && (
+      {activeTab === 'events' && !finished && canRun && (
         <EventPicker
           matchId={id}
           period={fixture.period}
           disabled={busy}
           onEvent={(body) => act(`/api/matches/${id}/events`, body)}
-          onStat={(body) => act(`/api/matches/${id}/stats`, body)}
         />
       )}
 
-      <section className="mt-4 rounded-2xl border border-white/10 bg-[#10192b] p-4">
+      {activeTab === 'events' && <section className="mt-4 rounded-2xl border border-white/10 bg-[#10192b] p-4">
         <h2 className="font-black">Event history</h2>
         <ul className="mt-3 space-y-2">
-          {events.map((event) => (
+          {events.filter(shownEvent).map((event) => (
             <li key={event.id} className="border-t border-white/5 py-2 text-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span>{event.minute}{event.addedMinute ? `+${event.addedMinute}` : ''}' {event.type.replaceAll('_', ' ')} · {event.type === 'substitution' ? `${event.playerName} off, ${event.relatedName} on` : event.playerName || event.detail}{event.assistName ? ` (assist ${event.assistName})` : ''}</span>
+                <span>{historyLine(event)}</span>
                 {!finished && (
                   <span className="flex gap-3">
                     {canCorrect && event.type === 'goal' && (
@@ -501,9 +566,9 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
               )}
             </li>
           ))}
-          {!events.length && <li className="text-sm text-white/40">No events yet.</li>}
+          {!events.some(shownEvent) && <li className="text-sm text-white/40">No goals, cards, or substitutions yet.</li>}
         </ul>
-      </section>
+      </section>}
     </div>
   );
 }
@@ -520,6 +585,29 @@ function TeamBlock({ team, align = 'start' }: { team?: { shortName: string; name
 
 function Action({ children, onClick, disabled }: { children: string; onClick: () => void; disabled?: boolean }) {
   return <button type="button" disabled={disabled} onClick={onClick} className="rounded-xl bg-white/10 px-3 py-2 text-sm font-bold disabled:opacity-40">{children}</button>;
+}
+
+function AddedTime({ period, announced, disabled, onSave }: { period?: string; announced: number; disabled: boolean; onSave: (minutes: number) => void }) {
+  const [value, setValue] = useState(String(announced || ''));
+  const label = period === 'first_half' ? 'First half added time'
+    : period === 'second_half' ? 'Second half added time'
+      : period === 'extra_first' ? 'Extra time added'
+        : period === 'extra_second' ? 'Second extra added'
+          : '';
+  if (!label) return null;
+  return (
+    <form className="mt-3 flex items-end gap-2" onSubmit={(event) => {
+      event.preventDefault();
+      const minutes = Number(value);
+      if (!Number.isInteger(minutes) || minutes < 0 || minutes > 30) return;
+      onSave(minutes);
+    }}>
+      <label className="text-xs font-bold text-white/45">{label}
+        <input className={inputClass} inputMode="numeric" value={value} onChange={(event) => setValue(event.target.value)} placeholder="0" />
+      </label>
+      <button type="submit" disabled={disabled} className="rounded-xl bg-white/10 px-3 py-2 text-sm font-bold">Set</button>
+    </form>
+  );
 }
 
 function ClockCorrection({ disabled, onSave }: { disabled: boolean; onSave: (seconds: number) => void }) {
@@ -580,7 +668,7 @@ function LineupEditor({ matchId, disabled, onSave }: { matchId: string; disabled
     <section className="mt-4 rounded-2xl border border-white/10 bg-[#10192b] p-4">
       <div className="flex items-center justify-between gap-3">
         <h2 className="font-black">Lineup</h2>
-        <Select label="Team" value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={[{ id: 'home', label: 'Home' }, { id: 'away', label: 'Away' }]} />
+        <Select label="Team" value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={sidesOf(fixture)} />
       </div>
       <LineupSide key={`${matchId}-${teamId}`} matchId={matchId} teamId={teamId} formation={side === 'home' ? fixture.formationHome : fixture.formationAway} disabled={disabled} onSave={onSave} />
     </section>
@@ -721,6 +809,13 @@ function spread(count: number) {
   return Array.from({ length: count }, (_, index) => inset + ((100 - inset * 2) * index) / (count - 1));
 }
 
+const goalTypes = [
+  { id: 'open_play', label: 'Normal goal' },
+  { id: 'penalty', label: 'Penalty goal' },
+  { id: 'free_kick', label: 'Direct free-kick goal' },
+  { id: 'own_goal', label: 'Own goal' },
+];
+
 function GoalCorrect({
   event,
   matchId,
@@ -740,6 +835,7 @@ function GoalCorrect({
   const [assistId, setAssistId] = useState(event.assistId || '');
   const [minute, setMinute] = useState(String(event.minute));
   const [addedMinute, setAddedMinute] = useState(String(event.addedMinute || 0));
+  const [detail, setDetail] = useState(event.detail || '');
   if (!fixture) return null;
   const credited = side === 'home' ? fixture.homeId : fixture.awayId;
   const scorerTeam = goalType === 'own_goal' ? (side === 'home' ? fixture.awayId : fixture.homeId) : credited;
@@ -749,14 +845,16 @@ function GoalCorrect({
   return (
     <form className="mt-2 grid w-full grid-cols-2 gap-2" onSubmit={(submit) => {
       submit.preventDefault();
-      onSave({ side, goalType, playerId, assistId: goalType === 'own_goal' ? '' : assistId, minute: Number(minute), addedMinute: Number(addedMinute) });
+      onSave({ side, goalType, playerId, assistId: goalType === 'own_goal' ? '' : assistId, minute: Number(minute), addedMinute: Number(addedMinute), detail });
     }}>
-      <Select label="Team credited" value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={[{ id: 'home', label: 'Home' }, { id: 'away', label: 'Away' }]} />
-      <Select label="Type" value={goalType} onChange={setGoalType} options={[{ id: 'open_play', label: 'Open play' }, { id: 'penalty', label: 'Penalty' }, { id: 'free_kick', label: 'Free kick' }, { id: 'own_goal', label: 'Own goal' }]} />
-      <Select label="Scorer" value={playerId} onChange={setPlayerId} options={scorers.map((id) => ({ id, label: playerName(id) }))} />
+      <Select label={goalType === 'own_goal' ? 'Team credited' : 'Team'} value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={sidesOf(fixture)} />
+      <Select label="Type" value={goalType} onChange={setGoalType} options={goalTypes} />
+      <Select label={goalType === 'own_goal' ? 'Own-goal scorer' : 'Scorer'} value={playerId} onChange={setPlayerId} options={scorers.map((id) => ({ id, label: playerName(id) }))} />
       {goalType !== 'own_goal' && <Select label="Assist" value={assistId} onChange={setAssistId} options={[{ id: '', label: 'No assist' }, ...assisters.map((id) => ({ id, label: playerName(id) }))]} />}
       <label className="text-xs font-bold text-white/45">Minute<input className={inputClass} value={minute} onChange={(input) => setMinute(input.target.value)} /></label>
       <label className="text-xs font-bold text-white/45">Added<input className={inputClass} value={addedMinute} onChange={(input) => setAddedMinute(input.target.value)} /></label>
+      <label className="col-span-2 text-xs font-bold text-white/45">Note<input className={inputClass} value={detail} onChange={(input) => setDetail(input.target.value)} /></label>
+      {goalType === 'own_goal' && <p className="col-span-2 text-xs font-semibold text-[#f5c518]">The selected team receives the goal. The scorer is on the other team, and no assist is recorded.</p>}
       <button type="submit" disabled={disabled || !playerId} className="col-span-2 rounded-xl bg-[#f5c518] px-3 py-2 text-sm font-black text-[#102018] disabled:opacity-40">Save correction</button>
     </form>
   );
@@ -796,21 +894,18 @@ function EventPicker({
   period,
   disabled,
   onEvent,
-  onStat,
 }: {
   matchId: string;
   period?: string;
   disabled: boolean;
   onEvent: (body: Record<string, unknown>) => void;
-  onStat: (body: Record<string, unknown>) => void;
 }) {
   const [tool, setTool] = useState('goal');
   const tools = [
     { id: 'goal', label: 'Goal' },
     { id: 'card', label: 'Card' },
     { id: 'sub', label: 'Substitution' },
-    { id: 'other', label: 'Other event' },
-    { id: 'stat', label: 'Manual statistic' },
+    ...(period === 'penalties' ? [{ id: 'penalty', label: 'Penalty kick' }] : []),
   ];
   return (
     <section className="mt-4 rounded-2xl border border-white/10 bg-[#10192b] p-4">
@@ -832,8 +927,7 @@ function EventPicker({
         {tool === 'goal' && <GoalForm matchId={matchId} disabled={disabled} onSubmit={onEvent} bare />}
         {tool === 'card' && <CardForm matchId={matchId} disabled={disabled} onSubmit={onEvent} bare />}
         {tool === 'sub' && <SubForm matchId={matchId} disabled={disabled} onSubmit={onEvent} bare />}
-        {tool === 'other' && <OtherForm matchId={matchId} period={period} disabled={disabled} onSubmit={onEvent} bare />}
-        {tool === 'stat' && <ManualStats matchId={matchId} disabled={disabled} onSave={onStat} bare />}
+        {tool === 'penalty' && <PenaltyForm matchId={matchId} disabled={disabled} onSubmit={onEvent} />}
       </div>
     </section>
   );
@@ -849,10 +943,13 @@ function GoalForm({ matchId, disabled, onSubmit, bare = false }: { matchId: stri
   const [assistId, setAssistId] = useState('');
   const [minute, setMinute] = useState(String(clock?.minute ?? fixture?.minute ?? 0));
   const [addedMinute, setAddedMinute] = useState('0');
+  const [detail, setDetail] = useState('');
   const minuteTouched = useRef(false);
+  const addedTouched = useRef(false);
   useEffect(() => {
     if (!minuteTouched.current && clock?.minute != null) setMinute(String(clock.minute));
-  }, [clock?.minute]);
+    if (!addedTouched.current) setAddedMinute(clock && clock.stoppage > 0 ? String(Math.floor(clock.stoppage / 60)) : '0');
+  }, [clock]);
   if (!fixture) return null;
   const credited = side === 'home' ? fixture.homeId : fixture.awayId;
   const scorerTeam = goalType === 'own_goal' ? (side === 'home' ? fixture.awayId : fixture.homeId) : credited;
@@ -862,16 +959,18 @@ function GoalForm({ matchId, disabled, onSubmit, bare = false }: { matchId: stri
   return (
     <form className={bare ? '' : 'rounded-2xl border border-white/10 bg-[#10192b] p-4'} onSubmit={(event) => {
       event.preventDefault();
-      onSubmit({ type: 'goal', side, goalType, playerId, assistId: goalType === 'own_goal' ? '' : assistId, minute: Number(minute), addedMinute: Number(addedMinute), clientKey: crypto.randomUUID() });
+      onSubmit({ type: 'goal', side, goalType, playerId, assistId: goalType === 'own_goal' ? '' : assistId, minute: Number(minute), addedMinute: Number(addedMinute), detail, clientKey: crypto.randomUUID() });
     }}>
       {!bare && <h2 className="font-black">Goal</h2>}
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <Select label="Team credited" value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={[{ id: 'home', label: 'Home' }, { id: 'away', label: 'Away' }]} />
-        <Select label="Type" value={goalType} onChange={setGoalType} options={[{ id: 'open_play', label: 'Open play' }, { id: 'penalty', label: 'Penalty' }, { id: 'free_kick', label: 'Free kick' }, { id: 'own_goal', label: 'Own goal' }]} />
-        <Select label="Scorer" value={playerId} onChange={setPlayerId} options={[{ id: '', label: 'Choose' }, ...scorers.map((id) => ({ id, label: playerName(id) }))]} />
+        <Select label={goalType === 'own_goal' ? 'Team credited' : 'Team'} value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={sidesOf(fixture)} />
+        <Select label="Type" value={goalType} onChange={setGoalType} options={goalTypes} />
+        <Select label={goalType === 'own_goal' ? 'Own-goal scorer' : 'Scorer'} value={playerId} onChange={setPlayerId} options={[{ id: '', label: 'Choose' }, ...scorers.map((id) => ({ id, label: playerName(id) }))]} />
         {goalType !== 'own_goal' && <Select label="Assist (optional)" value={assistId} onChange={setAssistId} options={[{ id: '', label: 'No assist' }, ...assisters.map((id) => ({ id, label: playerName(id) }))]} />}
         <label className="text-xs font-bold text-white/45">Minute<input className={inputClass} value={minute} onChange={(event) => { minuteTouched.current = true; setMinute(event.target.value); }} /></label>
-        <label className="text-xs font-bold text-white/45">Added<input className={inputClass} value={addedMinute} onChange={(event) => setAddedMinute(event.target.value)} /></label>
+        <label className="text-xs font-bold text-white/45">Added minute<input className={inputClass} value={addedMinute} onChange={(event) => { addedTouched.current = true; setAddedMinute(event.target.value); }} /></label>
+        <label className="col-span-2 text-xs font-bold text-white/45">Note<input className={inputClass} value={detail} onChange={(event) => setDetail(event.target.value)} /></label>
+        {goalType === 'own_goal' && <p className="col-span-2 text-xs font-semibold text-[#f5c518]">The selected team receives the goal. The scorer is on the other team, and no assist is recorded.</p>}
       </div>
       <button type="submit" disabled={disabled || !playerId} className="mt-3 rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018] disabled:opacity-40">Record goal</button>
     </form>
@@ -888,6 +987,7 @@ function CardForm({ matchId, disabled, onSubmit, bare = false }: { matchId: stri
   if (!fixture) return null;
   const teamId = side === 'home' ? fixture.homeId : fixture.awayId;
   const options = [...pitch.entries()].filter(([, row]) => row.teamId === teamId && row.on).map(([id]) => ({ id, label: playerName(id) }));
+  const booked = Boolean(playerId) && matchEvents.some((event) => event.matchId === matchId && !event.voided && event.playerId === playerId && event.type === 'card' && event.cardType === 'yellow');
   return (
     <form className={bare ? '' : 'rounded-2xl border border-white/10 bg-[#10192b] p-4'} onSubmit={(event) => {
       event.preventDefault();
@@ -895,11 +995,12 @@ function CardForm({ matchId, disabled, onSubmit, bare = false }: { matchId: stri
     }}>
       {!bare && <h2 className="font-black">Card</h2>}
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <Select label="Team" value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={[{ id: 'home', label: 'Home' }, { id: 'away', label: 'Away' }]} />
-        <Select label="Card" value={cardType} onChange={setCardType} options={[{ id: 'yellow', label: 'Yellow' }, { id: 'second_yellow', label: 'Second yellow' }, { id: 'red', label: 'Direct red' }]} />
+        <Select label="Team" value={side} onChange={(value) => { setSide(value as 'home' | 'away'); setPlayerId(''); }} options={sidesOf(fixture)} />
+        <Select label="Card" value={cardType} onChange={setCardType} options={[{ id: 'yellow', label: booked ? 'Second yellow (red card)' : 'Yellow' }, { id: 'red', label: 'Red card' }]} />
         <Select label="Player" value={playerId} onChange={setPlayerId} options={[{ id: '', label: 'Choose' }, ...options]} />
         <label className="text-xs font-bold text-white/45">Reason<input className={inputClass} value={detail} onChange={(event) => setDetail(event.target.value)} /></label>
       </div>
+      {booked && cardType === 'yellow' && <p className="mt-3 text-xs font-semibold text-[#f5c518]">A second yellow is a red card. {playerName(playerId)} is sent off.</p>}
       <button type="submit" disabled={disabled || !playerId} className="mt-3 rounded-xl bg-white/10 px-4 py-2 text-sm font-bold disabled:opacity-40">Record card</button>
     </form>
   );
@@ -922,7 +1023,7 @@ function SubForm({ matchId, disabled, onSubmit, bare = false }: { matchId: strin
     }}>
       {!bare && <h2 className="font-black">Substitution</h2>}
       <div className="mt-3 grid gap-2">
-        <Select label="Team" value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={[{ id: 'home', label: 'Home' }, { id: 'away', label: 'Away' }]} />
+        <Select label="Team" value={side} onChange={(value) => { setSide(value as 'home' | 'away'); setPlayerId(''); setRelatedPlayerId(''); }} options={sidesOf(fixture)} />
         <Select label="Off" value={playerId} onChange={setPlayerId} options={[{ id: '', label: 'Choose' }, ...outgoing]} />
         <Select label="On" value={relatedPlayerId} onChange={setRelatedPlayerId} options={[{ id: '', label: 'Choose' }, ...incoming]} />
       </div>
@@ -931,57 +1032,57 @@ function SubForm({ matchId, disabled, onSubmit, bare = false }: { matchId: strin
   );
 }
 
-function OtherForm({ matchId, period, disabled, onSubmit, bare = false }: { matchId: string; period?: string; disabled: boolean; onSubmit: (body: Record<string, unknown>) => void; bare?: boolean }) {
-  const [type, setType] = useState('foul');
+function PenaltyForm({ matchId, disabled, onSubmit }: { matchId: string; disabled: boolean; onSubmit: (body: Record<string, unknown>) => void }) {
   const [side, setSide] = useState<'home' | 'away'>('home');
-  const [detail, setDetail] = useState('');
   const [scored, setScored] = useState(true);
+  const [playerId, setPlayerId] = useState('');
   const fixture = getFixture(matchId);
   const pitch = usePitch(matchId);
-  const teamId = side === 'home' ? fixture?.homeId : fixture?.awayId;
+  if (!fixture) return null;
+  const teamId = side === 'home' ? fixture.homeId : fixture.awayId;
   const takers = [...pitch.entries()].filter(([, row]) => row.teamId === teamId && !row.dismissed).map(([id]) => ({ id, label: playerName(id) }));
-  const [playerId, setPlayerId] = useState('');
   return (
-    <form className={bare ? '' : 'rounded-2xl border border-white/10 bg-[#10192b] p-4'} onSubmit={(event) => {
+    <form onSubmit={(event) => {
       event.preventDefault();
-      if (type === 'added_time') onSubmit({ type, addedMinute: Number(detail), clientKey: crypto.randomUUID() });
-      else if (type === 'penalty_kick') onSubmit({ type, side, playerId, scored, clientKey: crypto.randomUUID() });
-      else onSubmit({ type, side, detail, playerId: playerId || undefined, clientKey: crypto.randomUUID() });
+      onSubmit({ type: 'penalty_kick', side, playerId, scored, clientKey: crypto.randomUUID() });
     }}>
-      {!bare && <h2 className="font-black">Other event</h2>}
-      <div className="mt-3 grid gap-2">
-        <Select label="Event" value={type} onChange={setType} options={['foul', 'free_kick', 'corner', 'offside', 'save', 'injury', 'penalty_awarded', 'penalty_missed', 'penalty_saved', 'var', 'added_time', 'note', 'penalty_kick'].map((id) => ({ id, label: id.replaceAll('_', ' ') }))} />
-        {type !== 'added_time' && <Select label="Team" value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={[{ id: 'home', label: 'Home' }, { id: 'away', label: 'Away' }]} />}
-        {type === 'penalty_kick' && <Select label="Taker" value={playerId} onChange={setPlayerId} options={takers} />}
-        {type === 'penalty_kick' && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={scored} onChange={(event) => setScored(event.target.checked)} /> Scored</label>}
-        {type !== 'penalty_kick' && (
-          <label className="text-xs font-bold text-white/45">{type === 'added_time' ? 'Added minutes' : 'Detail'}
-            <input className={inputClass} value={detail} onChange={(event) => setDetail(event.target.value)} />
-          </label>
-        )}
-        {period !== 'penalties' && type === 'penalty_kick' && <p className="text-xs text-white/40">Start the shootout before recording kicks. They do not change the match score.</p>}
+      <div className="grid gap-2">
+        <Select label="Team" value={side} onChange={(value) => { setSide(value as 'home' | 'away'); setPlayerId(''); }} options={sidesOf(fixture)} />
+        <Select label="Taker" value={playerId} onChange={setPlayerId} options={[{ id: '', label: 'Choose' }, ...takers]} />
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={scored} onChange={(event) => setScored(event.target.checked)} /> Scored</label>
       </div>
-      <button type="submit" disabled={disabled} className="mt-3 rounded-xl bg-white/10 px-4 py-2 text-sm font-bold disabled:opacity-40">Record</button>
+      <button type="submit" disabled={disabled || !playerId} className="mt-3 rounded-xl bg-white/10 px-4 py-2 text-sm font-bold disabled:opacity-40">Record kick</button>
     </form>
   );
 }
 
-function ManualStats({ matchId, disabled, onSave, bare = false }: { matchId: string; disabled: boolean; onSave: (body: Record<string, unknown>) => void; bare?: boolean }) {
-  const [metric, setMetric] = useState('corners');
-  const [side, setSide] = useState('home');
-  const [value, setValue] = useState('');
-  return (
-    <form className={bare ? '' : 'mt-4 rounded-2xl border border-white/10 bg-[#10192b] p-4'} onSubmit={(event) => { event.preventDefault(); onSave({ metric, side, value: Number(value) }); }}>
-      {!bare && <h2 className="font-black">Manual team statistic</h2>}
-      <p className="mt-1 text-xs text-white/40">Only numbers an official enters are stored. Possession and shots are never invented.</p>
-      <div className="mt-3 grid gap-2 sm:grid-cols-4">
-        <Select label="Stat" value={metric} onChange={setMetric} options={['possession', 'shots', 'shots_on_target', 'shots_off_target', 'blocked_shots', 'corners', 'fouls', 'offsides', 'saves', 'passes', 'pass_accuracy'].map((id) => ({ id, label: id.replaceAll('_', ' ') }))} />
-        <Select label="Team" value={side} onChange={setSide} options={[{ id: 'home', label: 'Home' }, { id: 'away', label: 'Away' }]} />
-        <label className="text-xs font-bold text-white/45">Value<input className={inputClass} value={value} onChange={(event) => setValue(event.target.value)} /></label>
-        <button type="submit" disabled={disabled || value === ''} className="self-end rounded-xl bg-white/10 px-3 py-2 text-sm font-bold disabled:opacity-40">Save</button>
-      </div>
-    </form>
-  );
+function sidesOf(fixture: { homeId: string; awayId: string }) {
+  const home = getDepartment(fixture.homeId);
+  const away = getDepartment(fixture.awayId);
+  return [
+    { id: 'home', label: home?.name || 'Team' },
+    { id: 'away', label: away?.name || 'Team' },
+  ];
+}
+
+function shownEvent(event: (typeof matchEvents)[number]) {
+  return event.type === 'goal' || event.type === 'card' || event.type === 'substitution' || event.type === 'added_time' || event.type === 'penalty_kick';
+}
+
+function historyLine(event: (typeof matchEvents)[number]) {
+  const stamp = `${event.minute}${event.addedMinute ? `+${event.addedMinute}` : ''}'`;
+  const team = getDepartment(event.creditedTeamId || event.teamId || '')?.name;
+  const who = team ? `${team} · ` : '';
+  if (event.type === 'goal') {
+    const kind = event.goalType === 'penalty' ? 'Penalty goal' : event.goalType === 'own_goal' ? 'Own goal' : event.goalType === 'free_kick' ? 'Direct free kick' : 'Goal';
+    const assist = event.goalType === 'own_goal' || !event.assistName ? '' : ` (assist ${event.assistName})`;
+    return `${stamp} ${kind} · ${who}${event.playerName}${assist}`;
+  }
+  if (event.type === 'card') return `${stamp} ${event.cardType === 'yellow' ? 'Yellow card' : 'Red card'} · ${who}${event.playerName}`;
+  if (event.type === 'substitution') return `${stamp} Substitution · ${who}${event.playerName} off, ${event.relatedName} on`;
+  if (event.type === 'added_time') return `${stamp} Added time +${event.addedMinute}`;
+  if (event.type === 'penalty_kick') return `${stamp} Penalty · ${who}${event.playerName} ${event.scored ? 'scored' : 'missed'}`;
+  return stamp;
 }
 
 function Field({ label, value, onChange, placeholder, required, maxLength, inputMode }: {
@@ -1218,7 +1319,7 @@ function PlayerAdmin({ onMessage, onError }: { onMessage: (text: string) => void
           <li key={player.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#10192b] px-3 py-2.5 text-sm">
             <span className="flex min-w-0 items-center gap-3"><Portrait name={player.name} src={player.photoUrl || undefined} size={40} /><span className="min-w-0"><span className="block truncate font-bold">{player.number} {player.name}</span><span className="block text-xs text-white/40">{player.position}</span></span></span>
             <span className="flex items-center gap-3 text-white/40">
-              <span>{player.goals}G {player.assists}A {player.yellowCards ?? 0}Y {player.redCards ?? 0}R · {player.appearances ?? 0} apps</span>
+              <span>{player.goals}G {player.assists}A {player.ownGoals ? `${player.ownGoals} OG ` : ''}{player.yellowCards ?? 0}Y {player.redCards ?? 0}R · {player.appearances ?? 0} apps</span>
               <select
                 className="rounded-lg bg-[#0c1424] px-2 py-1 text-xs text-white"
                 value={player.departmentId}

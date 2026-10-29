@@ -8,6 +8,7 @@ import {
   matchEvents,
   players,
   clockSync,
+  setCompetitionName,
   squads,
   viewClock,
   type Department,
@@ -60,7 +61,7 @@ function bucket(detail: string): MatchStatus {
 export interface Snapshot {
   serverNow: number;
   revision: number;
-  competition: { rules: typeof leagueRules } | null;
+  competition: { name?: string; rules: typeof leagueRules } | null;
   teams: Array<Department & { coach?: string; crestUrl?: string; status?: string }>;
   players: Player[];
   matches: Array<Fixture & {
@@ -70,6 +71,8 @@ export interface Snapshot {
     runningSince: number | null;
     addedMs: number;
     halfMs: number;
+    regulationMs?: number;
+    etHalfMs?: number;
     allowExtra: boolean;
     pensHome: number | null;
     pensAway: number | null;
@@ -79,6 +82,7 @@ export interface Snapshot {
     stage?: 'group' | 'r16' | 'qf' | 'sf' | 'final';
     slot?: number;
     version: number;
+    finishedAt?: number | null;
     updatedAt: number;
   }>;
   events: MatchEventRecord[];
@@ -105,6 +109,7 @@ if (liveChannel) {
 export function applySnapshot(data: Snapshot, broadcastCrossTab = true) {
   currentRevision = data.revision ?? currentRevision;
   clockSync.offset = data.serverNow - Date.now();
+  setCompetitionName(data.competition?.name || '');
   Object.assign(leagueRules, data.competition?.rules ?? {});
   replace(departments, data.teams.map((team) => ({
     ...team,
@@ -120,8 +125,11 @@ export function applySnapshot(data: Snapshot, broadcastCrossTab = true) {
     runningSince: match.runningSince == null ? null : Number(match.runningSince),
     addedSeconds: match.addedMs / 1000,
     halfSeconds: match.halfMs / 1000,
+    regulationSeconds: match.regulationMs ? match.regulationMs / 1000 : undefined,
+    extraHalfSeconds: match.etHalfMs ? match.etHalfMs / 1000 : undefined,
     stage: match.stage || 'group',
     slot: match.slot || 0,
+    finishedAt: match.finishedAt == null ? null : Number(match.finishedAt),
   })));
   replace(newsArticles, data.news);
   replace(matchEvents, data.events);

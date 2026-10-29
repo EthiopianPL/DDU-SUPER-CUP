@@ -13,14 +13,15 @@ import {
   Shield,
 } from 'lucide-react';
 import { DepartmentMark } from '../components/DepartmentMark';
+import { RedCards } from '../components/RedCards';
 import { formationPlan } from '../../data/formation';
-import { useLeagueVersion } from '../../data/live';
+import { refreshLeague, useLeagueVersion } from '../../data/live';
 import { useMatchClock } from '../useMatchClock';
 import { GroupTable } from '../components/GroupTable';
 import {
   clockSync,
   formatKickoff,
-  formatMatchClock,
+  formatLiveTime,
   getDepartment,
   getFixture,
   GROUP_COLLEGES,
@@ -29,6 +30,7 @@ import {
   matchSubstitutions,
   matchTimeline,
   periodText,
+  teamRedCards,
   players,
   type Player,
   type TimelineEvent,
@@ -54,6 +56,24 @@ export function MatchDetailsPage() {
   const fixture = id ? getFixture(id) : undefined;
   const clock = useMatchClock(fixture?.status === 'live' ? fixture.id : undefined);
   const version = useLeagueVersion();
+
+  useEffect(() => {
+    if (!id) return;
+    const pull = () => {
+      if (document.visibilityState === 'hidden') return;
+      refreshLeague().catch(() => {});
+    };
+    pull();
+    const timer = window.setInterval(pull, 3000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') pull();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [id]);
 
   // Unknown match ID handling
   if (!fixture) {
@@ -84,6 +104,8 @@ export function MatchDetailsPage() {
   const isLive = fixture.status === 'live';
 
   const timeline = useMemo(() => matchTimeline(fixture), [fixture, version, clock?.minute, fixture.homeScore, fixture.awayScore, fixture.status]);
+  const homeReds = teamRedCards(fixture.id, fixture.homeId);
+  const awayReds = teamRedCards(fixture.id, fixture.awayId);
   const substitutions = useMemo(() => matchSubstitutions(fixture), [fixture, version, clock?.minute, fixture.status]);
   const homeSheet = useMemo(() => matchSheet(fixture.homeId, fixture.id), [fixture.homeId, fixture.id, version]);
   const awaySheet = useMemo(() => matchSheet(fixture.awayId, fixture.id), [fixture.awayId, fixture.id, version]);
@@ -144,11 +166,11 @@ export function MatchDetailsPage() {
         {/* Teams and Scoreboard Grid */}
         <div className="relative mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-6">
           {/* Home Team */}
-          <div className="text-center sm:text-right">
+          <div className="min-w-0 text-center sm:text-right">
             <button
               type="button"
               onClick={() => home && navigate(`/team/${home.id}`)}
-              className="group mx-auto flex flex-col items-center sm:ml-auto sm:mr-0 sm:items-end"
+              className="group mx-auto flex w-full min-w-0 flex-col items-center sm:ml-auto sm:mr-0 sm:items-end"
             >
               <div className="transition-transform group-hover:scale-105">
                 <DepartmentMark
@@ -158,11 +180,11 @@ export function MatchDetailsPage() {
                   src={home?.crestUrl || undefined}
                 />
               </div>
-              <span className="mt-2.5 block text-sm font-bold text-white group-hover:underline sm:text-base">
-                {home?.name ?? 'Home Team'}
-              </span>
-              <span className="mt-1.5 rounded bg-[#2450c8]/25 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-[#9eb6f5]">
-                HOME
+              <span className="mt-2.5 inline-flex max-w-full items-center justify-center gap-1.5 sm:justify-end">
+                {homeReds > 0 && <RedCards count={homeReds} />}
+                <span className="min-w-0 text-sm font-bold leading-tight text-white group-hover:underline sm:text-base">
+                  {home?.name ?? home?.shortName ?? 'Team'}
+                </span>
               </span>
             </button>
           </div>
@@ -175,13 +197,13 @@ export function MatchDetailsPage() {
                   <div className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
                   <span className="text-xs font-black tracking-wide text-red-500">LIVE</span>
                   <span className="font-mono text-xs font-bold text-red-400">
-                    {clock ? formatMatchClock(clock) : `${fixture.minute ?? 0}'`}
+                    {clock ? formatLiveTime(clock) : `${fixture.minute ?? 0}'`}
                   </span>
                 </div>
                 <div className="text-4xl font-black tracking-tight text-white sm:text-5xl">
                   {fixture.homeScore} <span className="text-white/30">-</span> {fixture.awayScore}
                 </div>
-                <p className="mt-1 text-[11px] font-semibold text-white/50">{periodText(fixture.period, clock?.running)}</p>
+                <p className="mt-1 text-[11px] font-semibold text-white/50">{periodText(fixture.period, clock?.running)}{clock && clock.added > 0 ? ` · +${clock.added}` : ''}</p>
                 {fixture.pensHome != null && fixture.pensAway != null && (
                   <p className="text-[11px] font-bold text-[#f5c518]">Pens {fixture.pensHome}-{fixture.pensAway}</p>
                 )}
@@ -207,11 +229,11 @@ export function MatchDetailsPage() {
           </div>
 
           {/* Away Team */}
-          <div className="text-center sm:text-left">
+          <div className="min-w-0 text-center sm:text-left">
             <button
               type="button"
               onClick={() => away && navigate(`/team/${away.id}`)}
-              className="group mx-auto flex flex-col items-center sm:ml-0 sm:mr-auto sm:items-start"
+              className="group mx-auto flex w-full min-w-0 flex-col items-center sm:ml-0 sm:mr-auto sm:items-start"
             >
               <div className="transition-transform group-hover:scale-105">
                 <DepartmentMark
@@ -221,11 +243,11 @@ export function MatchDetailsPage() {
                   src={away?.crestUrl || undefined}
                 />
               </div>
-              <span className="mt-2.5 block text-sm font-bold text-white group-hover:underline sm:text-base">
-                {away?.name ?? 'Away Team'}
-              </span>
-              <span className="mt-1.5 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-white/70">
-                AWAY
+              <span className="mt-2.5 inline-flex max-w-full items-center justify-center gap-1.5 sm:justify-start">
+                <span className="min-w-0 text-sm font-bold leading-tight text-white group-hover:underline sm:text-base">
+                  {away?.name ?? away?.shortName ?? 'Team'}
+                </span>
+                {awayReds > 0 && <RedCards count={awayReds} />}
               </span>
             </button>
           </div>
@@ -254,6 +276,14 @@ export function MatchDetailsPage() {
               events={timeline}
               substitutions={substitutions}
               homeId={fixture.homeId}
+              awayId={fixture.awayId}
+              reachedHalf={Boolean(fixture.period && fixture.period !== 'pre' && fixture.period !== 'first_half')}
+              finished={fixture.detail === 'finished'}
+              homeScore={fixture.homeScore ?? 0}
+              awayScore={fixture.awayScore ?? 0}
+              pensHome={fixture.pensHome ?? null}
+              pensAway={fixture.pensAway ?? null}
+              halfMinute={Math.round((fixture.halfSeconds ?? 45 * 60) / 60)}
             />
           )}
         </section>
@@ -323,20 +353,7 @@ export function MatchDetailsPage() {
             <GroupTable
               group={fixture.group}
               highlightTeamIds={[fixture.homeId, fixture.awayId]}
-              homeTeamId={fixture.homeId}
-              awayTeamId={fixture.awayId}
             />
-          </div>
-
-          {/* Live Contextual Impact Note */}
-          <div className="rounded-2xl border border-white/10 bg-[#10192b] p-4 text-xs leading-relaxed text-white/70">
-            <p className="font-bold text-white">
-              Match Impact on Group {fixture.group}
-            </p>
-            <p className="mt-1">
-              Teams highlighted with <span className="font-bold text-[#9eb6f5]">[HOME]</span> and{' '}
-              <span className="font-bold text-white">[AWAY]</span> show the current standings impact. Positions 1 & 2 qualify directly for the knockout stage following the conclusion of Matchday 3 on October 31.
-            </p>
           </div>
         </section>
       )}
@@ -572,8 +589,13 @@ function LiveNotice({ events, live }: { events: TimelineEvent[]; live: boolean }
     const first = seen.current === '';
     seen.current = key;
     if (first) return;
-    const label = latest.kind === 'goal' ? 'Goal' : latest.kind === 'yellow' ? 'Yellow card' : 'Red card';
-    const assist = latest.kind === 'goal' && latest.assistName ? ` · Assist ${latest.assistName}` : '';
+    const label = latest.kind !== 'goal'
+      ? latest.kind === 'yellow' ? 'Yellow card' : 'Red card'
+      : latest.goalType === 'penalty' ? 'Penalty'
+        : latest.goalType === 'own_goal' ? 'Own goal'
+          : latest.goalType === 'free_kick' ? 'Free kick'
+            : 'Goal';
+    const assist = latest.kind === 'goal' && latest.goalType !== 'own_goal' && latest.assistName ? ` · Assist ${latest.assistName}` : '';
     setText(`${label} · ${latest.playerName}${assist}`);
     const timer = window.setTimeout(() => setText(''), 4500);
     return () => window.clearTimeout(timer);
@@ -637,16 +659,17 @@ function spread(count: number) {
   return Array.from({ length: count }, (_, index) => inset + ((100 - inset * 2) * index) / (count - 1));
 }
 
-function FootballIcon({ count = 1 }: { count?: number }) {
+function FootballIcon({ count = 1, own = false }: { count?: number; own?: boolean }) {
+  const label = own ? (count > 1 ? `${count} own goals` : 'Own goal') : (count > 1 ? `${count} goals` : 'Goal');
   return (
-    <span className="relative inline-flex items-center justify-center" title={count > 1 ? `${count} Goals` : 'Goal'}>
+    <span className="relative inline-flex items-center justify-center" title={label} aria-label={label}>
       <svg
         viewBox="0 0 24 24"
         className="h-3.5 w-3.5 shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
         fill="none"
         aria-hidden="true"
       >
-        <circle cx="12" cy="12" r="10" fill="#ffffff" stroke="#102018" strokeWidth="1.2" />
+        <circle cx="12" cy="12" r="10" fill={own ? '#e11d48' : '#ffffff'} stroke="#102018" strokeWidth="1.2" />
         <polygon points="12,7.2 16.5,10.5 14.8,15.8 9.2,15.8 7.5,10.5" fill="#102018" />
         <line x1="12" y1="7.2" x2="12" y2="2" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
         <line x1="16.5" y1="10.5" x2="21.5" y2="8.9" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
@@ -740,11 +763,12 @@ function PitchPlayer({
   played: boolean;
 }) {
   const marks = timeline.filter((event) => event.playerId === player.id);
-  const goalCount = marks.filter((event) => event.kind === 'goal').length;
+  const goalCount = marks.filter((event) => event.kind === 'goal' && event.goalType !== 'own_goal').length;
+  const ownCount = marks.filter((event) => event.kind === 'goal' && event.goalType === 'own_goal').length;
   const assistCount = timeline.filter((event) => event.kind === 'goal' && event.assistId === player.id).length;
   const hasYellow = marks.some((event) => event.kind === 'yellow');
   const hasRed = marks.some((event) => event.kind === 'red');
-  const hasEvents = played && (goalCount > 0 || assistCount > 0 || hasYellow || hasRed);
+  const hasEvents = played && (goalCount > 0 || ownCount > 0 || assistCount > 0 || hasYellow || hasRed);
 
   return (
     <div className={`absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center ${nameAbove ? 'flex-col-reverse' : ''}`} style={{ top, left }}>
@@ -757,6 +781,7 @@ function PitchPlayer({
             {hasYellow && <YellowCardIcon />}
             {hasRed && <RedCardIcon />}
             {goalCount > 0 && <FootballIcon count={goalCount} />}
+            {ownCount > 0 && <FootballIcon count={ownCount} own />}
             {assistCount > 0 && <BootIcon count={assistCount} />}
           </div>
         )}
@@ -928,40 +953,97 @@ function KickoffClock({ date, time, detail, compact = false }: { date: string; t
   );
 }
 
+function isFirstHalf(period: string | undefined, minute: number, halfMinute: number) {
+  if (period === 'first_half') return true;
+  if (period) return false;
+  return minute <= halfMinute;
+}
+
+function isExtra(period: string | undefined) {
+  return period === 'extra_first' || period === 'extra_break' || period === 'extra_second';
+}
+
+function sideGoals(events: TimelineEvent[], teamId: string, pick: (event: TimelineEvent) => boolean) {
+  return events.filter((event) => event.kind === 'goal' && event.teamId === teamId && pick(event)).length;
+}
+
 function EventTimeline({
   events,
   substitutions,
   homeId,
+  awayId,
+  reachedHalf,
+  finished,
+  homeScore,
+  awayScore,
+  pensHome,
+  pensAway,
+  halfMinute,
 }: {
   events: TimelineEvent[];
   substitutions: ReturnType<typeof matchSubstitutions>;
   homeId: string;
+  awayId: string;
+  reachedHalf: boolean;
+  finished: boolean;
+  homeScore: number;
+  awayScore: number;
+  pensHome: number | null;
+  pensAway: number | null;
+  halfMinute: number;
 }) {
   const rows = [
-    ...events.filter((event) => event.kind === 'goal' || event.kind === 'yellow' || event.kind === 'red').map((event) => ({
-      key: `${event.kind}-${event.playerId}-${event.minute}-${event.assistId ?? ''}`,
-      minute: event.minute,
-      teamId: event.teamId,
-      kind: event.kind,
-      title: event.kind === 'goal' ? 'Goal' : event.kind === 'yellow' ? 'Yellow card' : 'Red card',
-      name: event.playerName,
-      extra: event.kind === 'goal' && event.assistName ? `Assist ${event.assistName}` : event.kind === 'goal' && event.detail === 'penalty' ? 'Penalty' : '',
-    })),
+    ...events.filter((event) => event.kind === 'goal' || event.kind === 'yellow' || event.kind === 'red').map((event) => {
+      const goalType = event.goalType || '';
+      const bits = [
+        goalType === 'penalty' ? 'Penalty' : '',
+        goalType === 'free_kick' ? 'Free kick' : '',
+        goalType !== 'own_goal' && event.assistName ? `Assist ${event.assistName}` : '',
+      ].filter(Boolean);
+      return {
+        key: `${event.kind}-${event.playerId}-${event.minute}-${event.addedMinute ?? 0}-${event.assistId ?? ''}-${goalType}`,
+        minute: event.minute,
+        added: event.addedMinute ?? 0,
+        period: event.period,
+        teamId: event.teamId,
+        kind: event.kind,
+        cardType: event.cardType,
+        goalType,
+        title: event.kind === 'goal'
+          ? goalType === 'penalty' ? 'Penalty' : goalType === 'own_goal' ? 'Own goal' : goalType === 'free_kick' ? 'Free kick' : 'Goal'
+          : event.cardType === 'second_yellow' ? 'Second yellow, red card' : event.kind === 'yellow' ? 'Yellow card' : 'Red card',
+        name: event.kind === 'goal' && goalType === 'penalty' ? `${event.playerName.replace(/ \(OG\)$/, '')} (P)` : event.playerName.replace(/ \(OG\)$/, ''),
+        detail: bits.join(' · '),
+      };
+    }),
     ...substitutions.map((change) => {
       const off = players.find((player) => player.id === change.offId);
       return {
-        key: `sub-${change.offId}-${change.onPlayer.id}-${change.minute}`,
+        key: `sub-${change.offId}-${change.onPlayer.id}-${change.minute}-${change.addedMinute ?? 0}`,
         minute: change.minute,
+        added: change.addedMinute ?? 0,
+        period: change.period,
         teamId: change.teamId,
         kind: 'sub' as const,
+        cardType: null,
+        goalType: '',
         title: 'Substitution',
         name: change.onPlayer.name,
-        extra: off ? `On for ${off.name}` : '',
+        detail: off?.name ?? '',
       };
     }),
-  ].sort((a, b) => a.minute - b.minute || a.title.localeCompare(b.title));
+  ].sort((a, b) => Number(isExtra(a.period)) - Number(isExtra(b.period)) || Number(!isFirstHalf(a.period, a.minute, halfMinute)) - Number(!isFirstHalf(b.period, b.minute, halfMinute)) || a.minute - b.minute || a.added - b.added || a.title.localeCompare(b.title));
 
-  if (!rows.length) {
+  const first = rows.filter((row) => isFirstHalf(row.period, row.minute, halfMinute));
+  const extra = rows.filter((row) => isExtra(row.period));
+  const second = rows.filter((row) => !isFirstHalf(row.period, row.minute, halfMinute) && !isExtra(row.period));
+  const halfHome = sideGoals(events, homeId, (event) => isFirstHalf(event.period, event.minute, halfMinute));
+  const halfAway = sideGoals(events, awayId, (event) => isFirstHalf(event.period, event.minute, halfMinute));
+  const regulationHome = sideGoals(events, homeId, (event) => !isExtra(event.period));
+  const regulationAway = sideGoals(events, awayId, (event) => !isExtra(event.period));
+  const shootout = pensHome != null && pensAway != null;
+
+  if (!rows.length && !reachedHalf && !finished) {
     return (
       <p className="mx-auto max-w-md py-6 text-center text-sm text-white/50">
         No goals, cards, or substitutions yet.
@@ -969,46 +1051,106 @@ function EventTimeline({
     );
   }
 
+  const renderRow = (row: (typeof rows)[number]) => {
+    const home = row.teamId === homeId;
+    const note = row.kind === 'sub' && row.detail ? row.detail : row.kind === 'goal' ? row.detail : '';
+    return (
+      <li key={row.key} className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+        <div className="min-w-0 flex items-center justify-end">
+          {home && <EventSide home name={row.name} note={note} kind={row.kind} cardType={row.cardType} goalType={row.goalType} title={row.title} />}
+        </div>
+        <span className="relative z-10 flex h-6 min-w-7 items-center justify-center rounded-full border border-white/15 bg-[#0c1424] px-1.5 font-mono text-[11px] font-bold text-[#f5c518] shadow-md">
+          {row.added ? `${row.minute}+${row.added}` : row.minute}&apos;
+        </span>
+        <div className="min-w-0 flex items-center justify-start">
+          {!home && <EventSide name={row.name} note={note} kind={row.kind} cardType={row.cardType} goalType={row.goalType} title={row.title} />}
+        </div>
+      </li>
+    );
+  };
+
   return (
     <ol className="relative mx-auto max-w-md space-y-2.5 py-2">
       <span className="absolute bottom-1.5 left-1/2 top-1.5 w-px -translate-x-1/2 bg-white/20" aria-hidden="true" />
-      {rows.map((row) => {
-        const home = row.teamId === homeId;
-        return (
-          <li key={row.key} className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
-            <div className="min-w-0 flex items-center justify-end">
-              {home && (
-                <div
-                  title={row.extra ? `${row.title} · ${row.extra}` : row.title}
-                  className="flex items-center gap-2 truncate text-sm font-semibold text-white transition-opacity hover:opacity-80"
-                >
-                  <span className="truncate">{row.name}</span>
-                  <EventMark kind={row.kind} />
-                </div>
-              )}
-            </div>
-            <span className="relative z-10 flex h-6 min-w-7 items-center justify-center rounded-full border border-white/15 bg-[#0c1424] px-1.5 font-mono text-[11px] font-bold text-[#f5c518] shadow-md">
-              {row.minute}&apos;
-            </span>
-            <div className="min-w-0 flex items-center justify-start">
-              {!home && (
-                <div
-                  title={row.extra ? `${row.title} · ${row.extra}` : row.title}
-                  className="flex items-center gap-2 truncate text-sm font-semibold text-white transition-opacity hover:opacity-80"
-                >
-                  <EventMark kind={row.kind} />
-                  <span className="truncate">{row.name}</span>
-                </div>
-              )}
-            </div>
-          </li>
-        );
-      })}
+      {first.map(renderRow)}
+      {reachedHalf && <PeriodMark label="HT" home={halfHome} away={halfAway} />}
+      {second.map(renderRow)}
+      {extra.length > 0 && <PeriodMark label="ET" home={regulationHome} away={regulationAway} />}
+      {extra.map(renderRow)}
+      {shootout && <PeriodMark label="Pens" home={pensHome} away={pensAway} />}
+      {finished && <PeriodMark label="FT" home={homeScore} away={awayScore} />}
     </ol>
   );
 }
 
-function EventMark({ kind }: { kind: string }) {
+function PeriodMark({ label, home, away }: { label: string; home: number; away: number }) {
+  return (
+    <li className="my-5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center">
+      <span className="relative z-10 col-start-2 inline-flex items-center gap-2 rounded-full border border-white/20 bg-[#10192b] px-2.5 py-1 text-[10px] font-black tracking-[0.18em] text-white/75">
+        {label}
+        <span className="font-mono text-[11px] font-black tracking-normal text-[#f5c518]">{home} - {away}</span>
+      </span>
+    </li>
+  );
+}
+
+function EventSide({
+  home = false,
+  name,
+  note,
+  kind,
+  cardType,
+  goalType,
+  title,
+}: {
+  home?: boolean;
+  name: string;
+  note: string;
+  kind: string;
+  cardType?: string | null;
+  goalType?: string | null;
+  title: string;
+}) {
+  const mark = kind === 'sub'
+    ? <ArrowUp className="h-3.5 w-3.5 shrink-0 text-[#1f9d55]" strokeWidth={3} aria-label="Player on" />
+    : <EventMark kind={kind} cardType={cardType} goalType={goalType} />;
+  const player = <span className="truncate text-sm font-semibold text-white">{name}</span>;
+  return (
+    <div title={note ? `${title} · ${note}` : title} className={`flex min-w-0 flex-col ${home ? 'items-end' : 'items-start'}`}>
+      <div className="flex min-w-0 items-center gap-1.5">
+        {home ? player : mark}
+        {home ? mark : player}
+      </div>
+      {note && (
+        <span className={`mt-0.5 flex max-w-full items-center gap-1 text-[11px] font-medium text-white/55 ${home ? 'flex-row-reverse' : ''}`}>
+          {kind === 'sub' && <ArrowDown className="h-3 w-3 shrink-0 text-[#e11d48]" strokeWidth={3} />}
+          <span className="truncate">{note}</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+function CardFace({ color, label }: { color: string; label: string }) {
+  return (
+    <span
+      className="inline-block h-3.5 w-2.5 shrink-0 rounded-[1.5px] shadow-[0_1px_2px_rgba(0,0,0,0.8)] ring-1 ring-black/40"
+      style={{ background: color }}
+      title={label}
+    />
+  );
+}
+
+function EventMark({ kind, cardType, goalType }: { kind: string; cardType?: string | null; goalType?: string | null }) {
+  if (kind === 'red' && cardType === 'second_yellow') {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-0.5" aria-label="Second yellow, red card" title="Second yellow, red card">
+        <CardFace color="#f5c518" label="Yellow card" />
+        <CardFace color="#f5c518" label="Yellow card" />
+        <CardFace color="#e11d48" label="Red card" />
+      </span>
+    );
+  }
   if (kind === 'yellow') {
     return (
       <span
@@ -1035,27 +1177,7 @@ function EventMark({ kind }: { kind: string }) {
       </span>
     );
   }
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-3.5 w-3.5 shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
-      fill="none"
-      aria-label="Goal"
-    >
-      <circle cx="12" cy="12" r="10" fill="#ffffff" stroke="#102018" strokeWidth="1.2" />
-      <polygon points="12,7.2 16.5,10.5 14.8,15.8 9.2,15.8 7.5,10.5" fill="#102018" />
-      <line x1="12" y1="7.2" x2="12" y2="2" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
-      <line x1="16.5" y1="10.5" x2="21.5" y2="8.9" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
-      <line x1="14.8" y1="15.8" x2="17.9" y2="20.1" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
-      <line x1="9.2" y1="15.8" x2="6.1" y2="20.1" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
-      <line x1="7.5" y1="10.5" x2="2.5" y2="8.9" stroke="#102018" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M10 2.2A10 10 0 0 1 14 2.2L12 7.2Z" fill="#102018" />
-      <path d="M21.7 10.3A10 10 0 0 1 20.3 14.6L16.5 10.5Z" fill="#102018" />
-      <path d="M15.4 21.2A10 10 0 0 1 11.5 22L14.8 15.8Z" fill="#102018" />
-      <path d="M8.6 15.8L12.5 22A10 10 0 0 1 8.6 21.2Z" fill="#102018" />
-      <path d="M7.5 10.5L3.7 14.6A10 10 0 0 1 2.3 10.3Z" fill="#102018" />
-    </svg>
-  );
+  return <FootballIcon own={goalType === 'own_goal'} />;
 }
 
 function BenchList({ title, color, players }: { title: string; color: string; players: Player[] }) {

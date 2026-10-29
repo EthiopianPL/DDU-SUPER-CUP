@@ -1,6 +1,9 @@
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { MapPin } from 'lucide-react';
-import { formatKickoff, formatMatchClock, getFixture } from '../../data/supercup';
+import { formatKickoff, formatLiveTime, getFixture, teamRedCards } from '../../data/supercup';
+import { useLeagueVersion } from '../../data/live';
+import { RedCards } from './RedCards';
 import { useMatchClock } from '../useMatchClock';
 
 interface Team {
@@ -25,7 +28,7 @@ export interface MatchCardProps {
   matchSecond?: number;
   injuryTime?: number;
   showDate?: boolean;
-
+  competition?: string;
 }
 
 function TeamBadge({ team }: { team: Team }) {
@@ -56,9 +59,15 @@ export function MatchCard({
   stadium,
   matchMinute = 0,
   injuryTime = 0,
+  showDate = false,
+  date,
+  competition,
 }: MatchCardProps) {
   const navigate = useNavigate();
+  const version = useLeagueVersion();
   const clock = useMatchClock(status === 'live' ? id : undefined);
+  const homeReds = useMemo(() => teamRedCards(id, String(homeTeam.id)), [id, homeTeam.id, version]);
+  const awayReds = useMemo(() => teamRedCards(id, String(awayTeam.id)), [id, awayTeam.id, version]);
   const liveMinute = clock?.minute ?? matchMinute;
 
   const fixture = getFixture(id);
@@ -75,7 +84,7 @@ export function MatchCard({
   const isUpcoming = status === 'upcoming';
 
   const formattedLiveTime = clock
-    ? `${formatMatchClock(clock)}${clock.added > 0 ? ` +${clock.added}` : ''}`
+    ? formatLiveTime(clock)
     : `${liveMinute}'${liveMinute >= 45 && injuryTime > 0 ? ` +${injuryTime}` : ''}`;
 
   return (
@@ -101,11 +110,14 @@ export function MatchCard({
           {/* Circular Badge (40–48px) */}
           <TeamBadge team={homeTeam} />
           {/* Department Name Centered Directly Below */}
-          <span
-            className="mt-2 block max-w-[110px] sm:max-w-[150px] truncate text-xs font-bold leading-tight text-white group-hover:text-[#f5c518] sm:text-sm transition-colors"
-            title={homeTeam.name}
-          >
-            {homeTeam.name}
+          <span className="mt-2 inline-flex max-w-full items-center justify-center gap-1">
+            {homeReds > 0 && <RedCards count={homeReds} />}
+            <span
+              className="block max-w-[110px] truncate text-xs font-bold leading-tight text-white transition-colors group-hover:text-[#f5c518] sm:max-w-[150px] sm:text-sm"
+              title={homeTeam.name}
+            >
+              {homeTeam.name}
+            </span>
           </span>
         </div>
 
@@ -127,9 +139,16 @@ export function MatchCard({
                   LIVE {formattedLiveTime}
                 </span>
               ) : (
-                <span className="mt-1 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/50">
-                  FT
-                </span>
+                <>
+                  <span className="mt-1 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/50">
+                    FT
+                  </span>
+                  {showDate && (
+                    <span className="mt-1 max-w-[140px] text-[10px] font-semibold leading-tight text-white/45">
+                      {date}{competition ? ` · ${competition}` : ''}
+                    </span>
+                  )}
+                </>
               )}
             </>
           ) : (
@@ -157,11 +176,14 @@ export function MatchCard({
           {/* Circular Badge (40–48px) */}
           <TeamBadge team={awayTeam} />
           {/* Department Name Centered Directly Below */}
-          <span
-            className="mt-2 block max-w-[110px] sm:max-w-[150px] truncate text-xs font-bold leading-tight text-white group-hover:text-[#f5c518] sm:text-sm transition-colors"
-            title={awayTeam.name}
-          >
-            {awayTeam.name}
+          <span className="mt-2 inline-flex max-w-full items-center justify-center gap-1">
+            <span
+              className="block max-w-[110px] truncate text-xs font-bold leading-tight text-white transition-colors group-hover:text-[#f5c518] sm:max-w-[150px] sm:text-sm"
+              title={awayTeam.name}
+            >
+              {awayTeam.name}
+            </span>
+            {awayReds > 0 && <RedCards count={awayReds} />}
           </span>
         </div>
       </div>

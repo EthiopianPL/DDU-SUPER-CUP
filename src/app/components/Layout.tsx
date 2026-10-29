@@ -48,7 +48,7 @@ export function Layout() {
   );
 }
 
-function MatchLoading({ error }: { error: string }) {
+export function MatchLoading({ error = '' }: { error?: string }) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-6" role="status" aria-live="polite" aria-label={error || 'Loading'}>
       <div className="relative flex h-28 w-28 items-center justify-center">
