@@ -79,7 +79,7 @@ export function ContributorsPage() {
                 aria-label="Nahom Bekele Portfolio website (opens in new tab)"
               >
                 <Globe className="h-3.5 w-3.5" />
-                <span>Portfolio</span>
+                <span>nahombekePort</span>
                 <span className="text-[11px]">↗</span>
               </a>
             </div>
@@ -120,7 +120,7 @@ export function ContributorsPage() {
                 aria-label="Abrham Wendesen Portfolio website (opens in new tab)"
               >
                 <Globe className="h-3.5 w-3.5" />
-                <span>Portfolio</span>
+                <span>abrshiz.pro.et</span>
                 <span className="text-[11px]">↗</span>
               </a>
             </div>
