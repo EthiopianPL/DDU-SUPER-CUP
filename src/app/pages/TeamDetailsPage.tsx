@@ -80,6 +80,11 @@ export function TeamDetailsPage() {
             matchMinute={fixture.minute}
           />
         ))}
+        {matches.length === 0 && (
+          <p className="rounded-2xl border border-white/10 bg-[#10192b] px-4 py-6 text-sm text-white/50">
+            No fixtures scheduled for this team yet.
+          </p>
+        )}
       </div>
 
       <h2 className="mb-3 mt-6 text-lg font-black text-white">Squad</h2>
@@ -97,6 +102,11 @@ export function TeamDetailsPage() {
             <p className="text-sm text-white/70">{player.goals} {player.goals === 1 ? 'goal' : 'goals'}{player.ownGoals ? ` · ${player.ownGoals} OG` : ''}</p>
           </div>
         ))}
+        {squad.length === 0 && (
+          <p className="px-4 py-6 text-sm text-white/50 text-center">
+            No players registered for this team yet.
+          </p>
+        )}
       </div>
     </div>
   );
