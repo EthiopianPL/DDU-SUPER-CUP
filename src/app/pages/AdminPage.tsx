@@ -324,7 +324,7 @@ function MatchForm({ onDone, onError }: { onDone: (text: string) => void; onErro
           }
         }} />
         {stage === 'group' ? (
-          <ChoiceRow label="Group" value={group} options={['A', 'B', 'C', 'D', 'E']} onChange={(value) => setGroup(value as GroupId)} />
+          <ChoiceRow label="Group" value={group} options={['A', 'B', 'C', 'D', 'F' 'E',]} onChange={(value) => setGroup(value as GroupId)} />
         ) : (
           <ChoiceRow label="Tie" value={String(Math.min(Number(slot) || 1, ties))} options={Array.from({ length: ties }, (_, index) => String(index + 1))} onChange={setSlot} />
         )}
