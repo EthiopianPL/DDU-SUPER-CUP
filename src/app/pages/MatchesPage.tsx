@@ -7,11 +7,6 @@ import {
   getTournamentTodayString,
   shiftDate,
   formatDateLabel,
-  formatKickoff,
-  TOURNAMENT_MATCH_DATES,
-  TOURNAMENT_ACTIVE_MATCHDAY_DATE,
-  MIN_TOURNAMENT_DATE,
-  MAX_TOURNAMENT_DATE,
   sortFixturesByPriority,
 } from '../../data/supercup';
 import {
@@ -27,20 +22,12 @@ export function MatchesPage() {
   const version = useLeagueVersion();
   const systemTodayStr = useMemo(() => getTournamentTodayString(), []);
 
-  // Initial date:
-  // If system date has matches, use system date.
-  // Otherwise, default to the active tournament matchday date so fixtures are visible immediately.
   const [selectedDate, setSelectedDate] = useState<string>(() => {
-    const today = getTournamentTodayString();
-    const hasTodayFixtures = fixtures.some((f) => f.date === today);
-    return hasTodayFixtures ? today : TOURNAMENT_ACTIVE_MATCHDAY_DATE;
+    return getTournamentTodayString();
   });
 
   const [calendarOpen, setCalendarOpen] = useState(false);
-
-  // Status Filter
   const [status, setStatus] = useState<StatusFilter>('all');
-
 
   // Close calendar popup on click outside
   useEffect(() => {
@@ -58,15 +45,11 @@ export function MatchesPage() {
 
   // Date navigation handlers
   const handlePrevDay = () => {
-    if (selectedDate > MIN_TOURNAMENT_DATE) {
-      setSelectedDate((prev) => shiftDate(prev, -1));
-    }
+    setSelectedDate((prev) => shiftDate(prev, -1));
   };
 
   const handleNextDay = () => {
-    if (selectedDate < MAX_TOURNAMENT_DATE) {
-      setSelectedDate((prev) => shiftDate(prev, 1));
-    }
+    setSelectedDate((prev) => shiftDate(prev, 1));
   };
 
   // Date label in tournament timezone
@@ -75,8 +58,9 @@ export function MatchesPage() {
     [selectedDate, systemTodayStr],
   );
 
-  const isMinDate = selectedDate <= MIN_TOURNAMENT_DATE;
-  const isMaxDate = selectedDate >= MAX_TOURNAMENT_DATE;
+  const availableDates = useMemo(() => {
+    return Array.from(new Set(fixtures.map((f) => f.date))).sort();
+  }, [version]);
 
   // Filtered fixtures for the selected date and active status, sorted by smart priority:
   // 1. LIVE matches -> 2. UPCOMING matches (earliest first) -> 3. FINISHED matches (most recent first)
@@ -132,8 +116,7 @@ export function MatchesPage() {
             id="btn-prev-day"
             type="button"
             onClick={handlePrevDay}
-            disabled={isMinDate}
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 cursor-pointer"
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-white/70 transition-colors hover:bg-white/10 hover:text-white cursor-pointer"
             aria-label="Previous day"
             title="Previous day"
           >
@@ -157,8 +140,7 @@ export function MatchesPage() {
             id="btn-next-day"
             type="button"
             onClick={handleNextDay}
-            disabled={isMaxDate}
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 cursor-pointer"
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-white/70 transition-colors hover:bg-white/10 hover:text-white cursor-pointer"
             aria-label="Next day"
             title="Next day"
           >
@@ -191,31 +173,35 @@ export function MatchesPage() {
                   <span className="text-[10px] text-white/40">EAT (UTC+3)</span>
                 </div>
 
-                <div className="mt-2.5 space-y-1">
-                  {TOURNAMENT_MATCH_DATES.map((dateStr) => {
-                    const count = fixtures.filter((f) => f.date === dateStr).length;
-                    const isSelected = selectedDate === dateStr;
-                    return (
-                      <button
-                        key={dateStr}
-                        type="button"
-                        onClick={() => {
-                          setSelectedDate(dateStr);
-                          setCalendarOpen(false);
-                        }}
-                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-bold transition-colors cursor-pointer ${
-                          isSelected
-                            ? 'bg-[#f5c518] text-[#102018]'
-                            : 'bg-white/5 text-white/80 hover:bg-white/10'
-                        }`}
-                      >
-                        <span>{formatDateLabel(dateStr, systemTodayStr).main}</span>
-                        <span className={`text-[10px] font-bold ${isSelected ? 'text-[#102018]/70' : 'text-white/40'}`}>
-                          {count} matches
-                        </span>
-                      </button>
-                    );
-                  })}
+                <div className="mt-2.5 max-h-48 overflow-y-auto space-y-1">
+                  {availableDates.length > 0 ? (
+                    availableDates.map((dateStr) => {
+                      const count = fixtures.filter((f) => f.date === dateStr).length;
+                      const isSelected = selectedDate === dateStr;
+                      return (
+                        <button
+                          key={dateStr}
+                          type="button"
+                          onClick={() => {
+                            setSelectedDate(dateStr);
+                            setCalendarOpen(false);
+                          }}
+                          className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-bold transition-colors cursor-pointer ${
+                            isSelected
+                              ? 'bg-[#f5c518] text-[#102018]'
+                              : 'bg-white/5 text-white/80 hover:bg-white/10'
+                          }`}
+                        >
+                          <span>{formatDateLabel(dateStr, systemTodayStr).main}</span>
+                          <span className={`text-[10px] font-bold ${isSelected ? 'text-[#102018]/70' : 'text-white/40'}`}>
+                            {count} matches
+                          </span>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <p className="px-2 py-3 text-center text-xs text-white/40">No fixtures scheduled.</p>
+                  )}
                 </div>
 
                 <div className="mt-3 border-t border-white/[0.08] pt-2.5">
@@ -225,8 +211,6 @@ export function MatchesPage() {
                   <input
                     id="jump-date-input"
                     type="date"
-                    min={MIN_TOURNAMENT_DATE}
-                    max={MAX_TOURNAMENT_DATE}
                     value={selectedDate}
                     onChange={(e) => {
                       if (e.target.value) {
@@ -248,22 +232,24 @@ export function MatchesPage() {
         <FilterPill active={status === 'all'} onClick={() => setStatus('all')}>
           All
         </FilterPill>
-        <FilterPill active={status === 'live'} onClick={() => setStatus('live')}>
-          <span className="flex items-center gap-1">
-            {liveMatchesCount > 0 && <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />}
-            Live {liveMatchesCount > 0 ? `(${liveMatchesCount})` : ''}
-          </span>
-        </FilterPill>
-        <FilterPill active={status === 'finished'} onClick={() => setStatus('finished')}>
-          Finished
+        <FilterPill
+          active={status === 'live'}
+          onClick={() => setStatus('live')}
+          count={liveMatchesCount > 0 ? liveMatchesCount : undefined}
+          isLive={liveMatchesCount > 0}
+        >
+          Live
         </FilterPill>
         <FilterPill active={status === 'upcoming'} onClick={() => setStatus('upcoming')}>
           Upcoming
         </FilterPill>
+        <FilterPill active={status === 'finished'} onClick={() => setStatus('finished')}>
+          Finished
+        </FilterPill>
       </div>
 
-      {/* 4. Match Feed: Direct Vertically Spaced Fixture Cards */}
-      <div className="mt-4 space-y-3">
+      {/* 4. Match List or Empty State */}
+      <div className="mt-4 space-y-2.5">
         {displayedFixtures.length > 0 ? (
           displayedFixtures.map((fixture) => (
             <MatchCard
@@ -280,22 +266,31 @@ export function MatchesPage() {
             />
           ))
         ) : (
-          /* Concise & Dynamic Empty State */
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-[#101622]/40 px-4 py-8 text-center">
-            <CalendarX className="h-7 w-7 text-white/30" />
-            <p className="mt-2 text-sm font-bold text-white">No matches scheduled for this date</p>
-            <p className="mt-0.5 text-xs text-white/40">Try selecting another date or adjusting your filters.</p>
+          <div className="rounded-2xl border border-white/[0.08] bg-[#121722]/80 px-4 py-12 text-center shadow-inner">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white/5 text-white/30">
+              <CalendarX className="h-6 w-6" />
+            </div>
+            <p className="mt-3 text-sm font-bold text-white/70">
+              No matches found for this date
+            </p>
+            <p className="mt-1 text-xs text-white/40">
+              {status !== 'all'
+                ? `No ${status} matches scheduled for ${dateLabel.main}. Try switching filters.`
+                : `There are no matches scheduled for ${dateLabel.main}.`}
+            </p>
 
-            {nearestFixtureDate && nearestFixtureDate !== selectedDate && (
+            {/* Smart shortcut to jump to the nearest fixture day */}
+            {nearestFixtureDate && (
               <button
                 type="button"
                 onClick={() => {
                   setSelectedDate(nearestFixtureDate);
                   setStatus('all');
                 }}
-                className="mt-3 rounded-xl bg-[#f5c518] px-3.5 py-1.5 text-xs font-bold text-[#102018] shadow hover:bg-[#e5b510] transition-colors cursor-pointer"
+                className="mt-4 inline-flex items-center gap-1.5 rounded-xl border border-[#f5c518]/30 bg-[#f5c518]/10 px-3.5 py-2 text-xs font-bold text-[#f5c518] transition-colors hover:bg-[#f5c518]/20 cursor-pointer"
               >
-                View fixtures on {formatKickoff(nearestFixtureDate, '12:00')}
+                <span>Jump to {formatDateLabel(nearestFixtureDate, systemTodayStr).main}</span>
+                <ChevronRight className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
@@ -309,23 +304,41 @@ function FilterPill({
   active,
   onClick,
   children,
+  count,
+  isLive,
 }: {
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
+  count?: number;
+  isLive?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+      className={`flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer ${
         active
-          ? 'bg-[#f5c518] text-[#102018] shadow-sm font-bold'
-          : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+          ? 'bg-[#f5c518] text-[#102018] shadow-sm'
+          : 'border border-white/5 bg-[#121722] text-white/60 hover:bg-white/10 hover:text-white'
       }`}
     >
-      {children}
+      {isLive && (
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+        </span>
+      )}
+      <span>{children}</span>
+      {typeof count === 'number' && (
+        <span
+          className={`flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-black leading-none ${
+            active ? 'bg-[#102018] text-[#f5c518]' : 'bg-white/10 text-white'
+          }`}
+        >
+          {count}
+        </span>
+      )}
     </button>
   );
 }
-
