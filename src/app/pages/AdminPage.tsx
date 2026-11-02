@@ -1249,7 +1249,7 @@ function TeamEditor({ initial, onDone, onError, onCancel }: { initial?: (typeof 
           <Field label="Coach" value={coach} onChange={setCoach} placeholder="Coach name" />
           <Field label="Pitch" value={pitch} onChange={setPitch} placeholder="Campus pitch" />
           <div className="sm:col-span-2">
-            <ChoiceRow label="Group" value={group} options={['A', 'B', 'C', 'D', 'E', 'F']} onChange={(value) => setGroup(value as GroupId)} />
+            <ChoiceRow label="Group" value={group} options={['A', 'B', 'C', 'D', 'E']} onChange={(value) => setGroup(value as GroupId)} />
           </div>
         </div>
       </div>
