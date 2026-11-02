@@ -54,25 +54,22 @@ export function GroupTable({
                 <span className="text-center text-white/75" title="Won">W</span>
                 <span className="text-center text-white/75" title="Drawn">D</span>
                 <span className="text-center text-white/75" title="Lost">L</span>
-                <span className="text-center text-white/75" title="Goal Difference">GD</span>
+                <span className="text-center text-white/75" title="Goal difference">GD</span>
                 <span className="text-center font-black text-[#f5c518]" title="Points">PTS</span>
-                <span className="text-center text-white/75" title="Recent Form">FORM</span>
+                <span className="text-center text-white/75">Form</span>
               </>
             )}
           </div>
 
           {rows.map((row) => {
             const isHighlighted = highlightTeamIds.includes(row.department.id);
-
             return (
               <button
                 key={row.department.id}
                 type="button"
                 onClick={() => navigate(`/team/${row.department.id}`)}
-                className={`grid w-full items-center gap-2 border-t border-white/[0.07] px-4 py-3 text-left transition-colors focus-visible:bg-white/[0.08] focus-visible:outline-none ${
-                  isHighlighted
-                    ? 'bg-[#f5c518]/10 ring-1 ring-inset ring-[#f5c518]/40 hover:bg-[#f5c518]/15'
-                    : 'hover:bg-white/[0.06] active:bg-white/[0.09]'
+                className={`grid w-full items-center gap-2 border-b border-white/5 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-white/5 ${
+                  isHighlighted ? 'bg-[#f5c518]/10' : ''
                 }`}
                 style={{
                   gridTemplateColumns: compact
@@ -80,51 +77,74 @@ export function GroupTable({
                     : '28px minmax(130px, 1fr) 32px 30px 30px 30px 38px 42px 76px',
                 }}
               >
-                <span className={`text-sm font-black ${row.position <= 2 ? 'text-[#7ddea0]' : 'text-white/40'}`}>
+                <span
+                  className={`flex h-5 w-5 items-center justify-center rounded-full text-xs font-black ${
+                    row.position <= 2
+                      ? 'bg-[#2f9e44] text-[#070d18]'
+                      : 'text-white/40'
+                  }`}
+                >
                   {row.position}
                 </span>
-                <span className="flex min-w-0 items-center gap-2.5">
-                  <DepartmentMark shortName={row.department.shortName} color={row.department.color} size={32} src={row.department.crestUrl || undefined} />
-                  <span className="flex min-w-0 items-center gap-1.5 truncate">
-                    <span className="truncate text-sm font-bold tracking-tight text-white">{row.department.name}</span>
-                  </span>
-                </span>
-              {compact ? (
-                <>
-                  <span className="text-center text-sm font-semibold text-white/80">{row.played}</span>
-                  <span className="text-center text-sm font-black text-[#f5c518]">{row.points}</span>
-                </>
-              ) : (
-                <>
-                  <span className="text-center text-sm font-semibold text-white/80">{row.played}</span>
-                  <span className="text-center text-sm font-semibold text-white/80">{row.won}</span>
-                  <span className="text-center text-sm font-semibold text-white/80">{row.drawn}</span>
-                  <span className="text-center text-sm font-semibold text-white/80">{row.lost}</span>
-                  <span className="text-center text-sm font-semibold text-white/80">
-                    {row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}
-                  </span>
-                  <span className="text-center text-sm font-black text-[#f5c518]">{row.points}</span>
-                  <span className="flex items-center justify-center gap-1">
-                    {row.form.map((result, index) => (
-                      <span
-                        key={`${row.department.id}-${index}`}
-                        className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black ${
-                          result === 'W'
-                            ? 'bg-[#7ddea0] text-[#070d18]'
-                            : result === 'D'
-                              ? 'bg-[#f5c518] text-[#070d18]'
-                              : 'bg-[#f07167] text-white'
-                        }`}
-                      >
-                        {result}
-                      </span>
-                    ))}
-                  </span>
-                </>
-              )}
-            </button>
-          );
-        })}
+
+                <div className="flex items-center gap-2.5 overflow-hidden">
+                  <DepartmentMark
+                    shortName={row.department.shortName}
+                    color={row.department.color}
+                    size={22}
+                    src={row.department.crestUrl || undefined}
+                  />
+                  <div className="truncate">
+                    <p className="truncate text-sm font-bold text-white">
+                      {row.department.name}
+                    </p>
+                    <p className="text-[10px] text-white/40 sm:hidden">
+                      {row.department.shortName}
+                    </p>
+                  </div>
+                </div>
+
+                {compact ? (
+                  <>
+                    <span className="text-center text-sm font-semibold text-white/80">{row.played}</span>
+                    <span className="text-center text-sm font-black text-[#f5c518]">{row.points}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-center text-sm font-semibold text-white/80">{row.played}</span>
+                    <span className="text-center text-sm font-semibold text-white/80">{row.won}</span>
+                    <span className="text-center text-sm font-semibold text-white/80">{row.drawn}</span>
+                    <span className="text-center text-sm font-semibold text-white/80">{row.lost}</span>
+                    <span className="text-center text-sm font-semibold text-white/80">
+                      {row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}
+                    </span>
+                    <span className="text-center text-sm font-black text-[#f5c518]">{row.points}</span>
+                    <span className="flex items-center justify-center gap-1">
+                      {row.form.map((result, index) => (
+                        <span
+                          key={`${row.department.id}-${index}`}
+                          className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black ${
+                            result === 'W'
+                              ? 'bg-[#7ddea0] text-[#070d18]'
+                              : result === 'D'
+                                ? 'bg-[#f5c518] text-[#070d18]'
+                                : 'bg-[#f07167] text-white'
+                          }`}
+                        >
+                          {result}
+                        </span>
+                      ))}
+                    </span>
+                  </>
+                )}
+              </button>
+            );
+          })}
+          {rows.length === 0 && (
+            <div className="py-8 text-center text-xs text-white/40">
+              No teams registered in Group {group} yet.
+            </div>
+          )}
         </div>
       </div>
     </section>

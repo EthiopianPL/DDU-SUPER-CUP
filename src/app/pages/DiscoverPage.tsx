@@ -78,7 +78,7 @@ export function DiscoverPage() {
 
   return (
     <div className="mx-auto max-w-3xl overflow-x-clip px-4 pb-24 pt-3 sm:pb-12 sm:pt-5">
-      {/* Segmented Control / Tabs: uses grid-cols-3 so it never has horizontal overflow on mobile */}
+      {/* Segmented Control / Tabs */}
       <div
         role="tablist"
         aria-label="Discover tournament sections"
@@ -150,25 +150,25 @@ export function DiscoverPage() {
             aria-label="Filter standings by group"
             className="flex gap-2 overflow-x-auto pb-1 overscroll-x-contain"
           >
-              {GROUPS.map((item) => {
-                const isCurrent = item === selectedGroup;
-                return (
-                  <button
-                    key={item}
-                    type="button"
-                    aria-pressed={isCurrent}
-                    onClick={() => setSelectedGroup(item)}
-                    className={`shrink-0 rounded-full px-4 py-2 text-xs font-bold transition-all sm:text-sm active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518] focus-visible:ring-offset-2 focus-visible:ring-offset-[#070d18] ${
-                      isCurrent
-                        ? 'border border-[#f5c518] bg-[#f5c518] text-[#102018] shadow-md shadow-[#f5c518]/20 font-black'
-                        : 'border border-white/10 bg-[#10192b] text-white/80 hover:border-white/25 hover:bg-white/10 hover:text-white'
-                    }`}
-                  >
-                    Group {item}
-                  </button>
-                );
-              })}
-            </div>
+            {GROUPS.map((item) => {
+              const isCurrent = item === selectedGroup;
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  aria-pressed={isCurrent}
+                  onClick={() => setSelectedGroup(item)}
+                  className={`shrink-0 rounded-full px-4 py-2 text-xs font-bold transition-all sm:text-sm active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518] focus-visible:ring-offset-2 focus-visible:ring-offset-[#070d18] ${
+                    isCurrent
+                      ? 'border border-[#f5c518] bg-[#f5c518] text-[#102018] shadow-md shadow-[#f5c518]/20 font-black'
+                      : 'border border-white/10 bg-[#10192b] text-white/80 hover:border-white/25 hover:bg-white/10 hover:text-white'
+                  }`}
+                >
+                  Group {item}
+                </button>
+              );
+            })}
+          </div>
 
           {/* Group Standings Table */}
           <div>
@@ -202,6 +202,11 @@ export function DiscoverPage() {
                   matchMinute={fixture.minute}
                 />
               ))}
+              {groupFixtures.length === 0 && (
+                <p className="rounded-2xl border border-white/10 bg-[#10192b] px-4 py-6 text-sm text-white/50">
+                  No fixtures scheduled for Group {selectedGroup}.
+                </p>
+              )}
             </div>
           </div>
         </section>
@@ -358,6 +363,11 @@ export function DiscoverPage() {
                 </button>
               );
             })}
+            {activeStatsList.length === 0 && (
+              <p className="p-6 text-center text-xs text-white/50">
+                No statistics recorded yet.
+              </p>
+            )}
           </div>
         </section>
       )}
