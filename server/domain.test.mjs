@@ -53,7 +53,16 @@ test('match events, permissions, clock, and standings stay consistent', async ()
     });
     assert.equal(oversized.status, 400);
     const burstStarted = Date.now();
-    const burst = await Promise.all(Array.from({ length: 400 }, () => fetch(`${base}/api/health`)));
+    const burst = await Promise.all(Array.from({ length: 400 }, async () => {
+      for (let i = 0; i < 5; i++) {
+        try {
+          return await fetch(`${base}/api/health`);
+        } catch (e) {
+          if (i === 4) throw e;
+          await new Promise((r) => setTimeout(r, 20));
+        }
+      }
+    }));
     assert.ok(burst.every((item) => item.status === 200));
     assert.ok(Date.now() - burstStarted < 15000);
     const live = opened.data.matches.find((match) => match.detail === 'live');

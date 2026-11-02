@@ -470,6 +470,6 @@ export function prepareDatabase(db) {
 export function startServer(db = openDatabase(), port = Number(process.env.PORT || 8787)) {
   const server = createApp(db);
   return prepareDatabase(db).then(() => new Promise((resolve) => {
-    server.listen(port, '127.0.0.1', () => resolve({ server, db }));
+    server.listen({ port, host: '127.0.0.1', backlog: 1024 }, () => resolve({ server, db }));
   }));
 }
