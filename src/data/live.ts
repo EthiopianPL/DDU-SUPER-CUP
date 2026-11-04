@@ -83,6 +83,8 @@ export interface Snapshot {
     slot?: number;
     version: number;
     finishedAt?: number | null;
+    motmPlayerId?: string | null;
+    motmPhotoUrl?: string | null;
     updatedAt: number;
   }>;
   events: MatchEventRecord[];
@@ -130,6 +132,8 @@ export function applySnapshot(data: Snapshot, broadcastCrossTab = true) {
     stage: match.stage || 'group',
     slot: match.slot || 0,
     finishedAt: match.finishedAt == null ? null : Number(match.finishedAt),
+    motmPlayerId: match.motmPlayerId || null,
+    motmPhotoUrl: match.motmPhotoUrl || null,
   })));
   replace(newsArticles, data.news);
   replace(matchEvents, data.events);
