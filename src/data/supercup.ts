@@ -67,6 +67,8 @@ export interface Fixture {
   slot?: number;
   version?: number;
   finishedAt?: number | null;
+  motmPlayerId?: string | null;
+  motmPhotoUrl?: string | null;
   updatedAt?: number;
 }
 
