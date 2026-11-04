@@ -79,6 +79,8 @@ CREATE TABLE IF NOT EXISTS matches (
   slot INT NOT NULL DEFAULT 0,
   version INT NOT NULL DEFAULT 1,
   finished_at BIGINT NULL,
+  motm_player_id VARCHAR(160) NULL,
+  motm_photo_url TEXT NULL,
   updated_at BIGINT NOT NULL,
   CONSTRAINT fk_matches_home FOREIGN KEY (home_id) REFERENCES teams(id),
   CONSTRAINT fk_matches_away FOREIGN KEY (away_id) REFERENCES teams(id)
