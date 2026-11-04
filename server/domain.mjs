@@ -462,6 +462,8 @@ export function buildSnapshot(db, now = Date.now()) {
       slot: Number(match.slot) || 0,
       version: match.version,
       finishedAt: match.finished_at == null ? null : Number(match.finished_at),
+      motmPlayerId: match.motm_player_id || null,
+      motmPhotoUrl: match.motm_photo_url || null,
       updatedAt: match.updated_at,
     })),
     events: events.map((event) => ({
@@ -1388,4 +1390,64 @@ export function withRevision(work) {
   const result = work();
   touch();
   return result;
+}
+
+export function saveManOfTheMatch(db, actor, matchId, input) {
+  deny(actor, 'match.write');
+  return transaction(db, () => {
+    const match = matchRow(db, matchId);
+    assertVersion(match, input.version);
+
+    const before = {
+      motmPlayerId: match.motm_player_id || null,
+      motmPhotoUrl: match.motm_photo_url || null,
+    };
+
+    if (!input.playerId) {
+      db.prepare('UPDATE matches SET motm_player_id = NULL, motm_photo_url = NULL, version = version + 1, updated_at = ? WHERE id = ?').run(
+        Date.now(),
+        matchId,
+      );
+      audit(db, actor, 'match.motm.remove', 'match', matchId, before, null);
+      touch();
+      return { ok: true, motmPlayerId: null, motmPhotoUrl: null };
+    }
+
+    if (match.status !== 'finished') {
+      throw new RuleError('Man of the Match can only be awarded for completed matches.');
+    }
+
+    const playerId = String(input.playerId).trim();
+    const player = playerRow(db, playerId);
+
+    if (player.team_id !== match.home_id && player.team_id !== match.away_id) {
+      throw new RuleError('The selected player does not belong to either participating team.');
+    }
+
+    let photoUrl = match.motm_photo_url || null;
+
+    if (input.image) {
+      const image = storedImage(input);
+      photoUrl = saveMedia(db, 'motm', matchId, image);
+    } else if (input.photoUrl !== undefined) {
+      photoUrl = input.photoUrl ? String(input.photoUrl) : null;
+    }
+
+    if (!photoUrl) {
+      throw new RuleError('A photograph of the Man of the Match is required.');
+    }
+
+    db.prepare('UPDATE matches SET motm_player_id = ?, motm_photo_url = ?, version = version + 1, updated_at = ? WHERE id = ?').run(
+      player.id,
+      photoUrl,
+      Date.now(),
+      matchId,
+    );
+
+    const after = { motmPlayerId: player.id, motmPhotoUrl: photoUrl };
+    audit(db, actor, 'match.motm.set', 'match', matchId, before, after);
+    touch();
+
+    return { ok: true, motmPlayerId: player.id, motmPhotoUrl: photoUrl };
+  });
 }

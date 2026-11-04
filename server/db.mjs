@@ -142,6 +142,8 @@ function migrate(db) {
       slot INTEGER NOT NULL DEFAULT 0,
       version INTEGER NOT NULL DEFAULT 1,
       finished_at INTEGER,
+      motm_player_id TEXT REFERENCES players(id),
+      motm_photo_url TEXT,
       updated_at INTEGER NOT NULL
     );
     CREATE TABLE IF NOT EXISTS match_squad (
@@ -222,6 +224,12 @@ function migrate(db) {
   }
   if (matchColumns.length && !matchColumns.some((column) => column.name === 'finished_at')) {
     db.exec('ALTER TABLE matches ADD COLUMN finished_at INTEGER');
+  }
+  if (matchColumns.length && !matchColumns.some((column) => column.name === 'motm_player_id')) {
+    db.exec('ALTER TABLE matches ADD COLUMN motm_player_id TEXT REFERENCES players(id)');
+  }
+  if (matchColumns.length && !matchColumns.some((column) => column.name === 'motm_photo_url')) {
+    db.exec('ALTER TABLE matches ADD COLUMN motm_photo_url TEXT');
   }
 }
 
@@ -332,6 +340,8 @@ function finishPostgres(worker, port1, url) {
   }
   try {
     db.exec('ALTER TABLE matches ADD COLUMN IF NOT EXISTS finished_at BIGINT NULL');
+    db.exec('ALTER TABLE matches ADD COLUMN IF NOT EXISTS motm_player_id VARCHAR(160) NULL REFERENCES players(id)');
+    db.exec('ALTER TABLE matches ADD COLUMN IF NOT EXISTS motm_photo_url TEXT NULL');
   } catch (error) {
     if (error.code !== '42701') throw error;
   }
