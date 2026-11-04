@@ -23,6 +23,7 @@ import {
   recordEvent,
   RuleError,
   saveLineup,
+  saveManOfTheMatch,
   saveManualStat,
   saveNews,
   savePlayer,
@@ -170,7 +171,7 @@ async function serveApi(request, response, db, url) {
 
   const body = request.method === 'GET' ? {} : await readJson(request);
   const matchEvent = path.match(/^\/api\/matches\/([^/]+)\/events\/(\d+)(?:\/(void))?$/);
-  const matchAction = path.match(/^\/api\/matches\/([^/]+)\/(clock|events|lineup|stats|confirm)$/);
+  const matchAction = path.match(/^\/api\/matches\/([^/]+)\/(clock|events|lineup|stats|confirm|motm)$/);
   const one = path.match(/^\/api\/(teams|players|news|matches)\/([^/]+)$/);
 
   if (request.method === 'GET' && path === '/api/audit') return send(response, 200, { audit: listAudit(db, actor) });
@@ -190,6 +191,9 @@ async function serveApi(request, response, db, url) {
   if (one && request.method === 'DELETE' && one[1] === 'news') return mutate(response, db, () => deleteNews(db, must(actor), decodeURIComponent(one[2])));
   if (one && request.method === 'PATCH' && one[1] === 'matches') return mutate(response, db, () => updateMatch(db, must(actor), decodeURIComponent(one[2]), body));
 
+    if (matchAction && request.method === 'POST' && matchAction[2] === 'motm') {
+    return mutate(response, db, () => saveManOfTheMatch(db, must(actor), decodeURIComponent(matchAction[1]), body));
+  }
   if (matchAction && request.method === 'POST' && matchAction[2] === 'clock') {
     return mutate(response, db, () => controlMatch(db, must(actor), decodeURIComponent(matchAction[1]), body));
   }
@@ -335,7 +339,7 @@ function uploadImage(request, response, db, actor, path) {
 }
 
 function serveMedia(response, db, pathname) {
-  const match = pathname.match(/^\/api\/media\/(teams|players|news)\/([^/]+)$/);
+  const match = pathname.match(/^\/api\/media\/(teams|players|news|motm)\/([^/]+)$/);
   if (!match) return send(response, 404, { error: 'Not found.' });
   const row = db.prepare('SELECT content_type, bytes FROM media WHERE id = ?').get(`${match[1]}/${decodeURIComponent(match[2])}`);
   const bytes = mediaBytes(row?.bytes);
