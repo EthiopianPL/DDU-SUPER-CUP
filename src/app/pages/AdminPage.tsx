@@ -24,7 +24,7 @@ import { STAGE_OPTIONS, scheduleTie, stageLabel, tieCount, type Stage } from '..
 
 type Role = 'super_admin' | 'match_admin' | 'competition_manager' | 'team_manager' | 'reader';
 type Section = 'overview' | 'matches' | 'teams' | 'players' | 'news' | 'users' | 'audit' | 'rules';
-type DeskTab = 'clock' | 'events' | 'lineup' | 'fixture';
+type DeskTab = 'clock' | 'events' | 'lineup' | 'fixture' | 'motm';
 
 interface DeskUser {
   id: string;
@@ -438,6 +438,7 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
     { id: 'clock', label: 'Clock' },
     { id: 'events', label: 'Events' },
   ];
+  if (finished) deskTabs.push({ id: 'motm', label: 'Man of the Match' });
   if (!finished && !live) deskTabs.push({ id: 'lineup', label: 'Lineup' }, { id: 'fixture', label: 'Fixture' });
   const activeTab = deskTabs.some((item) => item.id === tab) ? tab : deskTabs[0].id;
 
@@ -475,7 +476,7 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
         {finished && <p className="mt-3 text-center text-sm text-white/50">This match is finished. The score, lineup, and events stay as recorded.</p>}
       </div>
 
-      <nav role="tablist" aria-label="Match desk" className={`mt-4 grid gap-1 rounded-2xl border border-white/10 bg-[#10192b] p-1.5 ${deskTabs.length > 2 ? 'grid-cols-4' : 'grid-cols-2'}`}>
+      <nav role="tablist" aria-label="Match desk" className={`mt-4 grid gap-1 rounded-2xl border border-white/10 bg-[#10192b] p-1.5 ${deskTabs.length >= 4 ? 'grid-cols-4' : deskTabs.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
         {deskTabs.map((item) => (
           <button
             key={item.id}
@@ -537,6 +538,36 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
           period={fixture.period}
           disabled={busy}
           onEvent={(body) => act(`/api/matches/${id}/events`, body)}
+        />
+      )}
+
+      
+      {activeTab === 'motm' && (
+        <MotmManager
+          fixture={fixture}
+          disabled={busy || !canRun}
+          onSave={async (body) => {
+            setBusy(true);
+            try {
+              await desk(`/api/matches/${id}/motm`, { method: 'POST', body: { ...body, version: getFixture(id)?.version } });
+              onMessage('Man of the Match selection saved.');
+            } catch (reason) {
+              onError(reason instanceof Error ? reason.message : 'Could not save Man of the Match.');
+            } finally {
+              setBusy(false);
+            }
+          }}
+          onRemove={async () => {
+            setBusy(true);
+            try {
+              await desk(`/api/matches/${id}/motm`, { method: 'POST', body: { playerId: null, photoUrl: null, version: getFixture(id)?.version } });
+              onMessage('Man of the Match selection removed.');
+            } catch (reason) {
+              onError(reason instanceof Error ? reason.message : 'Could not remove selection.');
+            } finally {
+              setBusy(false);
+            }
+          }}
         />
       )}
 
@@ -1520,4 +1551,268 @@ function labelOf(id: string) {
 function playerName(id: string) {
   const player = players.find((item) => item.id === id);
   return player ? `${player.number} ${player.name}` : id;
+}
+
+function MotmManager({
+  fixture,
+  disabled,
+  onSave,
+  onRemove,
+}: {
+  fixture: (typeof fixtures)[number];
+  disabled: boolean;
+  onSave: (body: { playerId: string; photoUrl?: string | null; image?: { contentType: string; data: string } }) => Promise<void>;
+  onRemove: () => Promise<void>;
+}) {
+  const [selectedPlayerId, setSelectedPlayerId] = useState(fixture.motmPlayerId || '');
+  const [currentPhotoUrl, setCurrentPhotoUrl] = useState(fixture.motmPhotoUrl || '');
+  const [previewUrl, setPreviewUrl] = useState(fixture.motmPhotoUrl || '');
+  const [pendingPayload, setPendingPayload] = useState<{ contentType: string; data: string } | null>(null);
+  const [fileError, setFileError] = useState('');
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setSelectedPlayerId(fixture.motmPlayerId || '');
+    setCurrentPhotoUrl(fixture.motmPhotoUrl || '');
+    if (!pendingPayload) {
+      setPreviewUrl(fixture.motmPhotoUrl || '');
+    }
+  }, [fixture.motmPlayerId, fixture.motmPhotoUrl]);
+
+  const homeDept = getDepartment(fixture.homeId);
+  const awayDept = getDepartment(fixture.awayId);
+
+  const homePlayers = players
+    .filter((p) => p.departmentId === fixture.homeId && p.registered !== false && p.active !== false)
+    .sort((a, b) => a.number - b.number);
+
+  const awayPlayers = players
+    .filter((p) => p.departmentId === fixture.awayId && p.registered !== false && p.active !== false)
+    .sort((a, b) => a.number - b.number);
+
+  const selectedPlayer = players.find((p) => p.id === selectedPlayerId);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFileError('');
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setFileError('Please select a JPG, JPEG, PNG, or WebP image.');
+      return;
+    }
+    if (file.size > 1_500_000) {
+      setFileError('The image must be smaller than 1.5 MB.');
+      return;
+    }
+
+    try {
+      const payload = await imagePayload(file);
+      setPendingPayload(payload);
+      setPreviewUrl(`data:${payload.contentType};base64,${payload.data}`);
+    } catch (err) {
+      setFileError(err instanceof Error ? err.message : 'Could not read image.');
+    }
+  };
+
+  const handleRemovePhoto = () => {
+    setPendingPayload(null);
+    setPreviewUrl('');
+    setCurrentPhotoUrl('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleSave = () => {
+    if (!selectedPlayerId) {
+      setFileError('Please select a player.');
+      return;
+    }
+    if (!previewUrl && !pendingPayload) {
+      setFileError('A photograph of the player is required.');
+      return;
+    }
+    onSave({
+      playerId: selectedPlayerId,
+      photoUrl: pendingPayload ? undefined : currentPhotoUrl,
+      image: pendingPayload || undefined,
+    });
+  };
+
+  const isPublished = Boolean(fixture.motmPlayerId && fixture.motmPhotoUrl);
+
+  return (
+    <section className="mt-4 rounded-2xl border border-white/10 bg-[#10192b] p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-4">
+        <div>
+          <h2 className="text-lg font-black tracking-wide text-white flex items-center gap-2">
+            <span className="text-[#f5c518]">★</span> Man of the Match Award
+          </h2>
+          <p className="mt-0.5 text-xs text-white/50">
+            Select the official award winner and upload their photograph.
+          </p>
+        </div>
+        {isPublished ? (
+          <span className="rounded-full bg-emerald-500/20 border border-emerald-500/40 px-3 py-1 text-xs font-bold text-emerald-400">
+            ✓ Published to Highlights
+          </span>
+        ) : (
+          <span className="rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs font-bold text-white/50">
+            Not Published
+          </span>
+        )}
+      </div>
+
+      <div className="mt-5 space-y-4">
+        {/* Player Selector */}
+        <div>
+          <label className="block text-xs font-bold tracking-wider text-white/70 uppercase">
+            Select Award Winner
+          </label>
+          <select
+            value={selectedPlayerId}
+            onChange={(e) => setSelectedPlayerId(e.target.value)}
+            disabled={disabled}
+            className="mt-1.5 w-full rounded-xl border border-white/15 bg-[#070d18] px-3.5 py-2.5 text-sm font-semibold text-white outline-none focus:border-[#f5c518]"
+          >
+            <option value="">-- Choose Man of the Match --</option>
+            <optgroup label={`${homeDept?.name || 'Home'} (${homeDept?.shortName})`}>
+              {homePlayers.map((p) => (
+                <option key={p.id} value={p.id}>
+                  #{p.number} · {p.name} ({p.position})
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label={`${awayDept?.name || 'Away'} (${awayDept?.shortName})`}>
+              {awayPlayers.map((p) => (
+                <option key={p.id} value={p.id}>
+                  #{p.number} · {p.name} ({p.position})
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        </div>
+
+        {/* Photograph Upload & Preview */}
+        <div>
+          <label className="block text-xs font-bold tracking-wider text-white/70 uppercase">
+            Player Photograph
+          </label>
+
+          <div className="mt-2 flex flex-col sm:flex-row items-center gap-4 rounded-2xl border border-white/10 bg-[#070d18] p-4">
+            {/* Preview Frame */}
+            <div className="relative flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-[#f5c518]/40 bg-[#10192b]">
+              {previewUrl ? (
+                <img src={previewUrl} alt="Preview" className="h-full w-full object-cover" />
+              ) : (
+                <div className="text-center p-2 text-white/30 text-xs font-bold">
+                  No photo
+                </div>
+              )}
+            </div>
+
+            {/* Upload Controls */}
+            <div className="flex-1 text-center sm:text-left">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleFileChange}
+                disabled={disabled}
+                className="hidden"
+                id="motm-photo-input"
+              />
+              <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={disabled}
+                  className="rounded-xl border border-white/20 bg-white/5 px-3.5 py-2 text-xs font-bold text-white transition-colors hover:border-[#f5c518] hover:bg-[#f5c518]/10"
+                >
+                  {previewUrl ? 'Replace Photograph' : 'Choose Photograph'}
+                </button>
+                {previewUrl && (
+                  <button
+                    type="button"
+                    onClick={handleRemovePhoto}
+                    disabled={disabled}
+                    className="rounded-xl border border-red-500/30 px-3.5 py-2 text-xs font-bold text-red-400 transition-colors hover:bg-red-500/10"
+                  >
+                    Remove Photo
+                  </button>
+                )}
+              </div>
+              <p className="mt-2 text-[11px] text-white/40">
+                Supports JPG, JPEG, PNG, and WebP (Max 1.5 MB). Preview appears before saving.
+              </p>
+              {fileError && <p className="mt-1 text-xs font-semibold text-red-400">{fileError}</p>}
+            </div>
+          </div>
+        </div>
+
+        {/* Selected Player Summary Preview */}
+        {selectedPlayer && (
+          <div className="rounded-xl border border-[#f5c518]/20 bg-[#f5c518]/5 p-3 flex items-center justify-between text-xs">
+            <div>
+              <span className="font-bold text-[#f5c518]">Selected: </span>
+              <span className="font-black text-white">{selectedPlayer.name}</span>
+              <span className="text-white/60"> (#{selectedPlayer.number} · {selectedPlayer.position})</span>
+            </div>
+            <span className="text-white/40 font-semibold">
+              {selectedPlayer.departmentId === fixture.homeId ? homeDept?.shortName : awayDept?.shortName}
+            </span>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={disabled || !selectedPlayerId || !previewUrl}
+            className="rounded-xl bg-[#f5c518] px-5 py-2.5 text-xs sm:text-sm font-black text-[#102018] shadow-md transition-all hover:bg-[#e5b512] disabled:opacity-40"
+          >
+            Save & Publish Award
+          </button>
+
+          {isPublished && (
+            <div>
+              {confirmRemove ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-red-300">Remove and hide from homepage?</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfirmRemove(false);
+                      onRemove();
+                    }}
+                    disabled={disabled}
+                    className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-700"
+                  >
+                    Yes, Remove
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmRemove(false)}
+                    className="text-xs text-white/50 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmRemove(true)}
+                  disabled={disabled}
+                  className="rounded-xl border border-red-500/30 px-3.5 py-2 text-xs font-bold text-red-400 hover:bg-red-500/10"
+                >
+                  Remove Selection
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
 }
