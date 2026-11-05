@@ -27,7 +27,7 @@ export function GroupTable({
           <p className="mt-0.5 text-xs text-white/70">{GROUP_COLLEGES[group]}</p>
         </div>
         <span className="rounded-full border border-[#2f9e44]/30 bg-[#2f9e44]/15 px-2.5 py-1 text-[10px] font-bold text-[#7ddea0]">
-          Top 2 advance
+          Top 3 advance
         </span>
       </header>
 
@@ -68,9 +68,8 @@ export function GroupTable({
                 key={row.department.id}
                 type="button"
                 onClick={() => navigate(`/team/${row.department.id}`)}
-                className={`grid w-full items-center gap-2 border-b border-white/5 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-white/5 ${
-                  isHighlighted ? 'bg-[#f5c518]/10' : ''
-                }`}
+                className={`grid w-full items-center gap-2 border-b border-white/5 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-white/5 ${isHighlighted ? 'bg-[#f5c518]/10' : ''
+                  }`}
                 style={{
                   gridTemplateColumns: compact
                     ? '28px 1fr 32px 42px'
@@ -78,11 +77,10 @@ export function GroupTable({
                 }}
               >
                 <span
-                  className={`flex h-5 w-5 items-center justify-center rounded-full text-xs font-black ${
-                    row.position <= 2
+                  className={`flex h-5 w-5 items-center justify-center rounded-full text-xs font-black ${row.position <= 2
                       ? 'bg-[#2f9e44] text-[#070d18]'
                       : 'text-white/40'
-                  }`}
+                    }`}
                 >
                   {row.position}
                 </span>
@@ -123,13 +121,12 @@ export function GroupTable({
                       {row.form.map((result, index) => (
                         <span
                           key={`${row.department.id}-${index}`}
-                          className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black ${
-                            result === 'W'
+                          className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black ${result === 'W'
                               ? 'bg-[#7ddea0] text-[#070d18]'
                               : result === 'D'
                                 ? 'bg-[#f5c518] text-[#070d18]'
                                 : 'bg-[#f07167] text-white'
-                          }`}
+                            }`}
                         >
                           {result}
                         </span>

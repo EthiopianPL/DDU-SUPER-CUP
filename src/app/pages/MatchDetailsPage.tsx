@@ -61,7 +61,7 @@ export function MatchDetailsPage() {
     if (!id) return;
     const pull = () => {
       if (document.visibilityState === 'hidden') return;
-      refreshLeague().catch(() => {});
+      refreshLeague().catch(() => { });
     };
     pull();
     const timer = window.setInterval(pull, 3000);
@@ -345,7 +345,7 @@ export function MatchDetailsPage() {
                 <p className="mt-0.5 text-xs text-white/50">{GROUP_COLLEGES[fixture.group]}</p>
               </div>
               <span className="rounded-full border border-[#2f9e44]/30 bg-[#2f9e44]/15 px-2.5 py-1 text-[11px] font-bold text-[#7ddea0]">
-                Top 2 Advance
+                Top 3 Advance
               </span>
             </div>
 
@@ -538,9 +538,8 @@ function TeamBar({
 }) {
   return (
     <div
-      className={`relative z-20 flex items-center justify-between gap-3 px-4 py-3 bg-[#0a1f13]/90 backdrop-blur-md ${
-        position === 'top' ? 'border-b border-white/10' : 'border-t border-white/10'
-      }`}
+      className={`relative z-20 flex items-center justify-between gap-3 px-4 py-3 bg-[#0a1f13]/90 backdrop-blur-md ${position === 'top' ? 'border-b border-white/10' : 'border-t border-white/10'
+        }`}
     >
       <span className="flex min-w-0 items-center gap-2">
         <DepartmentMark shortName={shortName} color={color} size={28} src={crest} />
@@ -885,9 +884,8 @@ function MatchTabButton({
       aria-selected={active}
       aria-controls={`match-panel-${id}`}
       onClick={onSelect}
-      className={`flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518] focus-visible:ring-offset-2 focus-visible:ring-offset-[#10192b] ${
-        active ? 'bg-[#f5c518] text-[#102018] shadow-md font-black' : 'text-white/60 hover:bg-white/5 hover:text-white'
-      }`}
+      className={`flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-center text-xs font-bold transition-all sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518] focus-visible:ring-offset-2 focus-visible:ring-offset-[#10192b] ${active ? 'bg-[#f5c518] text-[#102018] shadow-md font-black' : 'text-white/60 hover:bg-white/5 hover:text-white'
+        }`}
     >
       <Icon className={`h-4 w-4 shrink-0 ${active ? 'text-[#102018]' : 'text-white/40'}`} />
       <span className="truncate">{label}</span>
