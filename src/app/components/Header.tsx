@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from 'react-router';
 import { Home, Compass, Calendar, Newspaper, Users } from 'lucide-react';
 import { BrandLockup } from './BrandLockup';
+import { InstallAppButton } from './InstallAppButton';
 
 export function Header() {
   const navigate = useNavigate();
@@ -41,28 +42,31 @@ export function Header() {
     <header className="sticky top-0 z-50 border-b border-white/10 bg-[#070d18]/90 backdrop-blur-md">
       <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
         <BrandLockup size="sm" onClick={() => navigate('/')} />
-        <nav className="hidden sm:flex items-center gap-1.5" aria-label="Desktop primary navigation">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = isItemActive(item.path);
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => navigate(item.path)}
-                className={`flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-all ${
-                  active
-                    ? 'bg-[#f5c518] text-[#102018] shadow-sm'
-                    : 'text-white/60 hover:bg-white/5 hover:text-white'
-                }`}
-                aria-current={active ? 'page' : undefined}
-              >
-                <Icon className={`h-4 w-4 ${active ? 'text-[#102018]' : 'text-white/60'}`} />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
+        <div className="flex items-center gap-2">
+          <nav className="hidden sm:flex items-center gap-1.5" aria-label="Desktop primary navigation">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const active = isItemActive(item.path);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => navigate(item.path)}
+                  className={`flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-all ${
+                    active
+                      ? 'bg-[#f5c518] text-[#102018] shadow-sm'
+                      : 'text-white/60 hover:bg-white/5 hover:text-white'
+                  }`}
+                  aria-current={active ? 'page' : undefined}
+                >
+                  <Icon className={`h-4 w-4 ${active ? 'text-[#102018]' : 'text-white/60'}`} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+          <InstallAppButton />
+        </div>
       </div>
     </header>
   );

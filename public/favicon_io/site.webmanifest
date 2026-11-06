@@ -1,0 +1,94 @@
+{
+  "name": "Dire Dawa University Super Cup",
+  "short_name": "DDU Super Cup",
+  "description": "Official Dire Dawa University Super Cup Football Tournament Hub. Live scores, fixtures, standings, lineups, and team stats.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "portrait-primary",
+  "background_color": "#080d1a",
+  "theme_color": "#080d1a",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": [
+    "sports",
+    "entertainment",
+    "news"
+  ],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Matches & Live Scores",
+      "short_name": "Matches",
+      "description": "View live match results and upcoming fixtures",
+      "url": "/matches",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Tournament Standings",
+      "short_name": "Standings",
+      "description": "View group tables and knockout brackets",
+      "url": "/standings",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Teams & Squads",
+      "short_name": "Teams",
+      "description": "Explore department teams and player profiles",
+      "url": "/teams",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

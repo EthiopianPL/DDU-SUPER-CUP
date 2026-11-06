@@ -68,6 +68,7 @@ const TYPES = {
   '.webp': 'image/webp',
   '.svg': 'image/svg+xml',
   '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.ico': 'image/x-icon',
 };
 
@@ -462,7 +463,14 @@ function serveStatic(response, pathname) {
   const target = inside(dist, file) && existsSync(file) ? file : join(dist, 'index.html');
   if (!existsSync(target)) return send(response, 404, { error: 'Build the site before starting it.' });
   applySecurity(response);
-  response.writeHead(200, { 'Content-Type': TYPES[extname(target)] || 'text/html; charset=utf-8' });
+  const headers = { 'Content-Type': TYPES[extname(target)] || 'text/html; charset=utf-8' };
+  if (requested === '/sw.js') {
+    headers['Service-Worker-Allowed'] = '/';
+    headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+  } else if (requested.endsWith('.webmanifest') || requested.endsWith('.json')) {
+    headers['Cache-Control'] = 'public, max-age=3600';
+  }
+  response.writeHead(200, headers);
   createReadStream(target).pipe(response);
 }
 

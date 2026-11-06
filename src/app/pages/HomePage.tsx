@@ -7,6 +7,7 @@ import { getActiveMatchdayHighlights } from '../../data/motm';
 import { newsArticles } from '../../data/news';
 import { useLeagueVersion } from '../../data/live';
 import { DepartmentMark } from '../components/DepartmentMark';
+import { InstallAppButton } from '../components/InstallAppButton';
 import { stripHtml } from '../utils/richText';
 
 export function HomePage() {
@@ -29,6 +30,9 @@ export function HomePage() {
         <p className="text-[11px] font-semibold tracking-[0.22em] text-[#f5c518]">DIRE DAWA UNIVERSITY</p>
         <h1 className="mt-2 text-4xl font-black tracking-tight text-white">Super Cup</h1>
         <p className="mt-2 max-w-sm text-sm text-white/60">Department football.</p>
+        <div className="mt-4">
+          <InstallAppButton />
+        </div>
       </section>
 
       <section className="mb-6">
