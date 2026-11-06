@@ -410,6 +410,9 @@ function MatchForm({ onDone, onError }: { onDone: (text: string) => void; onErro
   const [time, setTime] = useState('15:00');
   const [venue, setVenue] = useState('DDU Main Pitch');
   const [referee, setReferee] = useState('');
+  const [assistant1, setAssistant1] = useState('');
+  const [assistant2, setAssistant2] = useState('');
+  const [fourthReferee, setFourthReferee] = useState('');
   const [allowExtra, setAllowExtra] = useState(false);
   void version;
   const home = pool.find((team) => team.id === homeId) ?? pool[0];
@@ -439,6 +442,9 @@ function MatchForm({ onDone, onError }: { onDone: (text: string) => void; onErro
               time,
               venue,
               referee,
+              assistant1,
+              assistant2,
+              fourthReferee,
               allowExtra: stage === 'group' ? allowExtra : true,
             },
           });
@@ -485,6 +491,9 @@ function MatchForm({ onDone, onError }: { onDone: (text: string) => void; onErro
           </label>
           <Field label="Venue" value={venue} onChange={setVenue} placeholder="Campus pitch" />
           <Field label="Referee" value={referee} onChange={setReferee} placeholder="Optional" />
+          <Field label="Assistant 1" value={assistant1} onChange={setAssistant1} placeholder="Optional" />
+          <Field label="Assistant 2" value={assistant2} onChange={setAssistant2} placeholder="Optional" />
+          <Field label="4th Referee" value={fourthReferee} onChange={setFourthReferee} placeholder="Optional" />
         </div>
         {stage === 'group' && (
           <label className="flex items-center gap-2 text-sm text-white/70">
@@ -638,7 +647,7 @@ function MatchDesk({
           </div>
           <TeamBlock team={away} align="end" />
         </div>
-        <p className="mt-3 text-center text-xs text-white/35">{fixture.stage && fixture.stage !== 'group' ? `${stageLabel(fixture.stage)} · Tie ${fixture.slot}` : `Group ${fixture.group} · MD${fixture.matchday}`} · {fixture.stadium} · {fixture.date} {fixture.time}{fixture.referee ? ` · Ref ${fixture.referee}` : ''}{fixture.confirmed ? ' · Confirmed' : ''}</p>
+        <p className="mt-3 text-center text-xs text-white/35">{fixture.stage && fixture.stage !== 'group' ? `${stageLabel(fixture.stage)} · Tie ${fixture.slot}` : `Group ${fixture.group} · MD${fixture.matchday}`} · {fixture.stadium} · {fixture.date} {fixture.time}{fixture.referee ? ` · Ref ${fixture.referee}` : ''}{fixture.assistant1 ? ` · AR1 ${fixture.assistant1}` : ''}{fixture.assistant2 ? ` · AR2 ${fixture.assistant2}` : ''}{fixture.fourthReferee ? ` · 4th Ref ${fixture.fourthReferee}` : ''}{fixture.confirmed ? ' · Confirmed' : ''}</p>
         {finished && <p className="mt-3 text-center text-sm text-white/50">This match is finished. The score, lineup, and events stay as recorded.</p>}
       </div>
 
@@ -839,19 +848,21 @@ function FixtureMeta({
   const [referee, setReferee] = useState(fixture.referee ?? '');
   const [assistant1, setAssistant1] = useState(fixture.assistant1 ?? '');
   const [assistant2, setAssistant2] = useState(fixture.assistant2 ?? '');
+  const [fourthReferee, setFourthReferee] = useState(fixture.fourthReferee ?? '');
   return (
-    <form className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-[#10192b] p-4 sm:grid-cols-3" onSubmit={(event) => {
+    <form className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-[#10192b] p-4 sm:grid-cols-3 lg:grid-cols-4" onSubmit={(event) => {
       event.preventDefault();
-      onSave({ date, time, venue, referee, assistant1, assistant2 });
+      onSave({ date, time, venue, referee, assistant1, assistant2, fourthReferee });
     }}>
-      <h2 className="font-black sm:col-span-3">Fixture and officials</h2>
+      <h2 className="font-black sm:col-span-3 lg:col-span-4">Fixture and officials</h2>
       <label className="text-xs font-bold text-white/45">Date<input className={inputClass} type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
       <label className="text-xs font-bold text-white/45">Kickoff<input className={inputClass} type="time" value={time} onChange={(event) => setTime(event.target.value)} /></label>
       <label className="text-xs font-bold text-white/45">Venue<input className={inputClass} value={venue} onChange={(event) => setVenue(event.target.value)} /></label>
       <label className="text-xs font-bold text-white/45">Referee<input className={inputClass} value={referee} onChange={(event) => setReferee(event.target.value)} /></label>
       <label className="text-xs font-bold text-white/45">Assistant 1<input className={inputClass} value={assistant1} onChange={(event) => setAssistant1(event.target.value)} /></label>
       <label className="text-xs font-bold text-white/45">Assistant 2<input className={inputClass} value={assistant2} onChange={(event) => setAssistant2(event.target.value)} /></label>
-      <button type="submit" disabled={disabled} className="rounded-xl bg-white/10 px-4 py-2 text-sm font-bold disabled:opacity-40 sm:col-span-3">Save fixture</button>
+      <label className="text-xs font-bold text-white/45">4th Referee<input className={inputClass} value={fourthReferee} onChange={(event) => setFourthReferee(event.target.value)} /></label>
+      <button type="submit" disabled={disabled} className="rounded-xl bg-white/10 px-4 py-2 text-sm font-bold disabled:opacity-40 sm:col-span-3 lg:col-span-4">Save fixture</button>
     </form>
   );
 }
@@ -1833,7 +1844,6 @@ function PlayerEditor({
         event.preventDefault();
         try {
           setIsSubmitting(true);
-          if (!initial && !file) throw new Error('A player photo is required.');
           const image = file ? await imagePayload(file) : undefined;
           await desk(initial ? `/api/players/${initial.id}` : '/api/players', {
             method: initial ? 'PATCH' : 'POST',
@@ -1886,9 +1896,8 @@ function PlayerEditor({
       <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:items-start">
         <PicturePicker
           preview={preview}
-          empty={initial ? 'Change photo' : 'Player photo'}
+          empty={initial ? 'Change photo' : 'Player photo (optional)'}
           round
-          required={!initial}
           inputKey={photoKey}
           onFile={choosePhoto}
         />

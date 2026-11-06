@@ -163,6 +163,14 @@ export function MatchDetailsPage() {
               {fixture.stadium}
             </span>
           </div>
+          {(fixture.referee || fixture.assistant1 || fixture.assistant2 || fixture.fourthReferee) && (
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-white/40">
+              {fixture.referee && <span>Ref: <strong className="font-semibold text-white/70">{fixture.referee}</strong></span>}
+              {fixture.assistant1 && <span>AR1: <strong className="font-semibold text-white/70">{fixture.assistant1}</strong></span>}
+              {fixture.assistant2 && <span>AR2: <strong className="font-semibold text-white/70">{fixture.assistant2}</strong></span>}
+              {fixture.fourthReferee && <span>4th Ref: <strong className="font-semibold text-white/70">{fixture.fourthReferee}</strong></span>}
+            </div>
+          )}
         </div>
 
         {/* Teams and Scoreboard Grid */}

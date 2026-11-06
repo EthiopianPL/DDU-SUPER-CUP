@@ -141,3 +141,4 @@ export function InstallAppButton({ className = '' }: { className?: string }) {
     </>
   );
 }
+

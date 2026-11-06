@@ -158,6 +158,7 @@ function migrate(db) {
       referee TEXT NOT NULL DEFAULT '',
       assistant1 TEXT NOT NULL DEFAULT '',
       assistant2 TEXT NOT NULL DEFAULT '',
+      fourth_referee TEXT NOT NULL DEFAULT '',
       formation_home TEXT NOT NULL DEFAULT '4-2-3-1',
       formation_away TEXT NOT NULL DEFAULT '4-2-3-1',
       lineup_home_approved INTEGER NOT NULL DEFAULT 0,
@@ -245,6 +246,9 @@ function migrate(db) {
   }
   if (matchColumns.length && !matchColumns.some((column) => column.name === 'slot')) {
     db.exec(`ALTER TABLE matches ADD COLUMN slot INTEGER NOT NULL DEFAULT 0`);
+  }
+  if (matchColumns.length && !matchColumns.some((column) => column.name === 'fourth_referee')) {
+    db.exec(`ALTER TABLE matches ADD COLUMN fourth_referee TEXT NOT NULL DEFAULT ''`);
   }
   if (matchColumns.length && !matchColumns.some((column) => column.name === 'finished_at')) {
     db.exec('ALTER TABLE matches ADD COLUMN finished_at INTEGER');
@@ -388,6 +392,7 @@ function finishPostgres(worker, port1, url) {
     db.exec('ALTER TABLE matches ADD COLUMN IF NOT EXISTS finished_at BIGINT NULL');
     db.exec('ALTER TABLE matches ADD COLUMN IF NOT EXISTS motm_player_id VARCHAR(160) NULL REFERENCES players(id)');
     db.exec('ALTER TABLE matches ADD COLUMN IF NOT EXISTS motm_photo_url TEXT NULL');
+    db.exec("ALTER TABLE matches ADD COLUMN IF NOT EXISTS fourth_referee VARCHAR(160) NOT NULL DEFAULT ''");
     db.exec("ALTER TABLE media_assets ADD COLUMN IF NOT EXISTS bucket VARCHAR(64) NOT NULL DEFAULT 'ddu-super-cup-media'");
     db.exec('ALTER TABLE media_assets ADD COLUMN IF NOT EXISTS path TEXT NULL');
     db.exec('ALTER TABLE media_assets ADD COLUMN IF NOT EXISTS public_url TEXT NULL');

@@ -283,6 +283,10 @@ test('DDU Super Cup teams pop up on knockout after group stage finishes', async 
         date: '2026-11-20',
         time: '14:00',
         venue: 'DDU Main Pitch',
+        referee: 'Abebe Bikila',
+        assistant1: 'Chala Tafa',
+        assistant2: 'Dawit Bekele',
+        fourthReferee: 'Ephrem Zewdu',
       });
       testMatchId = created.id;
 
@@ -290,10 +294,14 @@ test('DDU Super Cup teams pop up on knockout after group stage finishes', async 
       const squadRows = db.prepare('SELECT COUNT(*) AS total FROM match_squad WHERE match_id = ?').get(testMatchId);
       assert.equal(squadRows.total, 0, 'Newly created matches must not have default squads directly auto-filled');
 
-      // 3. Verify approval flags are 0 (false)
-      const matchRow = db.prepare('SELECT lineup_home_approved, lineup_away_approved FROM matches WHERE id = ?').get(testMatchId);
+      // 3. Verify approval flags are 0 (false) and match officials (including 4th referee) are saved
+      const matchRow = db.prepare('SELECT lineup_home_approved, lineup_away_approved, referee, assistant1, assistant2, fourth_referee FROM matches WHERE id = ?').get(testMatchId);
       assert.equal(matchRow.lineup_home_approved, 0, 'Home lineup must start unapproved');
       assert.equal(matchRow.lineup_away_approved, 0, 'Away lineup must start unapproved');
+      assert.equal(matchRow.referee, 'Abebe Bikila', 'Main referee must match');
+      assert.equal(matchRow.assistant1, 'Chala Tafa', 'Assistant 1 must match');
+      assert.equal(matchRow.assistant2, 'Dawit Bekele', 'Assistant 2 must match');
+      assert.equal(matchRow.fourth_referee, 'Ephrem Zewdu', '4th referee must match');
 
       // 4. Kickoff without lineups throws error
       assert.throws(() => {
@@ -371,19 +379,19 @@ test('DDU Super Cup teams pop up on knockout after group stage finishes', async 
       data: Buffer.from('fake-bytes').toString('base64'),
     };
     try {
-      // 1. Register player 1 with isCaptain = true
+      // 1. Register player 1 with isCaptain = true without a photo
       const created1 = await savePlayer(db, adminActor, {
         name: 'Captain One',
         teamId: 'information-technology',
         position: 'MID',
         number: 88,
         isCaptain: true,
-        image: fakeImg,
       });
       p1Id = created1.id;
 
-      const saved1 = db.prepare('SELECT is_captain FROM players WHERE id = ?').get(p1Id);
+      const saved1 = db.prepare('SELECT is_captain, photo_url FROM players WHERE id = ?').get(p1Id);
       assert.equal(saved1.is_captain, 1, 'Player 1 should be saved as captain');
+      assert.equal(saved1.photo_url, '', 'Player 1 registered without photo should have empty photo_url');
 
       // 2. Register player 2 for same team with isCaptain = true
       const created2 = await savePlayer(db, adminActor, {
