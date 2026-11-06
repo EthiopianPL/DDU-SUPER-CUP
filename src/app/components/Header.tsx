@@ -24,7 +24,8 @@ export function Header() {
         location.pathname === '/departments' ||
         location.pathname === '/stats' ||
         location.pathname === '/statistics' ||
-        location.pathname.startsWith('/team/')
+        location.pathname.startsWith('/team/') ||
+        location.pathname.startsWith('/teams/')
       );
     }
     if (path === '/matches') {

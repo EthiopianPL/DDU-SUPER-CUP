@@ -173,7 +173,17 @@ export function isTeamQualified(group: GroupId, position: number): boolean {
 }
 
 export function getDepartment(id: string) {
-  return departments.find((department) => department.id === id);
+  if (!id) return undefined;
+  const decoded = decodeURIComponent(id).trim().toLowerCase();
+  const slugified = decoded.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return (
+    departments.find((department) => department.id === id) ||
+    departments.find((department) => department.id.toLowerCase() === decoded) ||
+    departments.find((department) => department.name.toLowerCase() === decoded) ||
+    departments.find((department) => department.shortName.toLowerCase() === decoded) ||
+    departments.find((department) => department.id === slugified) ||
+    departments.find((department) => department.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') === slugified)
+  );
 }
 
 export function departmentsInGroup(group: GroupId) {
