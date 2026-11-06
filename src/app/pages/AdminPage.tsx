@@ -1423,6 +1423,22 @@ function PlayerAdmin({ onMessage, onError }: { onMessage: (text: string) => void
     return true;
   });
 
+  const playersByDepartment = useMemo(() => {
+    const map = new Map<string, Player[]>();
+    for (const player of filteredPlayers) {
+      const list = map.get(player.departmentId) || [];
+      list.push(player);
+      map.set(player.departmentId, list);
+    }
+    return Array.from(map.entries())
+      .map(([deptId, deptPlayers]) => ({
+        dept: getDepartment(deptId),
+        deptId,
+        players: deptPlayers.sort((a, b) => a.number - b.number),
+      }))
+      .sort((a, b) => (a.dept?.name || a.deptId).localeCompare(b.dept?.name || b.deptId));
+  }, [filteredPlayers]);
+
   const handleStartEdit = (player: Player) => {
     setEditingId(player.id);
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1455,7 +1471,7 @@ function PlayerAdmin({ onMessage, onError }: { onMessage: (text: string) => void
           <div>
             <h2 className="text-xl font-black text-white">Registered Squad</h2>
             <p className="text-xs text-white/45">
-              Showing {filteredPlayers.length} of {players.filter((p) => p.registered !== false).length} players
+              Showing {filteredPlayers.length} of {players.filter((p) => p.registered !== false).length} players · Grouped by Department
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1497,84 +1513,111 @@ function PlayerAdmin({ onMessage, onError }: { onMessage: (text: string) => void
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
         </div>
 
-        <ul className="mt-2 space-y-2">
-          {filteredPlayers.map((player) => {
-            const isEditing = editingId === player.id;
-            const dept = getDepartment(player.departmentId);
-            return (
-              <li
-                key={player.id}
-                className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-[#10192b] px-3.5 py-3 transition-all ${
-                  isEditing
-                    ? 'border-[#f5c518] ring-1 ring-[#f5c518]/50 shadow-lg'
-                    : 'border-white/10 hover:border-white/20'
-                }`}
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <Portrait name={player.name} src={player.photoUrl || undefined} size={42} />
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-white/10 text-[11px] font-black text-[#f5c518]">
-                        {player.number}
-                      </span>
-                      <span className="truncate font-bold text-white text-sm">
-                        {player.name}
-                      </span>
-                      <span className="rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/60">
-                        {player.position}
-                      </span>
-                    </div>
-                    <div className="mt-0.5 flex items-center gap-2 text-xs text-white/40">
-                      <span>{dept?.shortName ?? player.departmentId}</span>
-                      <span>·</span>
-                      <span>
-                        {player.goals}G {player.assists}A {player.ownGoals ? `${player.ownGoals}OG ` : ''}{player.yellowCards ?? 0}Y {player.redCards ?? 0}R · {player.appearances ?? 0} apps
-                      </span>
-                    </div>
+        <div className="mt-4 space-y-6">
+          {playersByDepartment.map(({ dept, deptId, players: deptPlayers }) => (
+            <div key={deptId} className="rounded-2xl border border-white/10 bg-[#0c1424] p-4">
+              <div className="mb-3 flex items-center justify-between border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <DepartmentMark
+                    id={deptId}
+                    shortName={dept?.shortName ?? deptId}
+                    color={dept?.color ?? '#2450c8'}
+                    size={34}
+                    src={dept?.crestUrl}
+                  />
+                  <div>
+                    <h3 className="font-black text-white text-base">
+                      {dept?.name ?? deptId}
+                    </h3>
+                    <p className="text-[11px] font-semibold text-white/40">
+                      Group {dept?.group ?? '—'} · {deptPlayers.length} player{deptPlayers.length === 1 ? '' : 's'}
+                    </p>
                   </div>
                 </div>
+                <span className="rounded-full bg-white/5 px-2.5 py-1 text-xs font-bold text-[#f5c518]">
+                  {deptPlayers.length}
+                </span>
+              </div>
 
-                <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-                  <button
-                    type="button"
-                    onClick={() => handleStartEdit(player)}
-                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition ${
-                      isEditing
-                        ? 'bg-[#f5c518] text-[#102018]'
-                        : 'bg-white/10 text-white hover:bg-[#f5c518] hover:text-[#102018]'
-                    }`}
-                  >
-                    <Edit3 className="h-3.5 w-3.5" />
-                    {isEditing ? 'Editing' : 'Edit'}
-                  </button>
+              <ul className="space-y-2">
+                {deptPlayers.map((player) => {
+                  const isEditing = editingId === player.id;
+                  return (
+                    <li
+                      key={player.id}
+                      className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-[#10192b] px-3.5 py-2.5 transition-all ${
+                        isEditing
+                          ? 'border-[#f5c518] ring-1 ring-[#f5c518]/50 shadow-lg'
+                          : 'border-white/5 hover:border-white/15'
+                      }`}
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <Portrait name={player.name} src={player.photoUrl || undefined} size={38} id={player.id} />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-white/10 text-[11px] font-black text-[#f5c518]">
+                              {player.number}
+                            </span>
+                            <span className="truncate font-bold text-white text-sm">
+                              {player.name}
+                            </span>
+                            <span className="rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/60">
+                              {player.position}
+                            </span>
+                          </div>
+                          <div className="mt-0.5 flex items-center gap-2 text-xs text-white/40">
+                            <span>
+                              {player.goals}G {player.assists}A {player.ownGoals ? `${player.ownGoals}OG ` : ''}{player.yellowCards ?? 0}Y {player.redCards ?? 0}R · {player.appearances ?? 0} apps
+                            </span>
+                          </div>
+                        </div>
+                      </div>
 
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!window.confirm(`Delete or deactivate player "${player.name}" (#${player.number})?`)) return;
-                      try {
-                        await desk(`/api/players/${player.id}`, { method: 'DELETE', body: {} });
-                        if (editingId === player.id) setEditingId(null);
-                        onMessage(`Player "${player.name}" removed.`);
-                      } catch (reason) {
-                        onError(reason instanceof Error ? reason.message : 'Could not delete the player.');
-                      }
-                    }}
-                    className="inline-flex items-center gap-1 rounded-full bg-white/5 p-1.5 text-xs font-bold text-red-300 transition hover:bg-red-500/20 hover:text-red-200"
-                    title="Delete player"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </li>
-            );
-          })}
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                        <button
+                          type="button"
+                          onClick={() => handleStartEdit(player)}
+                          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                            isEditing
+                              ? 'bg-[#f5c518] text-[#102018]'
+                              : 'bg-white/10 text-white hover:bg-[#f5c518] hover:text-[#102018]'
+                          }`}
+                        >
+                          <Edit3 className="h-3.5 w-3.5" />
+                          {isEditing ? 'Editing' : 'Edit'}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!window.confirm(`Delete or deactivate player "${player.name}" (#${player.number})?`)) return;
+                            try {
+                              await desk(`/api/players/${player.id}`, { method: 'DELETE', body: {} });
+                              if (editingId === player.id) setEditingId(null);
+                              onMessage(`Player "${player.name}" removed.`);
+                            } catch (reason) {
+                              onError(reason instanceof Error ? reason.message : 'Could not delete the player.');
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 rounded-full bg-white/5 p-1.5 text-xs font-bold text-red-300 transition hover:bg-red-500/20 hover:text-red-200"
+                          title="Delete player"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+
           {!filteredPlayers.length && (
-            <li className="rounded-2xl border border-white/10 px-4 py-10 text-center text-sm text-white/40">
+            <div className="rounded-2xl border border-white/10 px-4 py-10 text-center text-sm text-white/40">
               No players found matching your filters.
-            </li>
+            </div>
           )}
-        </ul>
+        </div>
       </div>
     </div>
   );

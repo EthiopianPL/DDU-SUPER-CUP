@@ -39,7 +39,7 @@ import {
 } from './domain.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const uploads = process.env.VERCEL ? join(tmpdir(), 'ddu-uploads') : join(root, 'data', 'uploads');
+const uploads = process.env.VERCEL ? join(tmpdir(), 'ddu-uploads') : join(root, 'public', 'uploads');
 const clients = new Set();
 const loginAttempts = new Map();
 const LIVE_CLIENT_LIMIT = 400;
@@ -343,7 +343,24 @@ function uploadImage(request, response, db, actor, path) {
 function serveMedia(response, db, pathname) {
   const match = pathname.match(/^\/api\/media\/(teams|players|news|motm)\/([^/]+)$/);
   if (!match) return send(response, 404, { error: 'Not found.' });
-  const row = db.prepare('SELECT content_type, bytes FROM media WHERE id = ?').get(`${match[1]}/${decodeURIComponent(match[2])}`);
+  const kind = match[1];
+  const id = decodeURIComponent(match[2]);
+
+  // Check if a local file exists in public/uploads first
+  for (const ext of ['.svg', '.png', '.jpg', '.jpeg', '.webp']) {
+    const localFile = join(root, 'public', 'uploads', kind, `${id}${ext}`);
+    if (existsSync(localFile)) {
+      applySecurity(response);
+      response.writeHead(200, {
+        'Content-Type': TYPES[ext] || 'application/octet-stream',
+        'Cache-Control': 'public, max-age=86400',
+      });
+      createReadStream(localFile).pipe(response);
+      return;
+    }
+  }
+
+  const row = db.prepare('SELECT content_type, bytes FROM media WHERE id = ?').get(`${match[1]}/${id}`);
   const bytes = mediaBytes(row?.bytes);
   if (!bytes?.length) return send(response, 404, { error: 'Not found.' });
   applySecurity(response);
@@ -395,10 +412,16 @@ function readRaw(request, limit) {
 function serveUpload(response, pathname) {
   const relative = normalize(pathname.replace(/^\/uploads\//, ''));
   if (relative.startsWith('..') || relative.includes('\0')) return send(response, 404, { error: 'Not found.' });
-  const file = join(uploads, relative);
-  if (!inside(uploads, file) || !existsSync(file)) return send(response, 404, { error: 'Not found.' });
+  let file = join(root, 'public', 'uploads', relative);
+  if (!existsSync(file)) {
+    file = join(uploads, relative);
+  }
+  if (!existsSync(file)) {
+    file = join(root, 'data', 'uploads', relative);
+  }
+  if (!existsSync(file)) return send(response, 404, { error: 'Not found.' });
   applySecurity(response);
-  response.writeHead(200, { 'Content-Type': TYPES[extname(file)] || 'application/octet-stream', 'Cache-Control': 'public, max-age=3600' });
+  response.writeHead(200, { 'Content-Type': TYPES[extname(file)] || 'application/octet-stream', 'Cache-Control': 'public, max-age=86400' });
   createReadStream(file).pipe(response);
 }
 

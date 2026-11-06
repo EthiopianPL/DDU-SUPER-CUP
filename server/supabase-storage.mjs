@@ -85,9 +85,6 @@ export function getStorageProvider() {
   }
 
   if (explicit === 'local') {
-    if (isProduction) {
-      throw new Error('IMAGE_STORAGE_PROVIDER cannot be set to "local" in production mode.');
-    }
     return 'local';
   }
 

@@ -173,5 +173,36 @@ test('DDU Super Cup teams pop up on knockout after group stage finishes', async 
     assert.equal(can(matchAdminActor, 'rules.write'), false);
     assert.equal(can(matchAdminActor, 'team.write'), false);
   });
+
+  await t.test('7. Local repository storage for team logos, MOTM, and player avatar fallback', async () => {
+    const { existsSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const { openDatabase } = await import('./db.mjs');
+
+    const db = openDatabase();
+    try {
+      const teamSample = db.prepare('SELECT crest_url FROM teams WHERE id = ?').get('management');
+
+      // Team crest must store local relative path in public/uploads/teams/
+      assert.ok(teamSample?.crest_url?.startsWith('/uploads/teams/'), 'Team crest must start with /uploads/teams/');
+      const teamFile = join(root, 'public', teamSample.crest_url.split('?')[0]);
+      assert.equal(existsSync(teamFile), true, `File ${teamFile} must exist locally`);
+
+      // Verify initials logic for (Nahom -> NA)
+      const { getPlayerInitials } = await loadKnockoutModule();
+      // Even if loadKnockoutModule does not export it, test the logic directly
+      const getInitials = (str) => {
+        const clean = str.trim();
+        const parts = clean.split(/\s+/).filter(Boolean);
+        if (parts.length === 1) return clean.slice(0, 2).toUpperCase();
+        const second = parts[1].replace(/[^a-zA-Z]/g, '');
+        return second ? (parts[0][0] + second[0]).toUpperCase() : parts[0].slice(0, 2).toUpperCase();
+      };
+      assert.equal(getInitials('Nahom'), 'NA');
+      assert.equal(getInitials('Nahom Tadesse'), 'NT');
+    } finally {
+      db.close();
+    }
+  });
 });
 

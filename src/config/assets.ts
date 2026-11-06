@@ -136,11 +136,7 @@ export function resolveTeamLogoUrl(teamId?: string | null, customCrestUrl?: stri
   }
   if (!teamId) return '';
   const normalizedId = teamId.toLowerCase().trim();
-  const relPath = STATIC_TEAM_LOGO_PATHS[normalizedId];
-  if (relPath) {
-    return `${GITHUB_ASSETS_BASE_URL}/${relPath}`;
-  }
-  return '';
+  return `/uploads/teams/${normalizedId}.svg`;
 }
 
 /**

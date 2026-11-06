@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { can, hashPassword, ROLES } from './auth.mjs';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 import { transaction } from './db.mjs';
 import { participation, substitutionCount, yellowCount } from './eligibility.mjs';
 import {
@@ -232,21 +237,26 @@ export function seedDatabase(db, source, password) {
       JSON.stringify(DEFAULT_RULES),
     );
 
-    const insertTeam = db.prepare(`INSERT INTO teams (id, name, short_name, college, group_id, color, pitch, coach, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, '', 'active')`);
+    const insertTeam = db.prepare(`INSERT INTO teams (id, name, short_name, college, group_id, color, pitch, coach, crest_url, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, 'active')`);
     for (const team of source.departments) {
-      insertTeam.run(team.id, team.name, team.shortName, team.college, team.group, team.color, team.pitch);
+      const localCrest = `/uploads/teams/${team.id}.svg`;
+      insertTeam.run(team.id, team.name, team.shortName, team.college, team.group, team.color, team.pitch, localCrest);
     }
 
-    const insertPlayer = db.prepare(`INSERT INTO players (id, team_id, name, position, number, nationality, registered, active)
-      VALUES (?, ?, ?, ?, ?, '', ?, 1)`);
-    for (const player of source.players) insertPlayer.run(player.id, player.departmentId, player.name, player.position, player.number, 1);
+    const insertPlayer = db.prepare(`INSERT INTO players (id, team_id, name, position, number, nationality, photo_url, registered, active)
+      VALUES (?, ?, ?, ?, ?, '', ?, ?, 1)`);
+    for (const player of source.players) {
+      const localPhoto = `/uploads/players/${player.id}.svg`;
+      insertPlayer.run(player.id, player.departmentId, player.name, player.position, player.number, localPhoto, 1);
+    }
 
     const knownPlayers = new Set(source.players.map((player) => player.id));
     const remember = (player) => {
       if (knownPlayers.has(player.id)) return;
       knownPlayers.add(player.id);
-      insertPlayer.run(player.id, player.departmentId, player.name, player.position, player.number, 0);
+      const localPhoto = `/uploads/players/${player.id}.svg`;
+      insertPlayer.run(player.id, player.departmentId, player.name, player.position, player.number, localPhoto, 0);
     };
 
     const insertMatch = db.prepare(`INSERT INTO matches (
@@ -563,10 +573,40 @@ function storedImage(input) {
   return { contentType, bytes, data: raw };
 }
 
+export function saveLocalFile(kind, id, image, subfolder = '') {
+  const ext = image.contentType?.includes('svg')
+    ? 'svg'
+    : image.contentType?.includes('png')
+    ? 'png'
+    : image.contentType?.includes('webp')
+    ? 'webp'
+    : 'jpg';
+  const cleanId = String(id).replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
+  const filename = `${cleanId}.${ext}`;
+  const relativeDir = subfolder ? join(kind, subfolder) : kind;
+
+  const publicDir = join(root, 'public', 'uploads', relativeDir);
+  mkdirSync(publicDir, { recursive: true });
+  writeFileSync(join(publicDir, filename), image.bytes);
+
+  const distDir = join(root, 'dist', 'uploads', relativeDir);
+  if (existsSync(join(root, 'dist'))) {
+    mkdirSync(distDir, { recursive: true });
+    writeFileSync(join(distDir, filename), image.bytes);
+  }
+
+  const urlPrefix = subfolder ? `/uploads/${kind}/${subfolder}` : `/uploads/${kind}`;
+  return `${urlPrefix}/${filename}?v=${Date.now()}`;
+}
+
 function saveMedia(db, kind, id, image) {
-  db.prepare(`INSERT INTO media (id, content_type, bytes) VALUES (?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET content_type = excluded.content_type, bytes = excluded.bytes`).run(`${kind}/${id}`, image.contentType, image.bytes);
-  return `/api/media/${kind}/${encodeURIComponent(id)}?v=${Date.now()}`;
+  try {
+    return saveLocalFile(kind, id, image);
+  } catch {
+    db.prepare(`INSERT INTO media (id, content_type, bytes) VALUES (?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET content_type = excluded.content_type, bytes = excluded.bytes`).run(`${kind}/${id}`, image.contentType, image.bytes);
+    return `/api/media/${kind}/${encodeURIComponent(id)}?v=${Date.now()}`;
+  }
 }
 
 export async function setImage(db, kind, id, image) {
@@ -702,24 +742,7 @@ export async function savePlayer(db, actor, input, id) {
   let oldStorageBucket = null;
 
   if (image) {
-    const provider = getStorageProvider();
-    if (provider === 'supabase') {
-      const ext = image.contentType?.replace('image/', '') === 'jpeg' ? 'jpg' : (image.contentType?.replace('image/', '') || 'png');
-      const path = buildStoragePath({
-        category: 'players',
-        groupId: team.group_id,
-        teamSlug: team.short_name || teamId,
-        entityId: playerId,
-        filename: `profile.${ext}`,
-      });
-      uploadedSupabase = await uploadToSupabaseStorage({
-        image,
-        path,
-      });
-      photo = getOptimizedSupabaseUrl(uploadedSupabase.publicUrl);
-    } else {
-      photo = saveMedia(db, 'players', playerId, image);
-    }
+    photo = saveLocalFile('players', playerId, image, teamId);
   }
 
   try {
@@ -805,19 +828,34 @@ export async function savePlayer(db, actor, input, id) {
   return { id: id || playerId };
 }
 
-export function saveNews(db, actor, input, id) {
+export async function saveNews(db, actor, input, id) {
   deny(actor, 'news.write');
   const title = String(input.title ?? '').trim();
   const summary = String(input.summary ?? '').trim();
   const body = String(input.body ?? '').trim();
   if (!title || !summary || !body) throw new RuleError('Title, summary, and story are required.');
   const image = storedImage(input);
+  const articleId = id || slug(title);
+  const before = id ? db.prepare('SELECT id, image_url FROM news WHERE id = ?').get(id) : null;
+  if (id && !before) throw new RuleError('Story not found.', 404);
+  if (!id && db.prepare('SELECT id FROM news WHERE id = ?').get(articleId)) throw new RuleError('A story with that title already exists.');
+
+  let imageUrl = before?.image_url ?? '';
+  if (image) {
+    if (isSupabaseConfigured()) {
+      const ext = image.contentType?.replace('image/', '') === 'jpeg' ? 'jpg' : (image.contentType?.replace('image/', '') || 'png');
+      const path = `news/${articleId}-${Date.now()}.${ext}`;
+      const uploaded = await uploadToSupabaseStorage({ image, path });
+      imageUrl = getOptimizedSupabaseUrl(uploaded.publicUrl);
+    } else {
+      // In Supabase PostgreSQL, store in the media table in the Supabase database
+      db.prepare(`INSERT INTO media (id, content_type, bytes) VALUES (?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET content_type = excluded.content_type, bytes = excluded.bytes`).run(`news/${articleId}`, image.contentType, image.bytes);
+      imageUrl = `/api/media/news/${encodeURIComponent(articleId)}?v=${Date.now()}`;
+    }
+  }
+
   return transaction(db, () => {
-    const articleId = id || slug(title);
-    const before = id ? db.prepare('SELECT id, image_url FROM news WHERE id = ?').get(id) : null;
-    if (id && !before) throw new RuleError('Story not found.', 404);
-    if (!id && db.prepare('SELECT id FROM news WHERE id = ?').get(articleId)) throw new RuleError('A story with that title already exists.');
-    const imageUrl = image ? saveMedia(db, 'news', articleId, image) : (before?.image_url ?? '');
     const fields = [title, String(input.category ?? 'News').trim() || 'News', String(input.time ?? 'Today').trim() || 'Today', summary, body, imageUrl];
     if (id) db.prepare('UPDATE news SET title=?, category=?, time_label=?, summary=?, body=?, image_url=? WHERE id=?').run(...fields, id);
     else db.prepare('INSERT INTO news (title, category, time_label, summary, body, image_url, id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(...fields, articleId, Date.now());
@@ -828,6 +866,13 @@ export function saveNews(db, actor, input, id) {
 
 export function deleteNews(db, actor, id) {
   deny(actor, 'news.write');
+  const before = db.prepare('SELECT image_url FROM news WHERE id = ?').get(id);
+  if (before?.image_url && before.image_url.includes('/storage/v1/object/public/')) {
+    const match = before.image_url.match(/\/storage\/v1\/object\/public\/[^/]+\/(.+)$/);
+    if (match) {
+      deleteFromSupabaseStorage(DEFAULT_BUCKET, match[1]).catch(() => {});
+    }
+  }
   return transaction(db, () => {
     const result = db.prepare('DELETE FROM news WHERE id = ?').run(id);
     if (!result.changes) throw new RuleError('Story not found.', 404);
@@ -1602,24 +1647,13 @@ export async function saveManOfTheMatch(db, actor, matchId, input) {
   let oldMotmBucket = null;
 
   if (image) {
-    const provider = getStorageProvider();
-    if (provider === 'supabase') {
-      const ext = image.contentType?.replace('image/', '') === 'jpeg' ? 'jpg' : (image.contentType?.replace('image/', '') || 'png');
-      const path = buildStoragePath({
-        category: 'motm',
-        entityId: matchId,
-        filename: `${player.id}.${ext}`,
-      });
-      uploadedSupabase = await uploadToSupabaseStorage({
-        image,
-        path,
-      });
-      photoUrl = getOptimizedSupabaseUrl(uploadedSupabase.publicUrl);
-    } else {
-      photoUrl = saveMedia(db, 'motm', matchId, image);
-    }
+    photoUrl = saveLocalFile('motm', `${matchId}-${player.id}`, image);
   } else if (input.photoUrl) {
-    photoUrl = String(input.photoUrl).trim();
+    let clean = String(input.photoUrl).trim();
+    if (!clean.startsWith('http') && !clean.startsWith('/')) {
+      clean = `/uploads/motm/${clean}`;
+    }
+    photoUrl = clean;
   } else if (match.motm_photo_url && match.motm_player_id === player.id) {
     photoUrl = match.motm_photo_url;
   }
