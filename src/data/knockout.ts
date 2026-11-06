@@ -89,26 +89,36 @@ export function getQualifiedTeams(settledOnly = false): Department[] {
   return result;
 }
 
-export function groupSettled(group: GroupId) {
+export function groupSettled(group: GroupId): boolean {
   const table = standingsFor(group);
-  if (table.length < 2 || table.some((row) => row.played < table.length - 1)) return false;
-  return !fixtures.some((fixture) =>
-    (fixture.stage ?? 'group') === 'group'
-    && fixture.group === group
-    && fixture.detail !== 'finished'
-    && fixture.detail !== 'cancelled'
-    && fixture.detail !== 'abandoned'
+  if (table.length < 2) return false;
+
+  const groupMatches = fixtures.filter(
+    (fixture) => (fixture.stage ?? 'group') === 'group' && fixture.group === group
   );
+  if (groupMatches.length === 0) return false;
+
+  const allDone = groupMatches.every(
+    (fixture) =>
+      fixture.detail === 'finished' ||
+      fixture.status === 'finished' ||
+      fixture.detail === 'cancelled' ||
+      fixture.detail === 'abandoned'
+  );
+  if (!allDone) return false;
+
+  return !table.some((row) => row.played < table.length - 1);
 }
 
-export function teamFromCode(code: string, settledOnly = false): Department | undefined {
+export function teamFromCode(code: string, settledOnly = true): Department | undefined {
   const place = code.match(/^([1-4])([A-E])$/);
   if (!place) return undefined;
   const rank = Number(place[1]);
   const group = place[2] as GroupId;
+  if (!isTeamQualified(group, rank)) return undefined;
   if (settledOnly && !groupSettled(group)) return undefined;
   const row = standingsFor(group)[rank - 1];
-  return row && (settledOnly || row.played > 0) ? row.department : undefined;
+  return row ? row.department : undefined;
 }
 
 export function codeLabel(code: string) {
@@ -192,15 +202,15 @@ export function thirdPlaceTie(): RoadTie {
   };
 }
 
-export function knockoutRoad(): RoadTie[] {
-  return buildRoad(false);
+export function knockoutRoad(settledOnly = true): RoadTie[] {
+  return buildRoad(settledOnly);
 }
 
 export function scheduleTie(stage: Exclude<Stage, 'group'>, slot: number): RoadTie | undefined {
-  return buildRoad(stage === 'r16').find((tie) => tie.stage === stage && tie.slot === slot);
+  return buildRoad(true).find((tie) => tie.stage === stage && tie.slot === slot);
 }
 
-function buildRoad(settledOnly: boolean): RoadTie[] {
+function buildRoad(settledOnly = true): RoadTie[] {
   const ties: RoadTie[] = R16.map(([homeCode, awayCode], index) => ({
     stage: 'r16',
     slot: index + 1,

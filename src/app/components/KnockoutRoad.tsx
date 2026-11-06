@@ -170,12 +170,19 @@ function SideRow({ tie, home = false }: { tie?: RoadTie; home?: boolean }) {
   const score = scored ? (home ? fixture.homeScore : fixture.awayScore) : undefined;
   const teamId = side?.team?.id;
   const leading = Boolean(scored && teamId && winnerId(fixture) === teamId);
+  const isPopulated = Boolean(side?.team);
+
   return (
-    <div className="flex h-[25px] items-center gap-1.5 px-1.5">
-      <span className="h-3.5 w-1 shrink-0 rounded-full" style={{ background: side?.team?.color || 'rgba(255,255,255,0.22)' }} />
+    <div className={`flex h-[25px] items-center gap-1.5 px-1.5 transition-colors duration-300 ${isPopulated ? 'bg-white/[0.03]' : ''}`}>
+      <span
+        className="h-3.5 w-1 shrink-0 rounded-full transition-all duration-300"
+        style={{ background: side?.team?.color || 'rgba(255,255,255,0.22)' }}
+      />
       <span
         title={side?.team?.name || side?.label}
-        className={`min-w-0 flex-1 truncate text-[10px] font-bold uppercase tracking-wide ${leading ? 'text-[#f5c518]' : 'text-white'}`}
+        className={`min-w-0 flex-1 truncate text-[10px] font-bold uppercase tracking-wide transition-all duration-300 ${
+          leading ? 'text-[#f5c518]' : isPopulated ? 'text-white font-extrabold' : 'text-white/45'
+        }`}
       >
         {side?.team?.shortName || side?.label || 'TBD'}
       </span>
