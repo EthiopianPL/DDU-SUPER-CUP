@@ -31,7 +31,7 @@ const rawConfiguredUrl =
     (import.meta.env?.VITE_GITHUB_ASSETS_URL || import.meta.env?.VITE_STATIC_ASSETS_BASE_URL)) ||
   (typeof process !== 'undefined' &&
     (process.env?.VITE_GITHUB_ASSETS_URL || process.env?.VITE_STATIC_ASSETS_BASE_URL)) ||
-  'https://raw.githubusercontent.com/EthiopianPL/ddu-super-cup-assets/main';
+  'https://cdn.jsdelivr.net/gh/EthiopianPL/ddu-super-cup-assets@main';
 
 export const GITHUB_ASSETS_BASE_URL = normalizeGitHubAssetsBaseUrl(rawConfiguredUrl);
 
