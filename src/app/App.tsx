@@ -40,6 +40,10 @@ function App() {
           <Route path="news/:id" element={<NewsDetailPage />} />
           <Route path="contributors" element={<ContributorsPage />} />
           <Route path="admin" element={<AdminPage />} />
+          <Route path="admin/:section" element={<AdminPage />} />
+          <Route path="admin/:section/:matchId" element={<AdminPage />} />
+          <Route path="admin/:section/:matchId/:deskTab" element={<AdminPage />} />
+          <Route path="admin/*" element={<AdminPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

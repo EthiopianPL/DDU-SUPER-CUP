@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import {
+  AlertCircle,
   ArrowDown,
   ArrowLeft,
   ArrowUp,
-  MapPin,
   Calendar,
+  CheckCircle2,
   Clock,
   History,
-  Users,
-  Trophy,
+  MapPin,
   Shield,
+  Trophy,
+  Users,
 } from 'lucide-react';
 import { DepartmentMark } from '../components/DepartmentMark';
 import { RedCards } from '../components/RedCards';
@@ -300,6 +302,35 @@ export function MatchDetailsPage() {
           aria-labelledby="match-tab-lineups"
           className="mt-6 space-y-4"
         >
+          {/* Official Announcement Status Banner */}
+          {fixture.status === 'upcoming' && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-white/10 bg-[#10192b] px-4 py-3">
+              {fixture.lineupHomeApproved && fixture.lineupAwayApproved ? (
+                <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Official Lineups Confirmed</span>
+                </div>
+              ) : fixture.lineupHomeApproved || fixture.lineupAwayApproved ? (
+                <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
+                  <Clock className="h-4 w-4 text-amber-400" />
+                  <span>
+                    {fixture.lineupHomeApproved ? `${home?.shortName ?? 'Home'} Confirmed` : `${home?.shortName ?? 'Home'} Pending`} · {fixture.lineupAwayApproved ? `${away?.shortName ?? 'Away'} Confirmed` : `${away?.shortName ?? 'Away'} Pending`}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-xs font-bold text-white/60">
+                  <AlertCircle className="h-4 w-4 text-amber-400/80" />
+                  <span>Official Lineups Awaiting Confirmation</span>
+                </div>
+              )}
+              <span className="text-[11px] font-semibold text-white/40">
+                {fixture.lineupHomeApproved && fixture.lineupAwayApproved
+                  ? 'Approved by Match Officials'
+                  : 'Only Approved Lineups Appear Here'}
+              </span>
+            </div>
+          )}
+
           <Pitch
             homeName={home?.name ?? 'Home'}
             awayName={away?.name ?? 'Away'}
@@ -405,7 +436,7 @@ function Pitch({
   return (
     <section>
       <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0a1f12] shadow-2xl">
-        <TeamBar name={homeName} shortName={homeShort} color={homeColor} crest={homeCrest} formation={homeSheet.formation} position="top" />
+        <TeamBar name={homeName} shortName={homeShort} color={homeColor} crest={homeCrest} formation={homeSheet.formation} position="top" hasLineup={homeLines.length > 0} />
         <div
           className="relative h-[760px] overflow-hidden select-none"
           style={{
@@ -480,8 +511,28 @@ function Pitch({
 
           {homeLines.length === 0 && awayLines.length === 0 && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-6 text-center">
-              <span className="rounded-full bg-black/60 px-4 py-2 text-xs font-semibold text-white/80 backdrop-blur-md border border-white/10 shadow-lg">
-                Official lineups not yet announced
+              <div className="rounded-2xl border border-white/10 bg-black/75 px-6 py-5 shadow-2xl backdrop-blur-md max-w-sm">
+                <Users className="mx-auto mb-2.5 h-8 w-8 text-[#f5c518]/80" />
+                <p className="text-sm font-black text-white">Official Lineups Not Yet Announced</p>
+                <p className="mt-1 text-xs text-white/50">
+                  Starting lineups and substitutes will appear here once approved by match officials.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {homeLines.length === 0 && awayLines.length > 0 && (
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-1/2 z-10 flex items-center justify-center p-4">
+              <span className="rounded-full border border-white/10 bg-black/60 px-4 py-1.5 text-xs font-semibold text-white/70 backdrop-blur-md shadow-lg">
+                {homeName} lineup not yet announced
+              </span>
+            </div>
+          )}
+
+          {awayLines.length === 0 && homeLines.length > 0 && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 z-10 flex items-center justify-center p-4">
+              <span className="rounded-full border border-white/10 bg-black/60 px-4 py-1.5 text-xs font-semibold text-white/70 backdrop-blur-md shadow-lg">
+                {awayName} lineup not yet announced
               </span>
             </div>
           )}
@@ -514,7 +565,7 @@ function Pitch({
             />
           )))}
         </div>
-        <TeamBar name={awayName} shortName={awayShort} color={awayColor} crest={awayCrest} formation={awaySheet.formation} position="bottom" />
+        <TeamBar name={awayName} shortName={awayShort} color={awayColor} crest={awayCrest} formation={awaySheet.formation} position="bottom" hasLineup={awayLines.length > 0} />
       </div>
       <SubList substitutions={substitutions} homeId={homeSheet.starters[0]?.departmentId} awayId={awaySheet.starters[0]?.departmentId} homeShort={homeShort} awayShort={awayShort} />
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -532,6 +583,7 @@ function TeamBar({
   crest,
   formation,
   position = 'top',
+  hasLineup = true,
 }: {
   name: string;
   shortName: string;
@@ -539,6 +591,7 @@ function TeamBar({
   crest?: string;
   formation: string;
   position?: 'top' | 'bottom';
+  hasLineup?: boolean;
 }) {
   return (
     <div
@@ -549,8 +602,8 @@ function TeamBar({
         <DepartmentMark name={name} shortName={shortName} color={color} size={28} src={crest} />
         <span className="truncate text-sm font-bold text-white">{name}</span>
       </span>
-      <span className="shrink-0 rounded-full border border-white/15 bg-[#174e2a] px-2.5 py-0.5 text-[11px] font-bold text-white shadow-sm">
-        {formation}
+      <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-bold shadow-sm ${hasLineup ? 'border-white/15 bg-[#174e2a] text-white' : 'border-white/10 bg-black/40 text-white/50'}`}>
+        {hasLineup ? formation : 'Lineup pending'}
       </span>
     </div>
   );

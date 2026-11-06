@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { Eye, EyeOff, Edit3, Plus, X, Trash2, Search, ExternalLink, LogOut, ArrowLeft } from 'lucide-react';
 import { desk, imagePayload } from '../../data/api';
 import { useLeagueVersion } from '../../data/live';
@@ -53,11 +53,11 @@ const FORMATIONS = ['4-2-3-1', '4-3-3', '4-4-2', '4-1-4-1', '3-5-2', '3-4-3', '5
 
 export function AdminPage() {
   const navigate = useNavigate();
+  const { section: routeSection, matchId: routeMatchId, deskTab: routeDeskTab } = useParams<{ section?: string; matchId?: string; deskTab?: string }>();
+  const [searchParams] = useSearchParams();
   const version = useLeagueVersion();
   const [user, setUser] = useState<DeskUser | null>(null);
   const [ready, setReady] = useState(false);
-  const [section, setSection] = useState<Section>('overview');
-  const [matchId, setMatchId] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [confirmLogout, setConfirmLogout] = useState(false);
@@ -66,19 +66,30 @@ export function AdminPage() {
     desk('/api/me')
       .then((data) => {
         setUser(data.user);
-        if (data.user?.role === 'match_admin') {
-          setSection('matches');
-        }
       })
       .catch(() => setUser(null))
       .finally(() => setReady(true));
   }, []);
 
+  const rawSection = (routeSection || searchParams.get('tab') || searchParams.get('section') || '').toLowerCase();
+  const validSections: Section[] = ['overview', 'matches', 'teams', 'players', 'news', 'users', 'audit'];
+  const resolvedSection: Section = rawSection === 'dashboard'
+    ? 'overview'
+    : rawSection === 'fixture' || rawSection === 'fixtures'
+      ? 'matches'
+      : (validSections.includes(rawSection as Section) ? (rawSection as Section) : (user?.role === 'match_admin' ? 'matches' : 'overview'));
+
+  const section: Section = user?.role === 'match_admin' && resolvedSection !== 'matches' && resolvedSection !== 'news'
+    ? 'matches'
+    : resolvedSection;
+
+  const matchId = section === 'matches' ? (routeMatchId || searchParams.get('match') || null) : null;
+
   useEffect(() => {
-    if (user?.role === 'match_admin' && section !== 'matches' && section !== 'news') {
-      setSection('matches');
+    if (user?.role === 'match_admin' && resolvedSection !== 'matches' && resolvedSection !== 'news') {
+      navigate('/admin/matches', { replace: true });
     }
-  }, [user, section]);
+  }, [user, resolvedSection, navigate]);
 
   useEffect(() => {
     if (!notice && !error) return;
@@ -96,16 +107,21 @@ export function AdminPage() {
         onSuccess={(loggedUser) => {
           setUser(loggedUser);
           if (loggedUser.role === 'match_admin') {
-            setSection('matches');
+            navigate('/admin/matches');
+          } else if (!routeSection) {
+            navigate('/admin/overview');
           }
         }}
       />
     );
   }
 
-  const openMatch = (id: string) => {
-    setMatchId(id);
-    setSection('matches');
+  const openMatch = (id: string, deskTab?: string) => {
+    navigate(deskTab ? `/admin/matches/${id}/${deskTab}` : `/admin/matches/${id}`);
+  };
+
+  const closeMatch = () => {
+    navigate('/admin/matches');
   };
 
   const visibleNav = NAV.filter((item) => {
@@ -136,7 +152,7 @@ export function AdminPage() {
               <button
                 key={item.id}
                 type="button"
-                onClick={() => { setSection(item.id); setMatchId(null); }}
+                onClick={() => navigate(`/admin/${item.id}`)}
                 className={`flex shrink-0 items-center rounded-xl px-3 py-2 text-left text-sm font-bold transition-colors ${
                   section === item.id ? 'bg-[#f5c518] text-[#102018]' : 'text-white/60 hover:bg-white/5 hover:text-white'
                 }`}
@@ -195,6 +211,7 @@ export function AdminPage() {
                     await desk('/api/logout', { method: 'POST', body: {} });
                   } finally {
                     setUser(null);
+                    navigate('/admin');
                   }
                 }}
                 className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-red-500"
@@ -214,7 +231,16 @@ export function AdminPage() {
         {section === 'overview' && user.role !== 'match_admin' && <Overview version={version} onOpen={openMatch} />}
         {section === 'matches' && !matchId && <MatchList version={version} onOpen={openMatch} onMessage={setNotice} onError={setError} />}
         {section === 'matches' && matchId && (
-          <MatchDesk key={matchId} id={matchId} role={user.role} onClose={() => setMatchId(null)} onMessage={setNotice} onError={setError} />
+          <MatchDesk
+            key={matchId}
+            id={matchId}
+            role={user.role}
+            tab={routeDeskTab as DeskTab | undefined}
+            onTabChange={(nextTab) => navigate(`/admin/matches/${matchId}/${nextTab}`)}
+            onClose={closeMatch}
+            onMessage={setNotice}
+            onError={setError}
+          />
         )}
         {section === 'teams' && user.role !== 'match_admin' && <TeamAdmin onMessage={setNotice} onError={setError} />}
         {section === 'players' && user.role !== 'match_admin' && <PlayerAdmin onMessage={setNotice} onError={setError} />}
@@ -522,19 +548,44 @@ function GroupRoundForm({ onDone, onError }: { onDone: (text: string) => void; o
   );
 }
 
-function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role: Role; onClose: () => void; onMessage: (text: string) => void; onError: (text: string) => void }) {
+function MatchDesk({
+  id,
+  role,
+  tab: controlledTab,
+  onTabChange,
+  onClose,
+  onMessage,
+  onError,
+}: {
+  id: string;
+  role: Role;
+  tab?: DeskTab;
+  onTabChange?: (tab: DeskTab) => void;
+  onClose: () => void;
+  onMessage: (text: string) => void;
+  onError: (text: string) => void;
+}) {
   const version = useLeagueVersion();
   const fixture = getFixture(id);
   const clock = useMatchClock(fixture?.status === 'live' ? id : undefined);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<{ label: string; action: string } | null>(null);
   const [editingGoal, setEditingGoal] = useState<number | null>(null);
-  const [tab, setTab] = useState<DeskTab>(() => {
+  const [internalTab, setInternalTab] = useState<DeskTab>(() => {
     const current = getFixture(id);
     if (!current || current.status === 'live' || (current.detail === 'finished' && current.confirmed)) return 'events';
     if (current.detail === 'finished') return 'clock';
     return 'lineup';
   });
+
+  const tab = controlledTab || internalTab;
+
+  useEffect(() => {
+    if (controlledTab) {
+      setInternalTab(controlledTab);
+    }
+  }, [controlledTab]);
+
   void version;
   if (!fixture) return <p className="text-sm text-white/50">That match is no longer on the server.</p>;
   const home = getDepartment(fixture.homeId);
@@ -552,6 +603,11 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
   if (!finished && !live) deskTabs.push({ id: 'lineup', label: 'Lineup' }, { id: 'fixture', label: 'Fixture' });
   const activeTab = deskTabs.some((item) => item.id === tab) ? tab : deskTabs[0].id;
 
+  const handleTabClick = (nextTab: DeskTab) => {
+    setInternalTab(nextTab);
+    if (onTabChange) onTabChange(nextTab);
+  };
+
   const act = async (path: string, body: Record<string, unknown>, method = 'POST') => {
     setBusy(true);
     try {
@@ -568,7 +624,7 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
 
   return (
     <div>
-      <button type="button" onClick={onClose} className="text-sm font-semibold text-white/50">All matches</button>
+      <button type="button" onClick={onClose} className="text-sm font-semibold text-white/50 hover:text-white transition-colors">← All matches</button>
       <div className="mt-3 rounded-3xl border border-white/10 bg-[#10192b] p-4 sm:p-6">
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
           <TeamBlock team={home} />
@@ -593,7 +649,7 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
             type="button"
             role="tab"
             aria-selected={activeTab === item.id}
-            onClick={() => setTab(item.id)}
+            onClick={() => handleTabClick(item.id)}
             className={`rounded-xl px-2 py-2.5 text-center text-xs font-bold sm:text-sm ${activeTab === item.id ? 'bg-[#f5c518] text-[#102018]' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}
           >
             {item.label}
@@ -805,13 +861,48 @@ function LineupEditor({ matchId, disabled, onSave }: { matchId: string; disabled
   const [side, setSide] = useState<'home' | 'away'>('home');
   if (!fixture) return null;
   const teamId = side === 'home' ? fixture.homeId : fixture.awayId;
+  const isApproved = side === 'home' ? Boolean(fixture.lineupHomeApproved) : Boolean(fixture.lineupAwayApproved);
+  const home = getDepartment(fixture.homeId);
+  const away = getDepartment(fixture.awayId);
+
   return (
     <section className="mt-4 rounded-2xl border border-white/10 bg-[#10192b] p-4">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="font-black">Lineup</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-black text-lg">Lineup</h2>
+          <p className="text-xs text-white/50">Only approved lineups will appear on the public Lineups tab.</p>
+        </div>
         <Select label="Team" value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={sidesOf(fixture)} />
       </div>
-      <LineupSide key={`${matchId}-${teamId}`} matchId={matchId} teamId={teamId} formation={side === 'home' ? fixture.formationHome : fixture.formationAway} disabled={disabled} onSave={onSave} />
+
+      <div className="mt-3 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-[#0c1424] p-3 text-xs">
+        <div className="flex items-center justify-between">
+          <span className="font-bold text-white/80">{home?.shortName ?? 'Home'}</span>
+          {fixture.lineupHomeApproved ? (
+            <span className="rounded-full bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 font-bold text-emerald-400">Approved</span>
+          ) : (
+            <span className="rounded-full bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 font-bold text-amber-300">Pending</span>
+          )}
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="font-bold text-white/80">{away?.shortName ?? 'Away'}</span>
+          {fixture.lineupAwayApproved ? (
+            <span className="rounded-full bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 font-bold text-emerald-400">Approved</span>
+          ) : (
+            <span className="rounded-full bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 font-bold text-amber-300">Pending</span>
+          )}
+        </div>
+      </div>
+
+      <LineupSide
+        key={`${matchId}-${teamId}`}
+        matchId={matchId}
+        teamId={teamId}
+        formation={side === 'home' ? fixture.formationHome : fixture.formationAway}
+        isApproved={isApproved}
+        disabled={disabled}
+        onSave={onSave}
+      />
     </section>
   );
 }
@@ -820,12 +911,14 @@ function LineupSide({
   matchId,
   teamId,
   formation,
+  isApproved,
   disabled,
   onSave,
 }: {
   matchId: string;
   teamId: string;
   formation?: string;
+  isApproved?: boolean;
   disabled: boolean;
   onSave: (body: Record<string, unknown>) => void;
 }) {
@@ -848,6 +941,28 @@ function LineupSide({
     if (chosen.has(playerId)) return;
     setBench((list) => list.includes(playerId) ? list.filter((id) => id !== playerId) : [...list, playerId]);
   };
+  const autoFill = () => {
+    const used = new Set<string>();
+    const newSlots: Array<string | null> = [];
+    for (const role of roles) {
+      const candidate = roster.find((p) => p.position === role && !used.has(p.id));
+      if (candidate) {
+        newSlots.push(candidate.id);
+        used.add(candidate.id);
+      } else {
+        newSlots.push(null);
+      }
+    }
+    const newBench = roster.filter((p) => !used.has(p.id)).slice(0, 9).map((p) => p.id);
+    setSlots(newSlots);
+    setBench(newBench);
+    setPicking(null);
+  };
+  const clearLineup = () => {
+    setSlots(Array.from({ length: roles.length }, () => null));
+    setBench([]);
+    setPicking(null);
+  };
   const ready = slots.every(Boolean);
   const openRole = picking == null ? null : roles[picking];
   const choices = openRole ? roster.filter((player) => player.position === openRole && !bench.includes(player.id) && (slots[picking!] === player.id || !chosen.has(player.id))) : [];
@@ -859,16 +974,34 @@ function LineupSide({
       if (!ready) return;
       onSave({ teamId, starters: slots, bench, formation: shape });
     }}>
-      <label className="mt-3 block text-xs font-bold text-white/45">Formation
-        <select className={inputClass} value={shape} onChange={(event) => {
-          const next = event.target.value;
-          setShape(next);
-          setSlots((list) => seatPlayers(list.filter((id): id is string => Boolean(id)), next, roster));
-          setPicking(null);
-        }}>
-          {FORMATIONS.map((item) => <option key={item} value={item}>{item}</option>)}
-        </select>
-      </label>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <label className="block text-xs font-bold text-white/45">Formation
+          <select className={`${inputClass} mt-1`} value={shape} onChange={(event) => {
+            const next = event.target.value;
+            setShape(next);
+            setSlots((list) => seatPlayers(list.filter((id): id is string => Boolean(id)), next, roster));
+            setPicking(null);
+          }}>
+            {FORMATIONS.map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
+        </label>
+        <div className="flex items-center gap-2 pt-4">
+          <button
+            type="button"
+            onClick={autoFill}
+            className="rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 px-3 py-1.5 text-xs font-bold text-white transition-colors"
+          >
+            Auto-fill from roster
+          </button>
+          <button
+            type="button"
+            onClick={clearLineup}
+            className="rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 px-3 py-1.5 text-xs font-bold text-white/60 hover:text-white transition-colors"
+          >
+            Clear
+          </button>
+        </div>
+      </div>
       <div className="relative mt-3 h-[460px] overflow-hidden rounded-3xl bg-[#3f7a4c]">
         <div className="pointer-events-none absolute inset-0" aria-hidden="true">
           <div className="absolute left-[20%] right-[20%] top-0 h-[16%] border-x border-b border-white/40" />
@@ -934,7 +1067,36 @@ function LineupSide({
         </ul>
       </div>
       <p className="mt-2 text-xs text-white/40">{slots.filter(Boolean).length} of {roles.length} places filled · {bench.length} substitutes</p>
-      <button type="submit" disabled={disabled || !ready} className="mt-3 rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018] disabled:opacity-40">Save lineup</button>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          disabled={disabled || !ready}
+          onClick={() => onSave({ teamId, starters: slots, bench, formation: shape, approved: false })}
+          className="rounded-xl border border-white/15 bg-white/10 hover:bg-white/15 px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
+        >
+          Save Draft
+        </button>
+
+        {!isApproved ? (
+          <button
+            type="button"
+            disabled={disabled || !ready}
+            onClick={() => onSave({ teamId, starters: slots, bench, formation: shape, approved: true })}
+            className="rounded-xl bg-[#2f9e44] hover:bg-[#288339] px-5 py-2 text-sm font-black text-white shadow-lg disabled:opacity-40"
+          >
+            Approve Lineup
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onSave({ teamId, action: 'unapprove' })}
+            className="rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 px-4 py-2 text-sm font-bold text-amber-300 disabled:opacity-40"
+          >
+            Revoke Approval (Set to Draft)
+          </button>
+        )}
+      </div>
     </form>
   );
 }

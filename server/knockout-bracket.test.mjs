@@ -252,11 +252,108 @@ test('DDU Super Cup teams pop up on knockout after group stage finishes', async 
       assert.equal(saved.content_type, 'image/png');
       assert.ok(saved.bytes, 'Media bytes must be stored in database');
     } finally {
-      db.prepare('DELETE FROM media WHERE id = ?').run(`players/${testId}`);
+      try {
+        db.prepare('DELETE FROM media WHERE id = ?').run(`players/${testId}`);
+      } catch {}
       db.close();
       const { rmSync, existsSync } = await import('node:fs');
       const testPath = join(root, 'public', 'uploads', 'players', 'test');
       if (existsSync(testPath)) rmSync(testPath, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('9. Created matches do not auto-fill lineups; lineups must be approved before appearing and before kickoff', async () => {
+    const { createMatch, saveLineup, controlMatch } = await import('./domain.mjs');
+    const { openDatabase } = await import('./db.mjs');
+
+    const previousDbEnv = process.env.DDU_DB;
+    process.env.DDU_DB = join(root, 'data', 'supercup.db');
+    const db = openDatabase();
+    const adminActor = { id: 'test-admin', role: 'competition_manager', name: 'Test Manager' };
+
+    let testMatchId = null;
+    try {
+      // 1. Create a match
+      const created = createMatch(db, adminActor, {
+        stage: 'group',
+        groupId: 'A',
+        matchday: 1,
+        homeId: 'information-technology',
+        awayId: 'electrical-engineering',
+        date: '2026-11-20',
+        time: '14:00',
+        venue: 'DDU Main Pitch',
+      });
+      testMatchId = created.id;
+
+      // 2. Verify that match_squad has NO auto-inserted squad
+      const squadRows = db.prepare('SELECT COUNT(*) AS total FROM match_squad WHERE match_id = ?').get(testMatchId);
+      assert.equal(squadRows.total, 0, 'Newly created matches must not have default squads directly auto-filled');
+
+      // 3. Verify approval flags are 0 (false)
+      const matchRow = db.prepare('SELECT lineup_home_approved, lineup_away_approved FROM matches WHERE id = ?').get(testMatchId);
+      assert.equal(matchRow.lineup_home_approved, 0, 'Home lineup must start unapproved');
+      assert.equal(matchRow.lineup_away_approved, 0, 'Away lineup must start unapproved');
+
+      // 4. Kickoff without lineups throws error
+      assert.throws(() => {
+        controlMatch(db, adminActor, testMatchId, { action: 'kickoff' });
+      }, /lineup before kickoff/i);
+
+      // 5. Get 11 players from home team (IT) to fill 4-2-3-1
+      const homePlayers = db.prepare('SELECT id, position FROM players WHERE team_id = ? AND active = 1').all('information-technology');
+      const pick = (pos, count, used) => {
+        const found = homePlayers.filter((p) => p.position === pos && !used.has(p.id)).slice(0, count);
+        found.forEach((p) => used.add(p.id));
+        return found.map((p) => p.id);
+      };
+      const used = new Set();
+      const starters = [
+        ...pick('GK', 1, used),
+        ...pick('DEF', 4, used),
+        ...pick('MID', 5, used),
+        ...pick('FWD', 1, used),
+      ];
+      assert.equal(starters.length, 11, 'Should have 11 home players');
+
+      // 6. Save as draft (approved: false)
+      saveLineup(db, adminActor, testMatchId, {
+        teamId: 'information-technology',
+        starters,
+        bench: [],
+        formation: '4-2-3-1',
+        approved: false,
+      });
+
+      const afterDraft = db.prepare('SELECT lineup_home_approved FROM matches WHERE id = ?').get(testMatchId);
+      assert.equal(afterDraft.lineup_home_approved, 0, 'Saving draft must keep lineup unapproved');
+
+      // 7. Approve lineup
+      saveLineup(db, adminActor, testMatchId, {
+        teamId: 'information-technology',
+        action: 'approve',
+      });
+
+      const afterApprove = db.prepare('SELECT lineup_home_approved FROM matches WHERE id = ?').get(testMatchId);
+      assert.equal(afterApprove.lineup_home_approved, 1, 'Approving lineup sets lineup_home_approved to 1');
+
+      // 8. Revoke approval
+      saveLineup(db, adminActor, testMatchId, {
+        teamId: 'information-technology',
+        action: 'unapprove',
+      });
+
+      const afterUnapprove = db.prepare('SELECT lineup_home_approved FROM matches WHERE id = ?').get(testMatchId);
+      assert.equal(afterUnapprove.lineup_home_approved, 0, 'Unapproving lineup sets lineup_home_approved back to 0');
+    } finally {
+      process.env.DDU_DB = previousDbEnv;
+      if (testMatchId) {
+        try {
+          db.prepare('DELETE FROM match_squad WHERE match_id = ?').run(testMatchId);
+          db.prepare('DELETE FROM matches WHERE id = ?').run(testMatchId);
+        } catch {}
+      }
+      db.close();
     }
   });
 });

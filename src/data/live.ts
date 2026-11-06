@@ -79,6 +79,9 @@ export interface Snapshot {
     confirmed: boolean;
     formationHome: string;
     formationAway: string;
+    lineupHomeApproved?: boolean;
+    lineupAwayApproved?: boolean;
+    lineupApproved?: boolean;
     stage?: 'group' | 'r16' | 'qf' | 'sf' | 'final';
     slot?: number;
     version: number;
@@ -134,6 +137,9 @@ export function applySnapshot(data: Snapshot, broadcastCrossTab = true) {
     finishedAt: match.finishedAt == null ? null : Number(match.finishedAt),
     motmPlayerId: match.motmPlayerId || null,
     motmPhotoUrl: match.motmPhotoUrl || null,
+    lineupHomeApproved: Boolean(match.lineupHomeApproved),
+    lineupAwayApproved: Boolean(match.lineupAwayApproved),
+    lineupApproved: Boolean(match.lineupApproved ?? (match.lineupHomeApproved && match.lineupAwayApproved)),
   })));
   replace(newsArticles, data.news);
   replace(matchEvents, data.events);

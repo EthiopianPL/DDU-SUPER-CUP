@@ -63,6 +63,9 @@ export interface Fixture {
   assistant2?: string;
   formationHome?: string;
   formationAway?: string;
+  lineupHomeApproved?: boolean;
+  lineupAwayApproved?: boolean;
+  lineupApproved?: boolean;
   stage?: 'group' | 'r16' | 'qf' | 'sf' | 'final';
   slot?: number;
   version?: number;
@@ -516,9 +519,23 @@ export interface Substitution {
 }
 
 export function matchSheet(departmentId: string, matchId?: string): MatchSheet {
-  const rows = matchId ? squads.filter((row) => row.matchId === matchId && row.teamId === departmentId) : [];
   const fixture = matchId ? getFixture(matchId) : undefined;
   const formation = fixture && departmentId === fixture.awayId ? fixture.formationAway : fixture?.formationHome;
+  const isApproved = fixture ? (
+    fixture.status === 'live' ||
+    fixture.detail === 'finished' ||
+    (departmentId === fixture.homeId ? Boolean(fixture.lineupHomeApproved) : Boolean(fixture.lineupAwayApproved))
+  ) : false;
+
+  if (matchId && !isApproved) {
+    return {
+      formation: formation || '4-2-3-1',
+      starters: [],
+      bench: [],
+    };
+  }
+
+  const rows = matchId ? squads.filter((row) => row.matchId === matchId && row.teamId === departmentId) : [];
   if (!rows.length) {
     return {
       formation: formation || '4-2-3-1',

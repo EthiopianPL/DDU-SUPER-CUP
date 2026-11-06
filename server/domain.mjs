@@ -262,8 +262,9 @@ export function seedDatabase(db, source, password) {
     const insertMatch = db.prepare(`INSERT INTO matches (
       id, competition_id, group_id, matchday, home_id, away_id, venue, kickoff_date, kickoff_time,
       status, period, elapsed_ms, running_since, added_ms, half_ms, regulation_ms, et_half_ms, allow_extra,
-      home_score, away_score, confirmed, formation_home, formation_away, version, updated_at
-    ) VALUES (?, 'super-cup', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?, ?, 0, 0, 0, ?, '4-2-3-1', '4-2-3-1', 1, ?)`);
+      home_score, away_score, confirmed, formation_home, formation_away, version, updated_at,
+      lineup_home_approved, lineup_away_approved
+    ) VALUES (?, 'super-cup', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?, ?, 0, 0, 0, ?, '4-2-3-1', '4-2-3-1', 1, ?, ?, ?)`);
     const insertSquad = db.prepare('INSERT INTO match_squad (match_id, team_id, player_id, role, sort_index) VALUES (?, ?, ?, ?, ?)');
     const insertEvent = db.prepare(`INSERT INTO match_events (
       match_id, client_key, type, team_id, credited_team_id, player_id, assist_id, related_player_id,
@@ -298,6 +299,8 @@ export function seedDatabase(db, source, password) {
         DEFAULT_RULES.extraHalfMinutes * 60 * 1000,
         status === 'finished' ? 1 : 0,
         now,
+        status !== 'scheduled' ? 1 : 0,
+        status !== 'scheduled' ? 1 : 0,
       );
 
       const writeSquad = (sheet, teamId) => {
@@ -479,6 +482,9 @@ export function buildSnapshot(db, now = Date.now()) {
       assistant2: match.assistant2,
       formationHome: match.formation_home,
       formationAway: match.formation_away,
+      lineupHomeApproved: Boolean(match.lineup_home_approved),
+      lineupAwayApproved: Boolean(match.lineup_away_approved),
+      lineupApproved: Boolean(match.lineup_home_approved && match.lineup_away_approved),
       stage: match.stage || 'group',
       slot: Number(match.slot) || 0,
       version: match.version,
@@ -995,8 +1001,8 @@ function insertScheduledMatch(db, plan) {
   db.prepare(`INSERT INTO matches (
     id, competition_id, group_id, matchday, home_id, away_id, venue, kickoff_date, kickoff_time,
     status, period, elapsed_ms, half_ms, regulation_ms, et_half_ms, allow_extra, referee, assistant1, assistant2,
-    stage, slot, version, updated_at
-  ) VALUES (?, 'super-cup', ?, ?, ?, ?, ?, ?, ?, 'scheduled', 'pre', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`).run(
+    stage, slot, version, updated_at, lineup_home_approved, lineup_away_approved
+  ) VALUES (?, 'super-cup', ?, ?, ?, ?, ?, ?, ?, 'scheduled', 'pre', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 0, 0)`).run(
     plan.id,
     plan.groupId,
     plan.matchday,
@@ -1016,12 +1022,6 @@ function insertScheduledMatch(db, plan) {
     plan.slot,
     now,
   );
-  const insertSquad = db.prepare('INSERT INTO match_squad (match_id, team_id, player_id, role, sort_index) VALUES (?, ?, ?, ?, ?)');
-  for (const teamId of [plan.homeId, plan.awayId]) {
-    const sheet = defaultSquad(db, teamId);
-    sheet.starters.forEach((player, index) => insertSquad.run(plan.id, teamId, player.id, 'starter', index));
-    sheet.bench.forEach((player, index) => insertSquad.run(plan.id, teamId, player.id, 'bench', index));
-  }
   return plan.id;
 }
 
@@ -1125,15 +1125,33 @@ export function updateMatch(db, actor, id, input) {
 export function saveLineup(db, actor, matchId, input) {
   deny(actor, 'lineup.write');
   const teamId = String(input.teamId ?? '');
-  const starters = [...new Set(input.starters ?? [])];
-  const bench = [...new Set(input.bench ?? [])].filter((playerId) => !starters.includes(playerId));
-  if (!starters.length) throw new RuleError('Pick at least one starter.');
-  if (starters.length > 11) throw new RuleError('A team can start at most 11 players.');
   return transaction(db, () => {
     const match = matchRow(db, matchId);
     assertVersion(match, input.version);
     assertNotFinished(match);
     if (teamId !== match.home_id && teamId !== match.away_id) throw new RuleError('That team is not in this match.');
+    const formationCol = teamId === match.home_id ? 'formation_home' : 'formation_away';
+    const approvedCol = teamId === match.home_id ? 'lineup_home_approved' : 'lineup_away_approved';
+
+    if (input.action === 'approve') {
+      const starters = db.prepare(`SELECT COUNT(*) AS total FROM match_squad WHERE match_id = ? AND team_id = ? AND role = 'starter'`).get(matchId, teamId);
+      if (!starters || starters.total < 11) throw new RuleError('Fill all 11 starter positions before approving the lineup.');
+      db.prepare(`UPDATE matches SET ${approvedCol} = 1, version = version + 1, updated_at = ? WHERE id = ?`).run(Date.now(), matchId);
+      audit(db, actor, 'lineup.approve', 'match', matchId, null, { teamId, approved: true });
+      return { id: matchId };
+    }
+
+    if (input.action === 'unapprove' || input.action === 'revoke') {
+      db.prepare(`UPDATE matches SET ${approvedCol} = 0, version = version + 1, updated_at = ? WHERE id = ?`).run(Date.now(), matchId);
+      audit(db, actor, 'lineup.unapprove', 'match', matchId, null, { teamId, approved: false });
+      return { id: matchId };
+    }
+
+    const starters = [...new Set(input.starters ?? [])];
+    const bench = [...new Set(input.bench ?? [])].filter((playerId) => !starters.includes(playerId));
+    if (!starters.length) throw new RuleError('Pick at least one starter.');
+    if (starters.length > 11) throw new RuleError('A team can start at most 11 players.');
+
     const formation = String(input.formation ?? '4-2-3-1');
     const roles = formationRoles(formation);
     if (starters.length !== roles.length) throw new RuleError('Fill every position in the formation.');
@@ -1142,13 +1160,15 @@ export function saveLineup(db, actor, matchId, input) {
       if (player.position !== roles[index]) throw new RuleError(`${player.name} is a ${player.position} and cannot fill the ${roles[index]} position.`);
     });
     for (const playerId of bench) ensureSquadPlayerSafe(db, playerId, teamId);
+
     db.prepare('DELETE FROM match_squad WHERE match_id = ? AND team_id = ?').run(matchId, teamId);
     const insert = db.prepare('INSERT INTO match_squad (match_id, team_id, player_id, role, sort_index) VALUES (?, ?, ?, ?, ?)');
     starters.forEach((playerId, index) => insert.run(matchId, teamId, playerId, 'starter', index));
     bench.forEach((playerId, index) => insert.run(matchId, teamId, playerId, 'bench', index));
-    const column = teamId === match.home_id ? 'formation_home' : 'formation_away';
-    db.prepare(`UPDATE matches SET ${column} = ?, version = version + 1, updated_at = ? WHERE id = ?`).run(formation, Date.now(), matchId);
-    audit(db, actor, 'lineup.update', 'match', matchId, null, { teamId, starters, bench, formation });
+
+    const approvedVal = input.approved === true ? 1 : (input.approved === false ? 0 : (match[approvedCol] || 0));
+    db.prepare(`UPDATE matches SET ${formationCol} = ?, ${approvedCol} = ?, version = version + 1, updated_at = ? WHERE id = ?`).run(formation, approvedVal, Date.now(), matchId);
+    audit(db, actor, 'lineup.update', 'match', matchId, null, { teamId, starters, bench, formation, approved: Boolean(approvedVal) });
     return { id: matchId };
   });
 }
@@ -1470,6 +1490,7 @@ export function controlMatch(db, actor, matchId, input) {
       if (!['scheduled', 'postponed'].includes(match.status)) throw new RuleError('This match has already kicked off.');
       const starters = db.prepare(`SELECT team_id, COUNT(*) AS total FROM match_squad WHERE match_id = ? AND role = 'starter' GROUP BY team_id`).all(matchId);
       if (starters.length < 2 || starters.some((row) => row.total < 1)) throw new RuleError('Both teams need a lineup before kickoff.');
+      if (!match.lineup_home_approved || !match.lineup_away_approved) throw new RuleError('Both teams need an approved lineup before kickoff.');
       startRunning('live', 'first_half', 0);
     } else if (action === 'pause') {
       if (!match.running_since) throw new RuleError('The clock is already stopped.');

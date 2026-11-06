@@ -75,6 +75,8 @@ CREATE TABLE IF NOT EXISTS matches (
   assistant2 VARCHAR(160) NOT NULL DEFAULT '',
   formation_home VARCHAR(16) NOT NULL DEFAULT '4-2-3-1',
   formation_away VARCHAR(16) NOT NULL DEFAULT '4-2-3-1',
+  lineup_home_approved SMALLINT NOT NULL DEFAULT 0,
+  lineup_away_approved SMALLINT NOT NULL DEFAULT 0,
   stage VARCHAR(16) NOT NULL DEFAULT 'group',
   slot INT NOT NULL DEFAULT 0,
   version INT NOT NULL DEFAULT 1,

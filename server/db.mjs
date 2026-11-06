@@ -159,6 +159,8 @@ function migrate(db) {
       assistant2 TEXT NOT NULL DEFAULT '',
       formation_home TEXT NOT NULL DEFAULT '4-2-3-1',
       formation_away TEXT NOT NULL DEFAULT '4-2-3-1',
+      lineup_home_approved INTEGER NOT NULL DEFAULT 0,
+      lineup_away_approved INTEGER NOT NULL DEFAULT 0,
       stage TEXT NOT NULL DEFAULT 'group',
       slot INTEGER NOT NULL DEFAULT 0,
       version INTEGER NOT NULL DEFAULT 1,
@@ -252,6 +254,14 @@ function migrate(db) {
   if (matchColumns.length && !matchColumns.some((column) => column.name === 'motm_photo_url')) {
     db.exec('ALTER TABLE matches ADD COLUMN motm_photo_url TEXT');
   }
+  if (matchColumns.length && !matchColumns.some((column) => column.name === 'lineup_home_approved')) {
+    db.exec('ALTER TABLE matches ADD COLUMN lineup_home_approved INTEGER NOT NULL DEFAULT 0');
+  }
+  if (matchColumns.length && !matchColumns.some((column) => column.name === 'lineup_away_approved')) {
+    db.exec('ALTER TABLE matches ADD COLUMN lineup_away_approved INTEGER NOT NULL DEFAULT 0');
+  }
+  // Matches already finished or live have approved lineups
+  db.exec(`UPDATE matches SET lineup_home_approved = 1, lineup_away_approved = 1 WHERE status != 'scheduled' AND (lineup_home_approved = 0 OR lineup_away_approved = 0)`);
   const mediaAssetColumns = db.prepare('PRAGMA table_info(media_assets)').all();
   if (mediaAssetColumns.length && !mediaAssetColumns.some((col) => col.name === 'bucket')) {
     db.exec(`ALTER TABLE media_assets ADD COLUMN bucket TEXT NOT NULL DEFAULT 'ddu-super-cup-media'`);
