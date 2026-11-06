@@ -24,7 +24,7 @@ export function HomePage() {
   return (
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-5">
       <section className="relative mb-6 overflow-hidden rounded-3xl border border-white/10 bg-[#10192b] px-5 py-6">
-        <img src="/brand/ddu-logo.png" alt="" className="pointer-events-none absolute -right-6 -top-6 h-40 w-40 object-contain opacity-30" />
+        <img src="/brand/ddu-logo.png" alt="" className="pointer-events-none absolute -right-1 -top-1 h-35 w-35 object-contain opacity-30" />
         <p className="text-[11px] font-semibold tracking-[0.22em] text-[#f5c518]">DIRE DAWA UNIVERSITY</p>
         <h1 className="mt-2 text-4xl font-black tracking-tight text-white">Super Cup</h1>
         <p className="mt-2 max-w-sm text-sm text-white/60">Department football.</p>
@@ -43,46 +43,45 @@ export function HomePage() {
         <div className="space-y-3">
           {live.map((fixture) => (
             <MatchCard
-            key={fixture.id}
-            id={fixture.id}
-            homeTeam={cardTeam(fixture.homeId)}
-            awayTeam={cardTeam(fixture.awayId)}
-            homeScore={fixture.homeScore}
-            awayScore={fixture.awayScore}
-            status="live"
-            stadium={fixture.stadium}
-            matchMinute={fixture.minute}
+              key={fixture.id}
+              id={fixture.id}
+              homeTeam={cardTeam(fixture.homeId)}
+              awayTeam={cardTeam(fixture.awayId)}
+              homeScore={fixture.homeScore}
+              awayScore={fixture.awayScore}
+              status="live"
+              stadium={fixture.stadium}
+              matchMinute={fixture.minute}
             />
           ))}
           {!live.length && <p className="rounded-2xl border border-white/10 bg-[#10192b] px-4 py-6 text-sm text-white/50">No games are live.</p>}
         </div>
       </section>
-          
-                {/* MATCHDAY HIGHLIGHTS */}
-                {highlights.length > 0 && (
-                  <section className="mb-6">
-                    <div className="mb-3 flex items-center justify-between">
-                      <h2 className="flex items-center gap-2 text-lg font-black tracking-wide text-white">
-                        <Award className="h-5 w-5 text-[#f5c518]" />
-                        MATCHDAY HIGHLIGHTS
-                      </h2>
-                      {activeMatchday != null && (
-                        <span className="text-[11px] font-bold tracking-wider text-[#f5c518]">
-                          MATCHDAY {activeMatchday}
-                        </span>
-                      )}
-                    </div>
-                    <div
-                      className={`grid gap-4 ${
-                        highlights.length > 1 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'
-                      }`}
-                    >
-                      {highlights.map((highlight) => (
-                        <MotmPoster key={highlight.matchId} highlight={highlight} />
-                      ))}
-                    </div>
-                  </section>
-                )}
+
+      {/* MATCHDAY HIGHLIGHTS */}
+      {highlights.length > 0 && (
+        <section className="mb-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-lg font-black tracking-wide text-white">
+              <Award className="h-5 w-5 text-[#f5c518]" />
+              MATCHDAY HIGHLIGHTS
+            </h2>
+            {activeMatchday != null && (
+              <span className="text-[11px] font-bold tracking-wider text-[#f5c518]">
+                MATCHDAY {activeMatchday}
+              </span>
+            )}
+          </div>
+          <div
+            className={`grid gap-4 ${highlights.length > 1 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'
+              }`}
+          >
+            {highlights.map((highlight) => (
+              <MotmPoster key={highlight.matchId} highlight={highlight} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {results.length > 0 && (
         <section className="mb-6">
