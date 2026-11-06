@@ -18,16 +18,28 @@ export const STAGE_OPTIONS: Array<{ id: Stage; label: string; ties: number }> = 
   { id: 'final', label: 'Final', ties: 1 },
 ];
 
-const R16: Array<[string, string]> = [
-  ['1A', '2B'],
-  ['1C', '2D'],
-  ['1E', '2F'],
-  ['1B', '2A'],
-  ['1D', '2C'],
-  ['1F', '2E'],
-  ['3-1', '3-4'],
-  ['3-2', '3-3'],
+export interface R16TieConfig {
+  slot: number;
+  homeGroup: GroupId;
+  homeRank: number;
+  awayGroup: GroupId;
+  awayRank: number;
+  homeCode: string;
+  awayCode: string;
+}
+
+export const R16_TIES: R16TieConfig[] = [
+  { slot: 1, homeGroup: 'A', homeRank: 1, awayGroup: 'C', awayRank: 3, homeCode: '1A', awayCode: '3C' },
+  { slot: 2, homeGroup: 'B', homeRank: 1, awayGroup: 'D', awayRank: 3, homeCode: '1B', awayCode: '3D' },
+  { slot: 3, homeGroup: 'C', homeRank: 1, awayGroup: 'E', awayRank: 3, homeCode: '1C', awayCode: '3E' },
+  { slot: 4, homeGroup: 'D', homeRank: 1, awayGroup: 'A', awayRank: 3, homeCode: '1D', awayCode: '3A' },
+  { slot: 5, homeGroup: 'E', homeRank: 1, awayGroup: 'B', awayRank: 3, homeCode: '1E', awayCode: '3B' },
+  { slot: 6, homeGroup: 'A', homeRank: 2, awayGroup: 'D', awayRank: 2, homeCode: '2A', awayCode: '2D' },
+  { slot: 7, homeGroup: 'B', homeRank: 2, awayGroup: 'E', awayRank: 2, homeCode: '2B', awayCode: '2E' },
+  { slot: 8, homeGroup: 'C', homeRank: 2, awayGroup: 'E', awayRank: 4, homeCode: '2C', awayCode: '4E' },
 ];
+
+export const R16: Array<[string, string]> = R16_TIES.map((tie) => [tie.homeCode, tie.awayCode]);
 
 export interface RoadSide {
   label: string;
@@ -50,17 +62,31 @@ export function tieCount(stage: Stage) {
   return STAGE_OPTIONS.find((item) => item.id === stage)?.ties ?? 0;
 }
 
-function bestThirds(settledOnly = false) {
-  return GROUPS
-    .filter((group) => !settledOnly || groupSettled(group))
-    .map((group) => standingsFor(group)[2])
-    .filter((row) => row && (settledOnly || row.played > 0))
-    .sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference || b.goalsFor - a.goalsFor || a.department.name.localeCompare(b.department.name))
-    .slice(0, 4)
-    .map((row) => row.department);
+export function qualifyingSpotsForGroup(group: GroupId): number {
+  return group === 'E' ? 4 : 3;
 }
 
-function groupSettled(group: GroupId) {
+export function isTeamQualified(group: GroupId, position: number): boolean {
+  return position >= 1 && position <= qualifyingSpotsForGroup(group);
+}
+
+export function getQualifiedTeams(settledOnly = false): Department[] {
+  const result: Department[] = [];
+  for (const group of GROUPS) {
+    if (settledOnly && !groupSettled(group)) continue;
+    const table = standingsFor(group);
+    const spots = qualifyingSpotsForGroup(group);
+    for (let index = 0; index < spots && index < table.length; index += 1) {
+      const row = table[index];
+      if (row && (settledOnly || row.played > 0)) {
+        result.push(row.department);
+      }
+    }
+  }
+  return result;
+}
+
+export function groupSettled(group: GroupId) {
   const table = standingsFor(group);
   if (table.length < 2 || table.some((row) => row.played < table.length - 1)) return false;
   return !fixtures.some((fixture) =>
@@ -72,26 +98,23 @@ function groupSettled(group: GroupId) {
   );
 }
 
-function teamFromCode(code: string, thirds: Department[], settledOnly = false) {
-  const place = code.match(/^([12])([A-F])$/);
-  if (place) {
-    const group = place[2] as GroupId;
-    if (settledOnly && !groupSettled(group)) return undefined;
-    const row = standingsFor(group)[Number(place[1]) - 1];
-    return row && (settledOnly || row.played > 0) ? row.department : undefined;
-  }
-  const third = code.match(/^3-(\d)$/);
-  return third ? thirds[Number(third[1]) - 1] : undefined;
+export function teamFromCode(code: string, settledOnly = false): Department | undefined {
+  const place = code.match(/^([1-4])([A-E])$/);
+  if (!place) return undefined;
+  const rank = Number(place[1]);
+  const group = place[2] as GroupId;
+  if (settledOnly && !groupSettled(group)) return undefined;
+  const row = standingsFor(group)[rank - 1];
+  return row && (settledOnly || row.played > 0) ? row.department : undefined;
 }
 
-function codeLabel(code: string) {
-  if (code === '3-1') return 'Best 3rd';
-  if (code === '3-2') return '2nd best 3rd';
-  if (code === '3-3') return '3rd best 3rd';
-  if (code === '3-4') return '4th best 3rd';
-  const place = code.match(/^([12])([A-F])$/);
+export function codeLabel(code: string) {
+  const place = code.match(/^([1-4])([A-E])$/);
   if (!place) return code;
-  return `${place[1] === '1' ? 'Winner' : 'Runner-up'} ${place[2]}`;
+  const rank = place[1];
+  const group = place[2];
+  const suffix = rank === '1' ? '1st' : rank === '2' ? '2nd' : rank === '3' ? '3rd' : '4th';
+  return `Group ${group} ${suffix}`;
 }
 
 function tieFixture(stage: string, slot: number) {
@@ -113,10 +136,17 @@ function side(label: string, teamId?: string): RoadSide {
   return { label, team: teamId ? getDepartment(teamId) : undefined };
 }
 
-const LATER: Array<{ stage: Exclude<Stage, 'group'>; ties: number; feed: Exclude<Stage, 'group'>; feedName: string }> = [
-  { stage: 'qf', ties: 4, feed: 'r16', feedName: 'R16' },
-  { stage: 'sf', ties: 2, feed: 'qf', feedName: 'QF' },
-  { stage: 'final', ties: 1, feed: 'sf', feedName: 'SF' },
+function feedLabel(stage: Exclude<Stage, 'group'>, slot: number): string {
+  if (stage === 'r16') return `Winner R16-${slot}`;
+  if (stage === 'qf') return `Winner QF${slot}`;
+  if (stage === 'sf') return `Winner SF${slot}`;
+  return `Winner ${stage} ${slot}`;
+}
+
+const LATER: Array<{ stage: Exclude<Stage, 'group'>; ties: number; feed: Exclude<Stage, 'group'> }> = [
+  { stage: 'qf', ties: 4, feed: 'r16' },
+  { stage: 'sf', ties: 2, feed: 'qf' },
+  { stage: 'final', ties: 1, feed: 'sf' },
 ];
 
 export function thirdPlaceTie(): RoadTie {
@@ -130,8 +160,8 @@ export function thirdPlaceTie(): RoadTie {
   return {
     stage: 'final',
     slot: 0,
-    home: side('SF 1', loser(left)),
-    away: side('SF 2', loser(right)),
+    home: side('Loser SF1', loser(left)),
+    away: side('Loser SF2', loser(right)),
   };
 }
 
@@ -144,12 +174,11 @@ export function scheduleTie(stage: Exclude<Stage, 'group'>, slot: number): RoadT
 }
 
 function buildRoad(settledOnly: boolean): RoadTie[] {
-  const thirds = bestThirds(settledOnly);
   const ties: RoadTie[] = R16.map(([homeCode, awayCode], index) => ({
     stage: 'r16',
     slot: index + 1,
-    home: { label: codeLabel(homeCode), team: teamFromCode(homeCode, thirds, settledOnly) },
-    away: { label: codeLabel(awayCode), team: teamFromCode(awayCode, thirds, settledOnly) },
+    home: { label: codeLabel(homeCode), team: teamFromCode(homeCode, settledOnly) },
+    away: { label: codeLabel(awayCode), team: teamFromCode(awayCode, settledOnly) },
     fixture: tieFixture('r16', index + 1),
   }));
 
@@ -160,8 +189,8 @@ function buildRoad(settledOnly: boolean): RoadTie[] {
       ties.push({
         stage: round.stage,
         slot,
-        home: side(`Winner ${round.feedName} ${left}`, winnerId(tieFixture(round.feed, left))),
-        away: side(`Winner ${round.feedName} ${right}`, winnerId(tieFixture(round.feed, right))),
+        home: side(feedLabel(round.feed, left), winnerId(tieFixture(round.feed, left))),
+        away: side(feedLabel(round.feed, right), winnerId(tieFixture(round.feed, right))),
         fixture: tieFixture(round.stage, slot),
       });
     }

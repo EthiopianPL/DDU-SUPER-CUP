@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router';
 import { DepartmentMark } from './DepartmentMark';
-import { GROUP_COLLEGES, standingsFor, type GroupId } from '../../data/supercup';
+import { GROUP_COLLEGES, isTeamQualified, standingsFor, type GroupId } from '../../data/supercup';
 import { useLeagueVersion } from '../../data/live';
 import { resolveGroupCoverUrl } from '../../config/assets';
 
@@ -64,7 +64,7 @@ export function GroupTable({
           </div>
         </div>
         <span className="rounded-full border border-[#2f9e44]/30 bg-[#2f9e44]/15 px-2.5 py-1 text-[10px] font-bold text-[#7ddea0] shrink-0">
-          Top 3 advance
+          {group === 'E' ? 'All 4 advance' : 'Top 3 advance'}
         </span>
       </header>
 
@@ -114,7 +114,7 @@ export function GroupTable({
                 }}
               >
                 <span
-                  className={`flex h-5 w-5 items-center justify-center rounded-full text-xs font-black ${row.position <= 2
+                  className={`flex h-5 w-5 items-center justify-center rounded-full text-xs font-black ${isTeamQualified(group, row.position)
                       ? 'bg-[#2f9e44] text-[#070d18]'
                       : 'text-white/40'
                     }`}

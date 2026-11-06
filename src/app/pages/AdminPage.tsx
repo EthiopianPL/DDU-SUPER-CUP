@@ -12,6 +12,7 @@ import { RichTextContent } from '../components/RichTextContent';
 import { stripHtml } from '../utils/richText';
 import {
   departments,
+  GROUPS,
   fixtures,
   formatLiveTime,
   getDepartment,
@@ -403,7 +404,7 @@ function GroupRoundForm({ onDone, onError }: { onDone: (text: string) => void; o
       <h2 className="mt-1 text-xl font-black">Fill a group calendar</h2>
       <p className="mt-1 text-sm text-white/45">Builds the missing round-robin only. Each matchday is one week apart. Scores stay blank until you play the match.</p>
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <Select label="Group" value={group} onChange={setGroup} options={[{ id: 'ALL', label: 'All groups' }, ...['A', 'B', 'C', 'D', 'E', 'F'].map((id) => ({ id, label: `Group ${id}` }))]} />
+        <Select label="Group" value={group} onChange={setGroup} options={[{ id: 'ALL', label: 'All groups' }, ...GROUPS.map((id) => ({ id, label: `Group ${id}` }))]} />
         <label className="text-[11px] font-bold uppercase tracking-wide text-white/40">First matchday
           <input className={inputClass} type="date" value={date} onChange={(event) => setDate(event.target.value)} required />
         </label>

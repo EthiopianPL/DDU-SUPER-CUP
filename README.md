@@ -1,10 +1,10 @@
 # Dire Dawa University Super Cup
 
-Department football league. Six groups, four departments in each group.
+Department football league. Five groups (A–E), 21 teams total.
 
 The public site and the match desk read from one server. Scores, cards, substitutions, and the clock are stored in Supabase Postgres and checked in a transaction. Standings use confirmed full-time group results only.
 
-A new database starts with the desk account and an empty calendar. Sign in and add teams, then schedule each match, or use **Fill a group calendar** to place the missing round-robin. Knockout ties are scheduled on the same form: round of 16, quarter-final, semi-final, then the final. Discover shows that path as 16, 8, 4, 2. The top two in each group and the four best third-placed teams make the last 16.
+A new database starts with the desk account and an empty calendar. Sign in and add teams, then schedule each match, or use **Fill a group calendar** to place the missing round-robin. Knockout ties are scheduled on the same form: round of 16, quarter-final, semi-final, then the final. Discover shows that path as 16, 8, 4, 2. The top three teams from Groups A–D and all four teams from Group E advance to the Round of 16 (16 teams total).
 
 Set `DDU_DEMO=1` only when a local SQLite file should load the old sample tournament. Tests do that. The live site does not.
 

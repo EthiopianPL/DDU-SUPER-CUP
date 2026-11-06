@@ -345,7 +345,7 @@ export function MatchDetailsPage() {
                 <p className="mt-0.5 text-xs text-white/50">{GROUP_COLLEGES[fixture.group]}</p>
               </div>
               <span className="rounded-full border border-[#2f9e44]/30 bg-[#2f9e44]/15 px-2.5 py-1 text-[11px] font-bold text-[#7ddea0]">
-                Top 3 Advance
+                {fixture.group === 'E' ? 'All 4 Advance' : 'Top 3 Advance'}
               </span>
             </div>
 

@@ -160,6 +160,14 @@ export const GROUP_COLLEGES: Record<GroupId, string> = {
   E: '',
 };
 
+export function qualifyingSpotsForGroup(group: GroupId): number {
+  return group === 'E' ? 4 : 3;
+}
+
+export function isTeamQualified(group: GroupId, position: number): boolean {
+  return position >= 1 && position <= qualifyingSpotsForGroup(group);
+}
+
 export function getDepartment(id: string) {
   return departments.find((department) => department.id === id);
 }

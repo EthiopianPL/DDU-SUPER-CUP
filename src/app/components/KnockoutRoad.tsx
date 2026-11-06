@@ -170,7 +170,10 @@ function SideRow({ tie, home = false }: { tie?: RoadTie; home?: boolean }) {
   return (
     <div className="flex h-[25px] items-center gap-1.5 px-1.5">
       <span className="h-3.5 w-1 shrink-0 rounded-full" style={{ background: side?.team?.color || 'rgba(255,255,255,0.22)' }} />
-      <span className={`min-w-0 flex-1 truncate text-[10px] font-bold uppercase tracking-wide ${leading ? 'text-[#f5c518]' : 'text-white'}`}>
+      <span
+        title={side?.team?.name || side?.label}
+        className={`min-w-0 flex-1 truncate text-[10px] font-bold uppercase tracking-wide ${leading ? 'text-[#f5c518]' : 'text-white'}`}
+      >
         {side?.team?.shortName || side?.label || 'TBD'}
       </span>
       {score != null && <span className="font-mono text-[11px] font-black text-white">{score}</span>}
