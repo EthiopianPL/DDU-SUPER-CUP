@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router';
 import { ChevronRight, Flame, Calendar, Newspaper, Award } from 'lucide-react';
 import { MatchCard } from '../components/MatchCard';
 import { MotmPoster } from '../components/MotmPoster';
-import { cardTeam, competitionName, fixtures, getTournamentTodayString, latestResults, topScorers, sortFixturesByPriority } from '../../data/supercup';
+import { cardTeam, competitionName, fixtures, latestResults, topScorers, sortFixturesByPriority } from '../../data/supercup';
 import { getActiveMatchdayHighlights } from '../../data/motm';
 import { newsArticles } from '../../data/news';
 import { useLeagueVersion } from '../../data/live';
@@ -12,11 +12,10 @@ export function HomePage() {
   const navigate = useNavigate();
   const version = useLeagueVersion();
   void version;
-  const today = getTournamentTodayString();
   const live = sortFixturesByPriority(fixtures.filter((fixture) => fixture.status === 'live'));
   const upcoming = sortFixturesByPriority(
-    fixtures.filter((fixture) => fixture.status === 'upcoming' && fixture.date === today),
-  );
+    fixtures.filter((fixture) => fixture.status === 'upcoming'),
+  ).slice(0, 2);
   const leader = topScorers(1)[0];
   const results = latestResults(2);
   const stories = [...newsArticles].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)).slice(0, 2);
@@ -135,6 +134,9 @@ export function HomePage() {
             <Calendar className="h-5 w-5 text-[#f5c518]" />
             Next fixtures
           </h2>
+          <button type="button" onClick={() => navigate('/matches')} className="flex items-center text-sm font-semibold text-[#f5c518]">
+            Matches <ChevronRight className="h-4 w-4" />
+          </button>
         </div>
         <div className="space-y-3">
           {upcoming.map((fixture) => (
@@ -148,7 +150,7 @@ export function HomePage() {
               stadium={fixture.stadium}
             />
           ))}
-          {!upcoming.length && <p className="rounded-2xl border border-white/10 bg-[#10192b] px-4 py-6 text-sm text-white/50">No fixtures today.</p>}
+          {!upcoming.length && <p className="rounded-2xl border border-white/10 bg-[#10192b] px-4 py-6 text-sm text-white/50">No upcoming fixtures.</p>}
         </div>
       </section>
 
