@@ -126,7 +126,8 @@ export function resolveTeamLogoUrl(teamId?: string | null, customCrestUrl?: stri
  */
 export function resolveGroupCoverUrl(groupId?: string | null): string {
   if (!groupId) return '';
-  const g = groupId.toLowerCase().trim();
-  return `${GITHUB_ASSETS_BASE_URL}/groups/group-${g}/group-cover.png`;
+  const clean = groupId.toLowerCase().trim().replace(/^group[\s-_]*/, '');
+  if (!clean) return '';
+  return `${GITHUB_ASSETS_BASE_URL}/groups/group-${clean}/group-cover.png`;
 }
 

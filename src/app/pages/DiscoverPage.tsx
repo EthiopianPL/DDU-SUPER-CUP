@@ -5,6 +5,7 @@ import { KnockoutRoad } from '../components/KnockoutRoad';
 import { GroupTable } from '../components/GroupTable';
 import { MatchCard } from '../components/MatchCard';
 import { DepartmentMark, Portrait } from '../components/DepartmentMark';
+import { resolveGroupCoverUrl } from '../../config/assets';
 import {
   GROUPS,
   cardTeam,
@@ -158,13 +159,21 @@ export function DiscoverPage() {
                   type="button"
                   aria-pressed={isCurrent}
                   onClick={() => setSelectedGroup(item)}
-                  className={`shrink-0 rounded-full px-4 py-2 text-xs font-bold transition-all sm:text-sm active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518] focus-visible:ring-offset-2 focus-visible:ring-offset-[#070d18] ${
+                  className={`shrink-0 inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition-all sm:text-sm active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518] focus-visible:ring-offset-2 focus-visible:ring-offset-[#070d18] ${
                     isCurrent
                       ? 'border border-[#f5c518] bg-[#f5c518] text-[#102018] shadow-md shadow-[#f5c518]/20 font-black'
                       : 'border border-white/10 bg-[#10192b] text-white/80 hover:border-white/25 hover:bg-white/10 hover:text-white'
                   }`}
                 >
-                  Group {item}
+                  <img
+                    src={resolveGroupCoverUrl(item)}
+                    alt=""
+                    className="h-4 w-4 shrink-0 object-contain drop-shadow"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                  <span>Group {item}</span>
                 </button>
               );
             })}

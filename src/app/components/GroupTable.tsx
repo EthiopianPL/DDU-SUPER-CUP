@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router';
 import { DepartmentMark } from './DepartmentMark';
 import { GROUP_COLLEGES, standingsFor, type GroupId } from '../../data/supercup';
 import { useLeagueVersion } from '../../data/live';
+import { resolveGroupCoverUrl } from '../../config/assets';
 
 interface GroupTableProps {
   group: GroupId;
@@ -21,12 +22,23 @@ export function GroupTable({
 
   return (
     <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#10192b] shadow-sm">
-      <header className="flex items-start justify-between gap-3 border-b border-white/10 bg-[#0c1424] px-4 py-3">
-        <div>
-          <p className="text-[11px] font-bold tracking-[0.18em] text-[#f5c518]">GROUP {group}</p>
-          <p className="mt-0.5 text-xs text-white/70">{GROUP_COLLEGES[group]}</p>
+      <header className="flex items-center justify-between gap-3 border-b border-white/10 bg-[#0c1424] px-4 py-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <img
+            src={resolveGroupCoverUrl(group)}
+            alt={`Group ${group}`}
+            className="h-10 w-10 shrink-0 object-contain drop-shadow"
+            loading="lazy"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = 'none';
+            }}
+          />
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold tracking-[0.18em] text-[#f5c518]">GROUP {group}</p>
+            <p className="mt-0.5 text-xs text-white/70 truncate">{GROUP_COLLEGES[group]}</p>
+          </div>
         </div>
-        <span className="rounded-full border border-[#2f9e44]/30 bg-[#2f9e44]/15 px-2.5 py-1 text-[10px] font-bold text-[#7ddea0]">
+        <span className="rounded-full border border-[#2f9e44]/30 bg-[#2f9e44]/15 px-2.5 py-1 text-[10px] font-bold text-[#7ddea0] shrink-0">
           Top 3 advance
         </span>
       </header>
