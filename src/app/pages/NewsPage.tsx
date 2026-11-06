@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router';
 import { newsArticles } from '../../data/news';
 import { useLeagueVersion } from '../../data/live';
+import { stripHtml } from '../utils/richText';
 
 export function NewsPage() {
   const version = useLeagueVersion();
@@ -23,8 +24,8 @@ export function NewsPage() {
                 <span className="rounded-full bg-[#f5c518] px-2 py-0.5 text-[#102018]">{article.category}</span>
                 <span className="text-white/40">{article.time}</span>
               </div>
-              <h2 className="mt-2 text-lg font-black text-white">{article.title}</h2>
-              <p className="mt-1 text-sm text-white/60">{article.summary}</p>
+              <h2 className="mt-2 text-lg font-black text-white">{stripHtml(article.title)}</h2>
+              <p className="mt-1 text-sm text-white/60">{stripHtml(article.summary)}</p>
             </div>
           </button>
         ))}

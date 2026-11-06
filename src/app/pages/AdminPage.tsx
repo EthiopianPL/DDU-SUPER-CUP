@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { Eye, EyeOff, Edit3, Plus, X } from 'lucide-react';
 import { desk, imagePayload } from '../../data/api';
 import { useLeagueVersion } from '../../data/live';
 import { newsArticles } from '../../data/news';
 import { useMatchClock } from '../useMatchClock';
 import { DepartmentMark, Portrait } from '../components/DepartmentMark';
 import { MatchLoading } from '../components/Layout';
+import { RichTextEditor } from '../components/RichTextEditor';
+import { RichTextContent } from '../components/RichTextContent';
+import { stripHtml } from '../utils/richText';
 import {
   departments,
   fixtures,
@@ -1374,12 +1378,19 @@ function PlayerAdmin({ onMessage, onError }: { onMessage: (text: string) => void
 }
 
 function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; onError: (text: string) => void }) {
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
+  const [category, setCategory] = useState('News');
+  const [timeLabel, setTimeLabel] = useState('Today');
   const [summary, setSummary] = useState('');
   const [body, setBody] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState('');
   const [photoKey, setPhotoKey] = useState(0);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const formRef = useRef<HTMLFormElement | null>(null);
+
   const choosePhoto = (next: File | null) => {
     setFile(next);
     setPreview((current) => {
@@ -1387,63 +1398,351 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
       return next ? URL.createObjectURL(next) : '';
     });
   };
+
+  const resetForm = () => {
+    setEditingId(null);
+    setTitle('');
+    setCategory('News');
+    setTimeLabel('Today');
+    setSummary('');
+    setBody('');
+    setFile(null);
+    setPhotoKey((value) => value + 1);
+    setPreview((current) => {
+      if (current.startsWith('blob:')) URL.revokeObjectURL(current);
+      return '';
+    });
+    setIsPreviewMode(false);
+  };
+
+  const handleEdit = (article: typeof newsArticles[number]) => {
+    setEditingId(article.id);
+    setTitle(article.title || '');
+    setCategory(article.category || 'News');
+    setTimeLabel(article.time || 'Today');
+    setSummary(article.summary || '');
+    setBody(article.body || '');
+    setFile(null);
+    setPreview(article.imageUrl || '');
+    setIsPreviewMode(false);
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!title.trim()) {
+      onError('Please enter a headline for the story.');
+      return;
+    }
+    if (!summary.trim()) {
+      onError('Please enter a summary for the news list.');
+      return;
+    }
+    if (!body.trim()) {
+      onError('Please write the story content in the rich text editor.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const image = file ? await imagePayload(file) : undefined;
+      const payload = {
+        title: title.trim(),
+        summary: summary.trim(),
+        body: body.trim(),
+        category: category.trim() || 'News',
+        time: timeLabel.trim() || 'Today',
+        ...(image ? { image } : {}),
+      };
+
+      if (editingId) {
+        await desk(`/api/news/${editingId}`, {
+          method: 'PATCH',
+          body: payload,
+        });
+        onMessage('Story updated successfully.');
+      } else {
+        await desk('/api/news', {
+          body: payload,
+        });
+        onMessage('Story published successfully.');
+      }
+
+      resetForm();
+    } catch (reason) {
+      onError(reason instanceof Error ? reason.message : 'Could not save the story.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const CATEGORY_PRESETS = ['News', 'Match report', 'Fixtures', 'Announcement', 'Discipline', 'Standings'];
+
   return (
     <div className="mx-auto max-w-3xl">
-      <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">STORIES</p>
-      <h1 className="mt-1 text-3xl font-black">News</h1>
-      <form className="mt-5 rounded-3xl border border-white/10 bg-[#10192b] p-5" onSubmit={async (event) => {
-        event.preventDefault();
-        try {
-          const image = file ? await imagePayload(file) : undefined;
-          await desk('/api/news', { body: { title, summary, body, category: 'News', time: 'Today', ...(image ? { image } : {}) } });
-          setTitle('');
-          setSummary('');
-          setBody('');
-          setFile(null);
-          setPhotoKey((value) => value + 1);
-          setPreview((current) => {
-            if (current.startsWith('blob:')) URL.revokeObjectURL(current);
-            return '';
-          });
-          onMessage('Story published.');
-        } catch (reason) {
-          onError(reason instanceof Error ? reason.message : 'Could not publish the story.');
-        }
-      }}>
-        <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">NEW STORY</p>
-        <h2 className="mt-1 text-xl font-black">Publish a story</h2>
-        <div className="mt-5 grid gap-3">
-          <PicturePicker preview={preview} empty="Story photo" wide inputKey={photoKey} onFile={choosePhoto} />
-          <Field label="Title" value={title} onChange={setTitle} placeholder="Headline" required />
-          <Field label="Summary" value={summary} onChange={setSummary} placeholder="One line for the news list" required />
-          <label className="text-[11px] font-bold uppercase tracking-wide text-white/40">Story
-            <textarea className={inputClass} rows={6} value={body} placeholder="The full story" required onChange={(event) => setBody(event.target.value)} />
-          </label>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">STORIES</p>
+          <h1 className="mt-1 text-3xl font-black">News</h1>
         </div>
-        <button type="submit" className="mt-5 w-full rounded-xl bg-[#f5c518] px-4 py-3 text-sm font-black text-[#102018] sm:w-auto">Publish</button>
-      </form>
-      <ul className="mt-6 space-y-2">
-        {newsArticles.map((article) => (
-          <li key={article.id} className="overflow-hidden rounded-2xl border border-white/10 bg-[#10192b]">
-            {article.imageUrl && <img src={article.imageUrl} alt="" className="h-36 w-full object-cover" />}
-            <span className="flex items-center justify-between gap-3 px-3 py-2.5">
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-bold">{article.title}</span>
-                <span className="block text-xs font-semibold text-white/35">{article.category} · {article.time}</span>
+        {editingId && (
+          <button
+            type="button"
+            onClick={resetForm}
+            className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/70 hover:bg-white/10 hover:text-white"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New story
+          </button>
+        )}
+      </div>
+
+      {/* PUBLISH / EDIT FORM */}
+      <form
+        ref={formRef}
+        className={`mt-5 rounded-3xl border bg-[#10192b] p-5 transition-all ${
+          editingId ? 'border-[#f5c518]/40 shadow-lg shadow-[#f5c518]/5' : 'border-white/10'
+        }`}
+        onSubmit={handleSubmit}
+      >
+        <div className="flex items-center justify-between border-b border-white/10 pb-4">
+          <div>
+            <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">
+              {editingId ? 'EDITING STORY' : 'NEW STORY'}
+            </p>
+            <h2 className="mt-1 text-xl font-black">
+              {editingId ? 'Edit news article' : 'Publish a story'}
+            </h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsPreviewMode(!isPreviewMode)}
+              className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition-all ${
+                isPreviewMode
+                  ? 'border-[#f5c518] bg-[#f5c518] text-[#102018]'
+                  : 'border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              {isPreviewMode ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              {isPreviewMode ? 'Editor' : 'Live Preview'}
+            </button>
+            {editingId && (
+              <button
+                type="button"
+                onClick={resetForm}
+                title="Cancel editing"
+                className="rounded-xl border border-white/10 bg-white/5 p-1.5 text-white/60 hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* PREVIEW MODE */}
+        {isPreviewMode ? (
+          <div className="mt-5 space-y-4 rounded-2xl border border-white/10 bg-[#070d18] p-5">
+            <div className="flex items-center gap-2 text-xs font-semibold">
+              <span className="rounded-full bg-[#f5c518] px-2 py-0.5 text-[11px] font-bold text-[#102018]">
+                {category || 'News'}
               </span>
-              <button type="button" className="shrink-0 rounded-full bg-white/5 px-3 py-1.5 text-xs font-bold text-red-300" onClick={async () => {
-                try {
-                  await desk(`/api/news/${article.id}`, { method: 'DELETE', body: {} });
-                  onMessage('Story removed.');
-                } catch (reason) {
-                  onError(reason instanceof Error ? reason.message : 'Could not remove the story.');
-                }
-              }}>Delete</button>
-            </span>
-          </li>
-        ))}
-        {!newsArticles.length && <li className="rounded-2xl border border-white/10 px-3 py-6 text-sm text-white/40">No stories yet.</li>}
-      </ul>
+              <span className="text-white/40">{timeLabel || 'Today'}</span>
+            </div>
+            <h1 className="text-2xl font-black text-white">{title || 'Story headline will appear here'}</h1>
+            {preview && (
+              <img src={preview} alt="" className="h-56 w-full rounded-2xl object-cover" />
+            )}
+            <p className="text-sm font-semibold text-white/60 italic">{summary || 'Summary line'}</p>
+            <div className="border-t border-white/10 pt-4">
+              <RichTextContent content={body || '<p>Start writing in the editor to see your story preview.</p>'} />
+            </div>
+          </div>
+        ) : (
+          /* EDITING FORM FIELDS */
+          <div className="mt-5 grid gap-4">
+            <PicturePicker
+              preview={preview}
+              empty={editingId ? 'Change photo (optional)' : 'Story photo'}
+              wide
+              inputKey={photoKey}
+              onFile={choosePhoto}
+            />
+
+            <Field
+              label="Title"
+              value={title}
+              onChange={setTitle}
+              placeholder="Headline"
+              required
+            />
+
+            {/* Category Presets & Custom Input */}
+            <div>
+              <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-white/40">
+                Category
+              </label>
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {CATEGORY_PRESETS.map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setCategory(cat)}
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors ${
+                      category.toLowerCase() === cat.toLowerCase()
+                        ? 'bg-[#f5c518] text-[#102018]'
+                        : 'border border-white/10 bg-white/5 text-white/70 hover:border-white/25 hover:text-white'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="text"
+                className={inputClass}
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="Category (e.g. Match report, Fixtures, Announcement)"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field
+                label="Time label"
+                value={timeLabel}
+                onChange={setTimeLabel}
+                placeholder="e.g. Today, Matchday 2, This week"
+              />
+              <Field
+                label="Summary"
+                value={summary}
+                onChange={setSummary}
+                placeholder="One line for the news list preview"
+                required
+              />
+            </div>
+
+            {/* RICH TEXT EDITOR */}
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label className="text-[11px] font-bold uppercase tracking-wide text-white/40">
+                  Story Content (Rich Text)
+                </label>
+                <span className="text-[10px] text-[#f5c518]/70">
+                  Format headings, bullet lists, bold text, links & match announcements
+                </span>
+              </div>
+              <RichTextEditor
+                content={body}
+                onChange={setBody}
+                placeholder="Write the full story... You can paste formatted text from Word, Google Docs or websites, add headings, match fixture lineups, and lists."
+                minHeight="240px"
+                disabled={isSubmitting}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* SUBMIT ACTIONS */}
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full rounded-xl bg-[#f5c518] px-6 py-3 text-sm font-black text-[#102018] shadow-md transition-all hover:bg-[#ffd644] active:scale-95 disabled:opacity-50 sm:w-auto"
+          >
+            {isSubmitting
+              ? editingId
+                ? 'Updating...'
+                : 'Publishing...'
+              : editingId
+              ? 'Update story'
+              : 'Publish story'}
+          </button>
+          {editingId && (
+            <button
+              type="button"
+              onClick={resetForm}
+              disabled={isSubmitting}
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-white/70 hover:bg-white/10 hover:text-white sm:w-auto"
+            >
+              Cancel editing
+            </button>
+          )}
+        </div>
+      </form>
+
+      {/* EXISTING STORIES LIST */}
+      <div className="mt-8">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-base font-bold text-white">Published Stories ({newsArticles.length})</h2>
+          <span className="text-xs text-white/40">Click Edit to modify formatting</span>
+        </div>
+        <ul className="space-y-3">
+          {newsArticles.map((article) => {
+            const isEditing = editingId === article.id;
+            return (
+              <li
+                key={article.id}
+                className={`overflow-hidden rounded-2xl border bg-[#10192b] transition-all ${
+                  isEditing
+                    ? 'border-[#f5c518] ring-1 ring-[#f5c518]/40 shadow-md'
+                    : 'border-white/10 hover:border-white/20'
+                }`}
+              >
+                {article.imageUrl && <img src={article.imageUrl} alt="" className="h-36 w-full object-cover" />}
+                <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-[#f5c518]/15 border border-[#f5c518]/30 px-2 py-0.5 text-[10px] font-bold text-[#f5c518]">
+                        {article.category}
+                      </span>
+                      <span className="text-xs text-white/40">{article.time}</span>
+                    </div>
+                    <span className="mt-1 block truncate text-base font-bold text-white">{stripHtml(article.title)}</span>
+                    <p className="mt-0.5 line-clamp-1 text-xs text-white/50">{stripHtml(article.summary)}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => handleEdit(article)}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${
+                        isEditing
+                          ? 'bg-[#f5c518] text-[#102018]'
+                          : 'bg-white/10 text-white hover:bg-[#f5c518] hover:text-[#102018]'
+                      }`}
+                    >
+                      <Edit3 className="h-3.5 w-3.5" />
+                      {isEditing ? 'Editing' : 'Edit'}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-full bg-white/5 px-3 py-1.5 text-xs font-bold text-red-300 transition-colors hover:bg-red-500/20 hover:text-red-200"
+                      onClick={async () => {
+                        if (!window.confirm(`Delete story "${article.title}"?`)) return;
+                        try {
+                          await desk(`/api/news/${article.id}`, { method: 'DELETE', body: {} });
+                          if (editingId === article.id) resetForm();
+                          onMessage('Story removed.');
+                        } catch (reason) {
+                          onError(reason instanceof Error ? reason.message : 'Could not remove the story.');
+                        }
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+          {!newsArticles.length && (
+            <li className="rounded-2xl border border-white/10 px-4 py-8 text-center text-sm text-white/40">
+              No stories published yet.
+            </li>
+          )}
+        </ul>
+      </div>
     </div>
   );
 }

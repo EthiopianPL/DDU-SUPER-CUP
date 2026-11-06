@@ -1,6 +1,7 @@
 @import './fonts.css';
 @import './tailwind.css';
 @import './theme.css';
+@import './richtext.css';
 /* Add to your global CSS file */
 @keyframes slideIn {
   from {

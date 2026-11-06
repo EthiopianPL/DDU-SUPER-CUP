@@ -7,6 +7,7 @@ import { getActiveMatchdayHighlights } from '../../data/motm';
 import { newsArticles } from '../../data/news';
 import { useLeagueVersion } from '../../data/live';
 import { DepartmentMark } from '../components/DepartmentMark';
+import { stripHtml } from '../utils/richText';
 
 export function HomePage() {
   const navigate = useNavigate();
@@ -177,8 +178,8 @@ export function HomePage() {
                   <span className="rounded-full bg-[#f5c518] px-2 py-0.5 text-[#102018]">{article.category}</span>
                   <span className="text-white/40">{article.time}</span>
                 </div>
-                <h3 className="mt-2 text-base font-black text-white">{article.title}</h3>
-                <p className="mt-1 text-sm text-white/60">{article.summary}</p>
+                <h3 className="mt-2 text-base font-black text-white">{stripHtml(article.title)}</h3>
+                <p className="mt-1 text-sm text-white/60">{stripHtml(article.summary)}</p>
               </div>
             </button>
           ))}

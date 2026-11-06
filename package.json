@@ -9,10 +9,18 @@
     "server": "node server/index.mjs",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test server/domain.test.mjs server/routing.test.mjs test/hybrid-media.test.mjs test/production-readiness.test.mjs"
+    "test": "node --test server/domain.test.mjs server/routing.test.mjs server/group-assets.test.mjs server/rich-text.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",
+    "@tiptap/extension-link": "^3.33.0",
+    "@tiptap/extension-text-align": "^3.33.0",
+    "@tiptap/extension-underline": "^3.33.0",
+    "@tiptap/pm": "^3.33.0",
+    "@tiptap/react": "^3.33.0",
+    "@tiptap/starter-kit": "^3.33.0",
+    "@types/dompurify": "^3.0.5",
+    "dompurify": "^3.4.17",
     "esbuild": "^0.25.12",
     "lucide-react": "^0.487.0",
     "pg": "^8.23.1",
