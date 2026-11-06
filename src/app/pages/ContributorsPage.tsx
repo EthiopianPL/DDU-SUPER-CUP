@@ -8,7 +8,7 @@ export function ContributorsPage() {
         <img
           src="/brand/ddu-logo.png"
           alt=""
-          className="pointer-events-none absolute -right-6 -top-10 h-44 w-44 object-contain opacity-25"
+          className="pointer-events-none absolute -right-1 -top-1 h-35 w-35 object-contain opacity-25"
         />
         <div className="relative z-10">
           <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">
