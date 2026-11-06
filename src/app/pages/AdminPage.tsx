@@ -1030,7 +1030,9 @@ function LineupSide({
               ) : (
                 <span className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-dashed border-white/80 text-[10px] font-black text-white">{role}</span>
               )}
-              <span className="mt-1 max-w-16 truncate text-[10px] font-semibold text-white drop-shadow">{player ? player.name.split(' ').slice(-1)[0] : 'Pick'}</span>
+              <span className="mt-1 max-w-20 text-center text-[10px] font-semibold leading-tight text-white drop-shadow line-clamp-2" title={player?.name}>
+                {player ? player.name : 'Pick'}
+              </span>
             </button>
           );
         }))}

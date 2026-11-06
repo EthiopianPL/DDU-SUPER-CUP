@@ -707,7 +707,7 @@ function SubList({
                 <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#1f9d55] text-white">
                   <ArrowUp className="h-3 w-3" strokeWidth={3} />
                 </span>
-                {change.onPlayer.number} {compactName(change.onPlayer.name)} {change.minute}&apos;
+                {change.onPlayer.number} {change.onPlayer.name} {change.minute}&apos;
               </span>
             ))}
           </div>
@@ -868,8 +868,12 @@ function PitchPlayer({
         )}
       </div>
       <div className={nameAbove ? (hasEvents ? 'mb-4.5' : 'mb-1') : 'mt-1'}>
-        <p className="whitespace-nowrap text-[10px] font-semibold text-white drop-shadow">
-          {compactName(player.name)}{player.isCaptain ? ' (C)' : ''}
+        <p
+          className="max-w-[80px] sm:max-w-[105px] text-center text-[10px] sm:text-[11px] font-bold leading-tight text-white drop-shadow line-clamp-2"
+          title={player.name}
+        >
+          {player.name}
+          {player.isCaptain && <span className="ml-0.5 text-[#f5c518] font-black">(C)</span>}
         </p>
       </div>
     </div>
@@ -1270,10 +1274,5 @@ function BenchList({ title, color, players }: { title: string; color: string; pl
       </ul>
     </section>
   );
-}
-
-function compactName(name: string) {
-  const [first, last] = name.split(' ');
-  return `${first?.[0] ?? ''}. ${last ?? first}`;
 }
 
