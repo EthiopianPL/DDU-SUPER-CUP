@@ -6,12 +6,34 @@
 
 // GitHub asset repository configuration
 // When the dedicated asset repository is published, raw GitHub or CDN URL is used.
-export const GITHUB_ASSETS_BASE_URL =
+/**
+ * Normalizes any GitHub repository URL (e.g. .git clone URL or github.com link)
+ * to its corresponding raw content delivery endpoint.
+ */
+export function normalizeGitHubAssetsBaseUrl(url?: string | null): string {
+  if (!url) return 'https://raw.githubusercontent.com/EthiopianPL/ddu-super-cup-assets/main';
+  let clean = url.trim().replace(/\/+$/, '');
+  if (clean.includes('github.com/') && !clean.includes('raw.githubusercontent.com')) {
+    clean = clean.replace(/\.git$/, '');
+    const match = clean.match(/github\.com\/([^/]+)\/([^/]+)(?:\/(?:raw|tree|blob)\/([^/]+))?/);
+    if (match) {
+      const owner = match[1];
+      const repo = match[2];
+      const branch = match[3] || 'main';
+      return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}`;
+    }
+  }
+  return clean;
+}
+
+const rawConfiguredUrl =
   (typeof import.meta !== 'undefined' &&
     (import.meta.env?.VITE_GITHUB_ASSETS_URL || import.meta.env?.VITE_STATIC_ASSETS_BASE_URL)) ||
   (typeof process !== 'undefined' &&
     (process.env?.VITE_GITHUB_ASSETS_URL || process.env?.VITE_STATIC_ASSETS_BASE_URL)) ||
   'https://raw.githubusercontent.com/EthiopianPL/ddu-super-cup-assets/main';
+
+export const GITHUB_ASSETS_BASE_URL = normalizeGitHubAssetsBaseUrl(rawConfiguredUrl);
 
 /**
  * High-performance CDN delivery base URL via jsDelivr.
