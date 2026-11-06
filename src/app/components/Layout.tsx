@@ -9,7 +9,7 @@ const MAIN_TABS = new Set(['/', '/discover', '/matches', '/news']);
 
 export function Layout() {
   const location = useLocation();
-  const desk = location.pathname.startsWith('/admin');
+  const desk = location.pathname.toLowerCase().startsWith('/admin');
   const mainTab = MAIN_TABS.has(location.pathname);
   const version = useLeagueVersion();
   const { ready, error } = leagueStatus();
