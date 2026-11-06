@@ -133,7 +133,7 @@ export function AdminPage() {
 }
 
 function Login({ onSuccess }: { onSuccess: (user: DeskUser) => void }) {
-  const [username, setUsername] = useState('admin');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
@@ -546,7 +546,7 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
         />
       )}
 
-      
+
       {activeTab === 'motm' && (
         <MotmManager
           fixture={fixture}
@@ -1501,9 +1501,8 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
       {/* PUBLISH / EDIT FORM */}
       <form
         ref={formRef}
-        className={`mt-5 rounded-3xl border bg-[#10192b] p-5 transition-all ${
-          editingId ? 'border-[#f5c518]/40 shadow-lg shadow-[#f5c518]/5' : 'border-white/10'
-        }`}
+        className={`mt-5 rounded-3xl border bg-[#10192b] p-5 transition-all ${editingId ? 'border-[#f5c518]/40 shadow-lg shadow-[#f5c518]/5' : 'border-white/10'
+          }`}
         onSubmit={handleSubmit}
       >
         <div className="flex items-center justify-between border-b border-white/10 pb-4">
@@ -1519,11 +1518,10 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
             <button
               type="button"
               onClick={() => setIsPreviewMode(!isPreviewMode)}
-              className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition-all ${
-                isPreviewMode
+              className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition-all ${isPreviewMode
                   ? 'border-[#f5c518] bg-[#f5c518] text-[#102018]'
                   : 'border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white'
-              }`}
+                }`}
             >
               {isPreviewMode ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
               {isPreviewMode ? 'Editor' : 'Live Preview'}
@@ -1589,11 +1587,10 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
                     key={cat}
                     type="button"
                     onClick={() => setCategory(cat)}
-                    className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors ${
-                      category.toLowerCase() === cat.toLowerCase()
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors ${category.toLowerCase() === cat.toLowerCase()
                         ? 'bg-[#f5c518] text-[#102018]'
                         : 'border border-white/10 bg-white/5 text-white/70 hover:border-white/25 hover:text-white'
-                    }`}
+                      }`}
                   >
                     {cat}
                   </button>
@@ -1657,8 +1654,8 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
                 ? 'Updating...'
                 : 'Publishing...'
               : editingId
-              ? 'Update story'
-              : 'Publish story'}
+                ? 'Update story'
+                : 'Publish story'}
           </button>
           {editingId && (
             <button
@@ -1685,11 +1682,10 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
             return (
               <li
                 key={article.id}
-                className={`overflow-hidden rounded-2xl border bg-[#10192b] transition-all ${
-                  isEditing
+                className={`overflow-hidden rounded-2xl border bg-[#10192b] transition-all ${isEditing
                     ? 'border-[#f5c518] ring-1 ring-[#f5c518]/40 shadow-md'
                     : 'border-white/10 hover:border-white/20'
-                }`}
+                  }`}
               >
                 {article.imageUrl && <img src={article.imageUrl} alt="" className="h-36 w-full object-cover" />}
                 <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1707,11 +1703,10 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
                     <button
                       type="button"
                       onClick={() => handleEdit(article)}
-                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${
-                        isEditing
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${isEditing
                           ? 'bg-[#f5c518] text-[#102018]'
                           : 'bg-white/10 text-white hover:bg-[#f5c518] hover:text-[#102018]'
-                      }`}
+                        }`}
                     >
                       <Edit3 className="h-3.5 w-3.5" />
                       {isEditing ? 'Editing' : 'Edit'}
