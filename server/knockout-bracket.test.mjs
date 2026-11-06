@@ -158,5 +158,20 @@ test('DDU Super Cup teams pop up on knockout after group stage finishes', async 
     assert.equal(finalTie.home.label, 'Winner SF1');
     assert.equal(finalTie.away.label, 'Winner SF2');
   });
+
+  await t.test('6. Match Admin role has permissions for Matches and News', async () => {
+    const { can } = await import('./auth.mjs');
+    const matchAdminActor = { id: 'u1', username: 'match_official', role: 'match_admin' };
+    
+    // Must be able to write matches, manage clock, lineups, and publish news
+    assert.equal(can(matchAdminActor, 'match.write'), true);
+    assert.equal(can(matchAdminActor, 'match.clock'), true);
+    assert.equal(can(matchAdminActor, 'lineup.write'), true);
+    assert.equal(can(matchAdminActor, 'news.write'), true);
+
+    // Must NOT be able to access other areas (like rules or teams)
+    assert.equal(can(matchAdminActor, 'rules.write'), false);
+    assert.equal(can(matchAdminActor, 'team.write'), false);
+  });
 });
 

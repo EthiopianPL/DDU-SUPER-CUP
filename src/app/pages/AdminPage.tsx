@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Eye, EyeOff, Edit3, Plus, X } from 'lucide-react';
+import { Eye, EyeOff, Edit3, Plus, X, Trash2, Search, ExternalLink, LogOut, ArrowLeft } from 'lucide-react';
 import { desk, imagePayload } from '../../data/api';
 import { useLeagueVersion } from '../../data/live';
 import { newsArticles } from '../../data/news';
@@ -23,12 +23,13 @@ import {
   players,
   squads,
   type GroupId,
+  type Player,
 } from '../../data/supercup';
 import { formationPlan, seatPlayers } from '../../data/formation';
 import { STAGE_OPTIONS, scheduleTie, stageLabel, tieCount, type Stage } from '../../data/knockout';
 
 type Role = 'super_admin' | 'match_admin' | 'competition_manager' | 'team_manager' | 'reader';
-type Section = 'overview' | 'matches' | 'teams' | 'players' | 'news' | 'users' | 'audit' | 'rules';
+type Section = 'overview' | 'matches' | 'teams' | 'players' | 'news' | 'users' | 'audit';
 type DeskTab = 'clock' | 'events' | 'lineup' | 'fixture' | 'motm';
 
 interface DeskUser {
@@ -43,7 +44,6 @@ const NAV: { id: Section; label: string }[] = [
   { id: 'teams', label: 'Teams' },
   { id: 'players', label: 'Players' },
   { id: 'news', label: 'News' },
-  { id: 'rules', label: 'Competition' },
   { id: 'users', label: 'Users' },
   { id: 'audit', label: 'Audit' },
 ];
@@ -60,10 +60,25 @@ export function AdminPage() {
   const [matchId, setMatchId] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const [confirmLogout, setConfirmLogout] = useState(false);
 
   useEffect(() => {
-    desk('/api/me').then((data) => setUser(data.user)).catch(() => setUser(null)).finally(() => setReady(true));
+    desk('/api/me')
+      .then((data) => {
+        setUser(data.user);
+        if (data.user?.role === 'match_admin') {
+          setSection('matches');
+        }
+      })
+      .catch(() => setUser(null))
+      .finally(() => setReady(true));
   }, []);
+
+  useEffect(() => {
+    if (user?.role === 'match_admin' && section !== 'matches' && section !== 'news') {
+      setSection('matches');
+    }
+  }, [user, section]);
 
   useEffect(() => {
     if (!notice && !error) return;
@@ -75,94 +90,184 @@ export function AdminPage() {
   }, [notice, error]);
 
   if (!ready) return <MatchLoading />;
-  if (!user) return <Login onSuccess={setUser} />;
+  if (!user) {
+    return (
+      <Login
+        onSuccess={(loggedUser) => {
+          setUser(loggedUser);
+          if (loggedUser.role === 'match_admin') {
+            setSection('matches');
+          }
+        }}
+      />
+    );
+  }
 
   const openMatch = (id: string) => {
     setMatchId(id);
     setSection('matches');
   };
 
+  const visibleNav = NAV.filter((item) => {
+    if (user.role === 'match_admin') {
+      return item.id === 'matches' || item.id === 'news';
+    }
+    return true;
+  });
+
   return (
-    <div className="min-h-screen bg-[#070d18] text-white lg:grid lg:grid-cols-[220px_1fr]">
-      <aside className="border-b border-white/10 px-4 py-4 lg:min-h-screen lg:border-b-0 lg:border-r">
-        <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">SUPER CUP DESK</p>
-        <p className="mt-1 text-xs text-white/40">{user.username} · {user.role.replaceAll('_', ' ')}</p>
-        <nav className="mt-4 flex gap-2 overflow-x-auto lg:flex-col" aria-label="Admin sections">
-          {NAV.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => { setSection(item.id); setMatchId(null); }}
-              className={`shrink-0 rounded-xl px-3 py-2 text-left text-sm font-bold ${section === item.id ? 'bg-[#f5c518] text-[#102018]' : 'text-white/60 hover:bg-white/5'}`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </nav>
-        <div className="mt-4 flex gap-3 text-sm">
-          <button type="button" onClick={() => navigate('/')} className="text-white/50">View site</button>
+    <div className="min-h-screen bg-[#070d18] text-white lg:grid lg:grid-cols-[230px_1fr]">
+      <aside className="flex flex-col justify-between border-b border-white/10 px-4 py-4 lg:min-h-screen lg:border-b-0 lg:border-r lg:p-5">
+        <div>
+          <div className="flex items-center justify-between lg:block">
+            <div>
+              <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">SUPER CUP DESK</p>
+              <div className="mt-1 flex items-center gap-2">
+                <span className="text-xs font-semibold text-white/90">{user.username}</span>
+                <span className="rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/60 uppercase">
+                  {user.role.replaceAll('_', ' ')}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <nav className="mt-4 flex gap-1.5 overflow-x-auto pb-1 lg:mt-6 lg:flex-col lg:gap-1 lg:pb-0" aria-label="Admin sections">
+            {visibleNav.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => { setSection(item.id); setMatchId(null); }}
+                className={`flex shrink-0 items-center rounded-xl px-3 py-2 text-left text-sm font-bold transition-colors ${
+                  section === item.id ? 'bg-[#f5c518] text-[#102018]' : 'text-white/60 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        <div className="mt-4 flex items-center gap-2 border-t border-white/10 pt-4 lg:mt-6 lg:flex-col lg:items-stretch lg:gap-1.5">
           <button
             type="button"
-            onClick={() => desk('/api/logout', { method: 'POST', body: {} }).then(() => setUser(null))}
-            className="text-white/50"
+            onClick={() => navigate('/')}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold text-white/80 transition-colors hover:border-white/20 hover:bg-white/10 hover:text-white lg:justify-start lg:text-sm"
           >
-            Sign out
+            <ExternalLink className="h-4 w-4 shrink-0 text-[#f5c518]" />
+            <span>View site</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmLogout(true)}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs font-bold text-red-300 transition-colors hover:border-red-500/40 hover:bg-red-500/15 hover:text-red-200 lg:justify-start lg:text-sm"
+          >
+            <LogOut className="h-4 w-4 shrink-0 text-red-400" />
+            <span>Log out</span>
           </button>
         </div>
       </aside>
+
+      {confirmLogout && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0f172a] p-6 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500/15 text-red-400">
+                <LogOut className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Log out</h3>
+                <p className="text-xs text-white/50">Are you sure you want to end your session?</p>
+              </div>
+            </div>
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmLogout(false)}
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setConfirmLogout(false);
+                  try {
+                    await desk('/api/logout', { method: 'POST', body: {} });
+                  } finally {
+                    setUser(null);
+                  }
+                }}
+                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-red-500"
+              >
+                Yes, log out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <main className="px-4 py-5 sm:px-6">
         {(notice || error) && (
           <p className={`mb-4 rounded-xl px-3 py-2 text-sm ${error ? 'bg-red-500/15 text-red-200' : 'bg-[#2f9e44]/15 text-[#7ddea0]'}`} role="status">
             {error || notice}
           </p>
         )}
-        {section === 'overview' && <Overview version={version} onOpen={openMatch} />}
+        {section === 'overview' && user.role !== 'match_admin' && <Overview version={version} onOpen={openMatch} />}
         {section === 'matches' && !matchId && <MatchList version={version} onOpen={openMatch} onMessage={setNotice} onError={setError} />}
         {section === 'matches' && matchId && (
           <MatchDesk key={matchId} id={matchId} role={user.role} onClose={() => setMatchId(null)} onMessage={setNotice} onError={setError} />
         )}
-        {section === 'teams' && <TeamAdmin onMessage={setNotice} onError={setError} />}
-        {section === 'players' && <PlayerAdmin onMessage={setNotice} onError={setError} />}
+        {section === 'teams' && user.role !== 'match_admin' && <TeamAdmin onMessage={setNotice} onError={setError} />}
+        {section === 'players' && user.role !== 'match_admin' && <PlayerAdmin onMessage={setNotice} onError={setError} />}
         {section === 'news' && <NewsAdmin onMessage={setNotice} onError={setError} />}
-        {section === 'rules' && <RulesAdmin role={user.role} onMessage={setNotice} onError={setError} />}
-        {section === 'users' && <UserAdmin role={user.role} onMessage={setNotice} onError={setError} />}
-        {section === 'audit' && <AuditList />}
+        {section === 'users' && user.role !== 'match_admin' && <UserAdmin role={user.role} onMessage={setNotice} onError={setError} />}
+        {section === 'audit' && user.role !== 'match_admin' && <AuditList />}
       </main>
     </div>
   );
 }
 
 function Login({ onSuccess }: { onSuccess: (user: DeskUser) => void }) {
+  const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
   return (
-    <form
-      className="mx-auto max-w-sm px-4 py-20"
-      onSubmit={async (event) => {
-        event.preventDefault();
-        setError('');
-        try {
-          const data = await desk('/api/login', { body: { username, password } });
-          onSuccess(data.user);
-        } catch (reason) {
-          setError(reason instanceof Error ? reason.message : 'Sign-in failed.');
-        }
-      }}
-    >
-      <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">MATCH DESK</p>
-      <h1 className="mt-2 text-3xl font-black">Sign in</h1>
-      <p className="mt-2 text-sm text-white/50">The desk account is admin. The default password is supercup unless the server was given another one.</p>
-      <label className="mt-5 block text-xs font-bold text-white/50">Username
-        <input className={inputClass} value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" />
-      </label>
-      <label className="mt-3 block text-xs font-bold text-white/50">Password
-        <input className={inputClass} type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" />
-      </label>
-      {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
-      <button type="submit" className="mt-5 w-full rounded-xl bg-[#f5c518] py-3 text-sm font-black text-[#102018]">Enter desk</button>
-    </form>
+    <div className="mx-auto max-w-sm px-4 py-16 sm:py-20">
+      <button
+        type="button"
+        onClick={() => navigate('/')}
+        className="mb-6 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-bold text-white/70 transition-colors hover:border-white/20 hover:bg-white/10 hover:text-white"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        <span>Back to site</span>
+      </button>
+
+      <form
+        onSubmit={async (event) => {
+          event.preventDefault();
+          setError('');
+          try {
+            const data = await desk('/api/login', { body: { username, password } });
+            onSuccess(data.user);
+          } catch (reason) {
+            setError(reason instanceof Error ? reason.message : 'Sign-in failed.');
+          }
+        }}
+      >
+        <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">MATCH DESK</p>
+        <h1 className="mt-2 text-3xl font-black">Sign in</h1>
+        <p className="mt-2 text-sm text-white/50">The desk account is admin. The default password is supercup unless the server was given another one.</p>
+        <label className="mt-5 block text-xs font-bold text-white/50">Username
+          <input className={inputClass} value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" />
+        </label>
+        <label className="mt-3 block text-xs font-bold text-white/50">Password
+          <input className={inputClass} type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" />
+        </label>
+        {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
+        <button type="submit" className="mt-5 w-full rounded-xl bg-[#f5c518] py-3 text-sm font-black text-[#102018]">Enter desk</button>
+      </form>
+    </div>
   );
 }
 
@@ -1295,86 +1400,337 @@ function TeamEditor({ initial, onDone, onError, onCancel }: { initial?: (typeof 
 }
 
 function PlayerAdmin({ onMessage, onError }: { onMessage: (text: string) => void; onError: (text: string) => void }) {
-  const [teamId, setTeamId] = useState(departments[0]?.id ?? '');
-  const [name, setName] = useState('');
-  const [position, setPosition] = useState('MID');
-  const [number, setNumber] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [teamFilter, setTeamFilter] = useState<string>('ALL');
+  const [positionFilter, setPositionFilter] = useState<string>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+  const formRef = useRef<HTMLDivElement | null>(null);
+
+  const editingPlayer = players.find((p) => p.id === editingId);
+
+  const filteredPlayers = players.filter((player) => {
+    if (player.registered === false) return false;
+    if (teamFilter !== 'ALL' && player.departmentId !== teamFilter) return false;
+    if (positionFilter !== 'ALL' && player.position !== positionFilter) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      const matchName = player.name.toLowerCase().includes(q);
+      const matchNumber = String(player.number).includes(q);
+      const dept = getDepartment(player.departmentId);
+      const matchDept = (dept?.name || '').toLowerCase().includes(q) || (dept?.shortName || '').toLowerCase().includes(q);
+      if (!matchName && !matchNumber && !matchDept) return false;
+    }
+    return true;
+  });
+
+  const handleStartEdit = (player: Player) => {
+    setEditingId(player.id);
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+  };
+
+  return (
+    <div className="mx-auto max-w-3xl">
+      <div ref={formRef}>
+        <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">SQUADS & ROSTERS</p>
+        <h1 className="mt-1 text-3xl font-black">Players</h1>
+        <PlayerEditor
+          key={editingPlayer?.id ?? 'new'}
+          initial={editingPlayer}
+          defaultTeamId={teamFilter !== 'ALL' ? teamFilter : undefined}
+          onDone={(text) => {
+            setEditingId(null);
+            onMessage(text);
+          }}
+          onError={onError}
+          onCancel={handleCancelEdit}
+        />
+      </div>
+
+      <div className="mt-8 flex flex-col gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-xl font-black text-white">Registered Squad</h2>
+            <p className="text-xs text-white/45">
+              Showing {filteredPlayers.length} of {players.filter((p) => p.registered !== false).length} players
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              aria-label="Filter by department"
+              className="rounded-xl border border-white/10 bg-[#0c1424] px-3 py-2 text-xs font-bold text-white focus:outline-none focus:ring-1 focus:ring-[#f5c518]"
+              value={teamFilter}
+              onChange={(e) => setTeamFilter(e.target.value)}
+            >
+              <option value="ALL">All Departments</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.shortName} · {d.name}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Filter by position"
+              className="rounded-xl border border-white/10 bg-[#0c1424] px-3 py-2 text-xs font-bold text-white focus:outline-none focus:ring-1 focus:ring-[#f5c518]"
+              value={positionFilter}
+              onChange={(e) => setPositionFilter(e.target.value)}
+            >
+              <option value="ALL">All Positions</option>
+              <option value="GK">Goalkeepers (GK)</option>
+              <option value="DEF">Defenders (DEF)</option>
+              <option value="MID">Midfielders (MID)</option>
+              <option value="FWD">Forwards (FWD)</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="relative">
+          <input
+            className={`${inputClass} mt-0 pl-9`}
+            placeholder="Search by player name, shirt #, or department..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+        </div>
+
+        <ul className="mt-2 space-y-2">
+          {filteredPlayers.map((player) => {
+            const isEditing = editingId === player.id;
+            const dept = getDepartment(player.departmentId);
+            return (
+              <li
+                key={player.id}
+                className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-[#10192b] px-3.5 py-3 transition-all ${
+                  isEditing
+                    ? 'border-[#f5c518] ring-1 ring-[#f5c518]/50 shadow-lg'
+                    : 'border-white/10 hover:border-white/20'
+                }`}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <Portrait name={player.name} src={player.photoUrl || undefined} size={42} />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-white/10 text-[11px] font-black text-[#f5c518]">
+                        {player.number}
+                      </span>
+                      <span className="truncate font-bold text-white text-sm">
+                        {player.name}
+                      </span>
+                      <span className="rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/60">
+                        {player.position}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-2 text-xs text-white/40">
+                      <span>{dept?.shortName ?? player.departmentId}</span>
+                      <span>·</span>
+                      <span>
+                        {player.goals}G {player.assists}A {player.ownGoals ? `${player.ownGoals}OG ` : ''}{player.yellowCards ?? 0}Y {player.redCards ?? 0}R · {player.appearances ?? 0} apps
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => handleStartEdit(player)}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                      isEditing
+                        ? 'bg-[#f5c518] text-[#102018]'
+                        : 'bg-white/10 text-white hover:bg-[#f5c518] hover:text-[#102018]'
+                    }`}
+                  >
+                    <Edit3 className="h-3.5 w-3.5" />
+                    {isEditing ? 'Editing' : 'Edit'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!window.confirm(`Delete or deactivate player "${player.name}" (#${player.number})?`)) return;
+                      try {
+                        await desk(`/api/players/${player.id}`, { method: 'DELETE', body: {} });
+                        if (editingId === player.id) setEditingId(null);
+                        onMessage(`Player "${player.name}" removed.`);
+                      } catch (reason) {
+                        onError(reason instanceof Error ? reason.message : 'Could not delete the player.');
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 rounded-full bg-white/5 p-1.5 text-xs font-bold text-red-300 transition hover:bg-red-500/20 hover:text-red-200"
+                    title="Delete player"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+          {!filteredPlayers.length && (
+            <li className="rounded-2xl border border-white/10 px-4 py-10 text-center text-sm text-white/40">
+              No players found matching your filters.
+            </li>
+          )}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function PlayerEditor({
+  initial,
+  defaultTeamId,
+  onDone,
+  onError,
+  onCancel,
+}: {
+  initial?: Player;
+  defaultTeamId?: string;
+  onDone: (text: string) => void;
+  onError: (text: string) => void;
+  onCancel: () => void;
+}) {
+  const [teamId, setTeamId] = useState(initial?.departmentId ?? defaultTeamId ?? departments[0]?.id ?? '');
+  const [name, setName] = useState(initial?.name ?? '');
+  const [position, setPosition] = useState(initial?.position ?? 'MID');
+  const [number, setNumber] = useState(initial ? String(initial.number) : '');
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState('');
+  const [preview, setPreview] = useState(initial?.photoUrl ?? '');
   const [photoKey, setPhotoKey] = useState(0);
-  const squad = players.filter((player) => player.departmentId === teamId && player.registered !== false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const choosePhoto = (next: File | null) => {
     setFile(next);
     setPreview((current) => {
       if (current.startsWith('blob:')) URL.revokeObjectURL(current);
-      return next ? URL.createObjectURL(next) : '';
+      return next ? URL.createObjectURL(next) : (initial?.photoUrl ?? '');
     });
   };
+
   return (
-    <div className="mx-auto max-w-3xl">
-      <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">SQUADS</p>
-      <h1 className="mt-1 text-3xl font-black">Players</h1>
-      <form className="mt-5 rounded-3xl border border-white/10 bg-[#10192b] p-5" onSubmit={async (event) => {
+    <form
+      className="mt-5 rounded-3xl border border-white/10 bg-[#10192b] p-5 shadow-lg"
+      onSubmit={async (event) => {
         event.preventDefault();
         try {
-          if (!file) throw new Error('A player photo is required.');
-          const image = await imagePayload(file);
-          await desk('/api/players', { body: { name, teamId, position, number: Number(number), image } });
-          setName('');
-          setNumber('');
-          setFile(null);
-          setPhotoKey((value) => value + 1);
-          setPreview((current) => {
-            if (current.startsWith('blob:')) URL.revokeObjectURL(current);
-            return '';
+          setIsSubmitting(true);
+          if (!initial && !file) throw new Error('A player photo is required.');
+          const image = file ? await imagePayload(file) : undefined;
+          await desk(initial ? `/api/players/${initial.id}` : '/api/players', {
+            method: initial ? 'PATCH' : 'POST',
+            body: {
+              name: name.trim(),
+              teamId,
+              position,
+              number: Number(number),
+              ...(image ? { image } : {}),
+            },
           });
-          onMessage('Player registered.');
+
+          if (!initial) {
+            setName('');
+            setNumber('');
+            setFile(null);
+            setPhotoKey((k) => k + 1);
+            setPreview('');
+          }
+          onDone(initial ? `Player "${name.trim()}" updated.` : `Player "${name.trim()}" registered.`);
         } catch (reason) {
           onError(reason instanceof Error ? reason.message : 'Could not save the player.');
+        } finally {
+          setIsSubmitting(false);
         }
-      }}>
-        <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">NEW PLAYER</p>
-        <h2 className="mt-1 text-xl font-black">Register a player</h2>
-        <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:items-start">
-          <PicturePicker preview={preview} empty="Player photo" round required inputKey={photoKey} onFile={choosePhoto} />
-          <div className="grid flex-1 gap-3 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <Select label="Team" value={teamId} onChange={setTeamId} options={departments.map((team) => ({ id: team.id, label: team.name }))} />
-            </div>
-            <Field label="Player name" value={name} onChange={setName} placeholder="Full name" required />
-            <Field label="Shirt number" value={number} onChange={setNumber} placeholder="10" required inputMode="numeric" />
-            <div className="sm:col-span-2">
-              <ChoiceRow label="Position" value={position} options={['GK', 'DEF', 'MID', 'FWD']} onChange={setPosition} />
-            </div>
+      }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">
+            {initial ? 'EDIT PLAYER' : 'NEW PLAYER'}
+          </p>
+          <h2 className="mt-1 text-xl font-black text-white">
+            {initial ? `Edit ${initial.name}` : 'Register a player'}
+          </h2>
+        </div>
+        {initial && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white/70 hover:bg-white/20 hover:text-white transition"
+          >
+            Cancel
+          </button>
+        )}
+      </div>
+
+      <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:items-start">
+        <PicturePicker
+          preview={preview}
+          empty={initial ? 'Change photo' : 'Player photo'}
+          round
+          required={!initial}
+          inputKey={photoKey}
+          onFile={choosePhoto}
+        />
+        <div className="grid flex-1 gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <Select
+              label="Team"
+              value={teamId}
+              onChange={setTeamId}
+              options={departments.map((team) => ({
+                id: team.id,
+                label: `${team.shortName} · ${team.name} (Group ${team.group})`,
+              }))}
+            />
+          </div>
+          <Field
+            label="Player name"
+            value={name}
+            onChange={setName}
+            placeholder="Full name"
+            required
+          />
+          <Field
+            label="Shirt number"
+            value={number}
+            onChange={setNumber}
+            placeholder="10"
+            required
+            inputMode="numeric"
+          />
+          <div className="sm:col-span-2">
+            <ChoiceRow
+              label="Position"
+              value={position}
+              options={['GK', 'DEF', 'MID', 'FWD']}
+              onChange={setPosition}
+            />
           </div>
         </div>
-        <button type="submit" className="mt-5 w-full rounded-xl bg-[#f5c518] px-4 py-3 text-sm font-black text-[#102018] sm:w-auto">Add player</button>
-      </form>
-      <ul className="mt-6 space-y-2">
-        {squad.map((player) => (
-          <li key={player.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#10192b] px-3 py-2.5 text-sm">
-            <span className="flex min-w-0 items-center gap-3"><Portrait name={player.name} src={player.photoUrl || undefined} size={40} /><span className="min-w-0"><span className="block truncate font-bold">{player.number} {player.name}</span><span className="block text-xs text-white/40">{player.position}</span></span></span>
-            <span className="flex items-center gap-3 text-white/40">
-              <span>{player.goals}G {player.assists}A {player.ownGoals ? `${player.ownGoals} OG ` : ''}{player.yellowCards ?? 0}Y {player.redCards ?? 0}R · {player.appearances ?? 0} apps</span>
-              <select
-                className="rounded-lg bg-[#0c1424] px-2 py-1 text-xs text-white"
-                value={player.departmentId}
-                onChange={async (event) => {
-                  try {
-                    await desk(`/api/players/${player.id}`, { method: 'PATCH', body: { name: player.name, teamId: event.target.value, position: player.position, number: player.number } });
-                    onMessage('Player moved. Past match events stay with this player.');
-                  } catch (reason) {
-                    onError(reason instanceof Error ? reason.message : 'Could not move the player.');
-                  }
-                }}
-              >
-                {departments.map((team) => <option key={team.id} value={team.id}>{team.shortName}</option>)}
-              </select>
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
+      </div>
+
+      <div className="mt-5 flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="w-full rounded-xl bg-[#f5c518] px-5 py-3 text-sm font-black text-[#102018] transition hover:bg-[#ffe27a] disabled:opacity-40 sm:w-auto"
+        >
+          {isSubmitting ? 'Saving...' : initial ? 'Save changes' : 'Add player'}
+        </button>
+        {initial && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-xl border border-white/10 px-4 py-3 text-sm font-bold text-white/70 hover:bg-white/5 transition"
+          >
+            Cancel
+          </button>
+        )}
+      </div>
+    </form>
   );
 }
 
@@ -1743,64 +2099,78 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
   );
 }
 
-function RulesAdmin({ role, onMessage, onError }: { role: Role; onMessage: (text: string) => void; onError: (text: string) => void }) {
-  const [halfMinutes, setHalfMinutes] = useState(String(leagueRules.halfMinutes));
-  const [pointsWin, setPointsWin] = useState(String(leagueRules.pointsWin));
-  const [maxSubs, setMaxSubs] = useState(String(leagueRules.maxSubs));
-  const locked = role === 'reader' || role === 'match_admin' || role === 'team_manager';
-  return (
-    <form className="max-w-lg" onSubmit={async (event) => {
-      event.preventDefault();
-      try {
-        await desk('/api/rules', { method: 'PATCH', body: { halfMinutes: Number(halfMinutes), pointsWin: Number(pointsWin), maxSubs: Number(maxSubs) } });
-        onMessage('Competition rules saved. Matches already created keep their own half length.');
-      } catch (reason) {
-        onError(reason instanceof Error ? reason.message : 'Could not save the rules.');
-      }
-    }}>
-      <h1 className="text-3xl font-black">Competition</h1>
-      <p className="mt-1 text-sm text-white/45">Live scores count straight away and stay in the table at full time. Confirming locks the result. Tie-break is points, goal difference, then goals scored.</p>
-      <label className="mt-4 block text-xs font-bold text-white/45">Half length (minutes)<input className={inputClass} value={halfMinutes} onChange={(event) => setHalfMinutes(event.target.value)} /></label>
-      <label className="mt-3 block text-xs font-bold text-white/45">Points for a win<input className={inputClass} value={pointsWin} onChange={(event) => setPointsWin(event.target.value)} /></label>
-      <label className="mt-3 block text-xs font-bold text-white/45">Substitutions<input className={inputClass} value={maxSubs} onChange={(event) => setMaxSubs(event.target.value)} /></label>
-      <button type="submit" disabled={locked} className="mt-4 rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018] disabled:opacity-40">Save rules</button>
-    </form>
-  );
-}
-
 function UserAdmin({ role, onMessage, onError }: { role: Role; onMessage: (text: string) => void; onError: (text: string) => void }) {
   const [users, setUsers] = useState<Array<{ id: string; username: string; role: string }>>([]);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [nextRole, setNextRole] = useState<Role>('match_admin');
+
   useEffect(() => {
     if (role !== 'super_admin') return;
     desk('/api/users').then((data) => setUsers(data.users)).catch((reason) => onError(reason.message));
   }, [role, onError]);
+
   if (role !== 'super_admin') return <p className="text-sm text-white/50">Only a super admin can manage accounts.</p>;
+
+  const roleOptions: { id: string; label: string }[] = [
+    { id: 'match_admin', label: 'Match Admin (Matches & News only)' },
+    { id: 'super_admin', label: 'Super Admin (Full access)' },
+  ];
+
   return (
     <div>
       <h1 className="text-3xl font-black">Users</h1>
-      <form className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-[#10192b] p-4 sm:grid-cols-2" onSubmit={async (event) => {
-        event.preventDefault();
-        try {
-          await desk('/api/users', { body: { username, password, role: nextRole } });
-          const data = await desk('/api/users');
-          setUsers(data.users);
-          setUsername('');
-          setPassword('');
-          onMessage('Account created.');
-        } catch (reason) {
-          onError(reason instanceof Error ? reason.message : 'Could not create the account.');
-        }
-      }}>
-        <label className="text-xs font-bold text-white/45">Username<input className={inputClass} value={username} onChange={(event) => setUsername(event.target.value)} /></label>
-        <label className="text-xs font-bold text-white/45">Password<input className={inputClass} type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
-        <Select label="Role" value={nextRole} onChange={(value) => setNextRole(value as Role)} options={['super_admin', 'match_admin', 'competition_manager', 'team_manager', 'reader'].map((id) => ({ id, label: id.replaceAll('_', ' ') }))} />
-        <button type="submit" className="self-end rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018]">Create</button>
+      <p className="mt-1 text-sm text-white/45">Create and manage admin and match official accounts.</p>
+      <form
+        className="mt-4 grid gap-3 rounded-2xl border border-white/10 bg-[#10192b] p-4 sm:grid-cols-2"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          try {
+            await desk('/api/users', { body: { username, password, role: nextRole } });
+            const data = await desk('/api/users');
+            setUsers(data.users);
+            setUsername('');
+            setPassword('');
+            onMessage('Account created successfully.');
+          } catch (reason) {
+            onError(reason instanceof Error ? reason.message : 'Could not create the account.');
+          }
+        }}
+      >
+        <label className="text-xs font-bold text-white/45">
+          Username
+          <input className={inputClass} value={username} onChange={(event) => setUsername(event.target.value)} required />
+        </label>
+        <label className="text-xs font-bold text-white/45">
+          Password
+          <input className={inputClass} type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+        </label>
+        <div className="sm:col-span-2">
+          <Select
+            label="Role"
+            value={nextRole}
+            onChange={(value) => setNextRole(value as Role)}
+            options={roleOptions}
+          />
+          {nextRole === 'match_admin' && (
+            <p className="mt-1.5 text-xs text-[#f5c518]">
+              ℹ Match Admins have access restricted strictly to the <strong>Matches</strong> and <strong>News</strong> tabs.
+            </p>
+          )}
+        </div>
+        <button type="submit" className="self-end rounded-xl bg-[#f5c518] px-4 py-2 text-sm font-black text-[#102018] sm:col-span-2 sm:w-fit">
+          Create Account
+        </button>
       </form>
       <ul className="mt-4 divide-y divide-white/5 rounded-2xl border border-white/10">
-        {users.map((account) => <li key={account.id} className="flex justify-between px-3 py-2 text-sm"><span>{account.username}</span><span className="text-white/40">{account.role.replaceAll('_', ' ')}</span></li>)}
+        {users.map((account) => (
+          <li key={account.id} className="flex items-center justify-between px-3 py-2 text-sm">
+            <span className="font-semibold">{account.username}</span>
+            <span className="text-white/40">
+              {account.role === 'match_admin' ? 'Match Admin (Matches & News only)' : account.role.replaceAll('_', ' ')}
+            </span>
+          </li>
+        ))}
       </ul>
     </div>
   );
