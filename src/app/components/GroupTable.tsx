@@ -24,22 +24,40 @@ export function GroupTable({
     <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#10192b] shadow-sm">
       <header className="flex items-center justify-between gap-3 border-b border-white/10 bg-[#0c1424] px-4 py-3">
         <div className="flex items-center gap-3 min-w-0">
-          <img
-            src={resolveGroupCoverUrl(group)}
-            alt={`Group ${group}`}
-            className="h-10 w-10 shrink-0 object-contain drop-shadow"
-            loading="lazy"
-            onError={(e) => {
-              const img = e.currentTarget as HTMLImageElement;
-              if (img.src.includes('raw.githubusercontent.com')) {
-                img.src = img.src.replace('raw.githubusercontent.com/EthiopianPL/ddu-super-cup-assets/main', 'cdn.jsdelivr.net/gh/EthiopianPL/ddu-super-cup-assets@main');
-              } else if (img.src.includes('cdn.jsdelivr.net')) {
-                img.src = img.src.replace('cdn.jsdelivr.net/gh/EthiopianPL/ddu-super-cup-assets@main', 'raw.githubusercontent.com/EthiopianPL/ddu-super-cup-assets/main');
-              } else {
+          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center">
+            <div
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#f5c518]/30 bg-[#0c1424] text-xs font-black text-[#f5c518] shadow-sm select-none"
+              aria-hidden="true"
+            >
+              {group}
+            </div>
+            <img
+              src={resolveGroupCoverUrl(group)}
+              alt=""
+              className="absolute inset-0 h-10 w-10 object-contain drop-shadow transition-opacity duration-200"
+              onError={(e) => {
+                const img = e.currentTarget as HTMLImageElement;
+                if (!img.dataset.retried) {
+                  img.dataset.retried = 'true';
+                  if (img.src.includes('cdn.jsdelivr.net')) {
+                    img.src = img.src.replace(
+                      'cdn.jsdelivr.net/gh/EthiopianPL/ddu-super-cup-assets@main',
+                      'raw.githubusercontent.com/EthiopianPL/ddu-super-cup-assets/main'
+                    );
+                    return;
+                  }
+                  if (img.src.includes('raw.githubusercontent.com')) {
+                    img.src = img.src.replace(
+                      'raw.githubusercontent.com/EthiopianPL/ddu-super-cup-assets/main',
+                      'cdn.jsdelivr.net/gh/EthiopianPL/ddu-super-cup-assets@main'
+                    );
+                    return;
+                  }
+                }
                 img.style.display = 'none';
-              }
-            }}
-          />
+              }}
+            />
+          </div>
           <div className="min-w-0">
             <p className="text-[11px] font-bold tracking-[0.18em] text-[#f5c518]">GROUP {group}</p>
             <p className="mt-0.5 text-xs text-white/70 truncate">{GROUP_COLLEGES[group]}</p>

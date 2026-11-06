@@ -171,13 +171,18 @@ export function DiscoverPage() {
                     className="h-4 w-4 shrink-0 object-contain drop-shadow"
                     onError={(e) => {
                       const img = e.currentTarget as HTMLImageElement;
-                      if (img.src.includes('raw.githubusercontent.com')) {
-                        img.src = img.src.replace('raw.githubusercontent.com/EthiopianPL/ddu-super-cup-assets/main', 'cdn.jsdelivr.net/gh/EthiopianPL/ddu-super-cup-assets@main');
-                      } else if (img.src.includes('cdn.jsdelivr.net')) {
-                        img.src = img.src.replace('cdn.jsdelivr.net/gh/EthiopianPL/ddu-super-cup-assets@main', 'raw.githubusercontent.com/EthiopianPL/ddu-super-cup-assets/main');
-                      } else {
-                        img.style.display = 'none';
+                      if (!img.dataset.retried) {
+                        img.dataset.retried = 'true';
+                        if (img.src.includes('cdn.jsdelivr.net')) {
+                          img.src = img.src.replace('cdn.jsdelivr.net/gh/EthiopianPL/ddu-super-cup-assets@main', 'raw.githubusercontent.com/EthiopianPL/ddu-super-cup-assets/main');
+                          return;
+                        }
+                        if (img.src.includes('raw.githubusercontent.com')) {
+                          img.src = img.src.replace('raw.githubusercontent.com/EthiopianPL/ddu-super-cup-assets/main', 'cdn.jsdelivr.net/gh/EthiopianPL/ddu-super-cup-assets@main');
+                          return;
+                        }
                       }
+                      img.style.display = 'none';
                     }}
                   />
                   <span>Group {item}</span>
