@@ -29,7 +29,7 @@ export function TeamDetailsPage() {
 
   const row = standingsFor(department.group).find((entry) => entry.department.id === department.id);
   const squad = playersForDepartment(department.id);
-  const captain = squad.find((player) => player.position === 'FWD') ?? squad[0];
+  const captain = squad.find((player) => player.isCaptain) ?? squad.find((player) => player.position === 'FWD') ?? squad[0];
   const matches = fixturesForDepartment(department.id);
 
   return (
@@ -102,7 +102,14 @@ export function TeamDetailsPage() {
               <Portrait name={player.name} src={player.photoUrl || undefined} size={36} />
               <span className="w-6 text-sm font-black text-white/40">{player.number}</span>
               <div>
-                <p className="text-sm font-semibold text-white">{player.name}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-semibold text-white">{player.name}</p>
+                  {player.isCaptain && (
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#f5c518] text-[9px] font-black text-[#102018]" title="Team Captain">
+                      C
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-white/40">{player.position}</p>
               </div>
             </div>

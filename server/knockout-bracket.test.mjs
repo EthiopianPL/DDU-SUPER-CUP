@@ -356,5 +356,61 @@ test('DDU Super Cup teams pop up on knockout after group stage finishes', async 
       db.close();
     }
   });
+
+  await t.test('10. Registering a player with captain assignment works and enforces single team captain', async () => {
+    const { openDatabase } = await import('./db.mjs');
+    const { savePlayer } = await import('./domain.mjs');
+    const db = openDatabase();
+    const adminActor = { id: 'admin', username: 'admin', role: 'super_admin' };
+    const p1Id = 'test-player-captain-1';
+    const p2Id = 'test-player-captain-2';
+    try {
+      // 1. Register player 1 with isCaptain = true
+      await savePlayer(db, adminActor, {
+        name: 'Captain One',
+        teamId: 'information-technology',
+        position: 'MID',
+        number: 88,
+        isCaptain: true,
+        image: { contentType: 'image/png', bytes: Buffer.from('fake-bytes') },
+      }, p1Id);
+
+      const saved1 = db.prepare('SELECT is_captain FROM players WHERE id = ?').get(p1Id);
+      assert.equal(saved1.is_captain, 1, 'Player 1 should be saved as captain');
+
+      // 2. Register player 2 for same team with isCaptain = true
+      await savePlayer(db, adminActor, {
+        name: 'Captain Two',
+        teamId: 'information-technology',
+        position: 'FWD',
+        number: 89,
+        isCaptain: true,
+        image: { contentType: 'image/png', bytes: Buffer.from('fake-bytes') },
+      }, p2Id);
+
+      const saved2 = db.prepare('SELECT is_captain FROM players WHERE id = ?').get(p2Id);
+      assert.equal(saved2.is_captain, 1, 'Player 2 should now be captain');
+
+      const saved1After = db.prepare('SELECT is_captain FROM players WHERE id = ?').get(p1Id);
+      assert.equal(saved1After.is_captain, 0, 'Player 1 should no longer be captain');
+
+      // 3. Edit player 2 with isCaptain = false
+      await savePlayer(db, adminActor, {
+        name: 'Captain Two',
+        teamId: 'information-technology',
+        position: 'FWD',
+        number: 89,
+        isCaptain: false,
+      }, p2Id);
+
+      const saved2After = db.prepare('SELECT is_captain FROM players WHERE id = ?').get(p2Id);
+      assert.equal(saved2After.is_captain, 0, 'Player 2 should now not be captain');
+    } finally {
+      db.prepare('DELETE FROM players WHERE id IN (?, ?)').run(p1Id, p2Id);
+      db.prepare('DELETE FROM media WHERE id IN (?, ?)').run(`players/${p1Id}`, `players/${p2Id}`);
+      db.prepare('DELETE FROM media_assets WHERE entity_id IN (?, ?)').run(p1Id, p2Id);
+      db.close();
+    }
+  });
 });
 

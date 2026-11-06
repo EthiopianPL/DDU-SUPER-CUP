@@ -1724,6 +1724,11 @@ function PlayerAdmin({ onMessage, onError }: { onMessage: (text: string) => void
                             <span className="truncate font-bold text-white text-sm">
                               {player.name}
                             </span>
+                            {player.isCaptain && (
+                              <span className="rounded-md border border-[#f5c518]/40 bg-[#f5c518]/20 px-1.5 py-0.5 text-[10px] font-black text-[#f5c518] tracking-wider">
+                                CAPTAIN
+                              </span>
+                            )}
                             <span className="rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/60">
                               {player.position}
                             </span>
@@ -1803,10 +1808,13 @@ function PlayerEditor({
   const [name, setName] = useState(initial?.name ?? '');
   const [position, setPosition] = useState(initial?.position ?? 'MID');
   const [number, setNumber] = useState(initial ? String(initial.number) : '');
+  const [isCaptain, setIsCaptain] = useState(Boolean(initial?.isCaptain));
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState(initial?.photoUrl ?? '');
   const [photoKey, setPhotoKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const currentCaptain = players.find((p) => p.departmentId === teamId && p.isCaptain && p.id !== initial?.id);
 
   const choosePhoto = (next: File | null) => {
     setFile(next);
@@ -1832,6 +1840,7 @@ function PlayerEditor({
               teamId,
               position,
               number: Number(number),
+              isCaptain,
               ...(image ? { image } : {}),
             },
           });
@@ -1839,6 +1848,7 @@ function PlayerEditor({
           if (!initial) {
             setName('');
             setNumber('');
+            setIsCaptain(false);
             setFile(null);
             setPhotoKey((k) => k + 1);
             setPreview('');
@@ -1914,6 +1924,43 @@ function PlayerEditor({
               options={['GK', 'DEF', 'MID', 'FWD']}
               onChange={setPosition}
             />
+          </div>
+          <div className="sm:col-span-2">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-white/40">Assign Captain</p>
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsCaptain(false)}
+                className={`rounded-full px-3.5 py-1.5 text-xs font-black transition ${
+                  !isCaptain
+                    ? 'bg-[#f5c518] text-[#102018]'
+                    : 'bg-white/5 text-white/70 hover:bg-white/10'
+                }`}
+              >
+                No (Squad Player)
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsCaptain(true)}
+                className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-black transition ${
+                  isCaptain
+                    ? 'bg-[#f5c518] text-[#102018] shadow-md shadow-[#f5c518]/20'
+                    : 'bg-white/5 text-white/70 hover:bg-white/10'
+                }`}
+              >
+                <span>© Yes (Team Captain)</span>
+              </button>
+            </div>
+            {isCaptain ? (
+              <p className="mt-1.5 text-[11px] text-[#f5c518]">
+                ★ This player will be assigned as the team captain.
+                {currentCaptain ? ` (Replaces current captain: ${currentCaptain.name} #${currentCaptain.number})` : ''}
+              </p>
+            ) : currentCaptain ? (
+              <p className="mt-1.5 text-[11px] text-white/40">
+                Current team captain: <span className="font-semibold text-white/60">{currentCaptain.name} (#{currentCaptain.number})</span>
+              </p>
+            ) : null}
           </div>
         </div>
       </div>

@@ -30,6 +30,7 @@ export interface Player {
   nationality?: string;
   registered?: boolean;
   active?: boolean;
+  isCaptain?: boolean;
   photoUrl?: string;
 }
 

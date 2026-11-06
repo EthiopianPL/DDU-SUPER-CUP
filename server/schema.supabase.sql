@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS players (
   registered SMALLINT NOT NULL DEFAULT 1,
   active SMALLINT NOT NULL DEFAULT 1,
   photo_url VARCHAR(255) NOT NULL DEFAULT '',
+  is_captain SMALLINT NOT NULL DEFAULT 0,
   CONSTRAINT fk_players_team FOREIGN KEY (team_id) REFERENCES teams(id)
 );
 

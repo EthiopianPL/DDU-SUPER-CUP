@@ -102,7 +102,8 @@ function migrate(db) {
       nationality TEXT NOT NULL DEFAULT '',
       registered INTEGER NOT NULL DEFAULT 1,
       active INTEGER NOT NULL DEFAULT 1,
-      photo_url TEXT NOT NULL DEFAULT ''
+      photo_url TEXT NOT NULL DEFAULT '',
+      is_captain INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS media (
       id TEXT PRIMARY KEY,
@@ -272,6 +273,10 @@ function migrate(db) {
   if (mediaAssetColumns.length && !mediaAssetColumns.some((col) => col.name === 'public_url')) {
     db.exec(`ALTER TABLE media_assets ADD COLUMN public_url TEXT NOT NULL DEFAULT ''`);
   }
+  const playerColumns = db.prepare('PRAGMA table_info(players)').all();
+  if (playerColumns.length && !playerColumns.some((col) => col.name === 'is_captain')) {
+    db.exec(`ALTER TABLE players ADD COLUMN is_captain INTEGER NOT NULL DEFAULT 0`);
+  }
 }
 
 function serverFile(name) {
@@ -386,6 +391,7 @@ function finishPostgres(worker, port1, url) {
     db.exec("ALTER TABLE media_assets ADD COLUMN IF NOT EXISTS bucket VARCHAR(64) NOT NULL DEFAULT 'ddu-super-cup-media'");
     db.exec('ALTER TABLE media_assets ADD COLUMN IF NOT EXISTS path TEXT NULL');
     db.exec('ALTER TABLE media_assets ADD COLUMN IF NOT EXISTS public_url TEXT NULL');
+    db.exec('ALTER TABLE players ADD COLUMN IF NOT EXISTS is_captain SMALLINT NOT NULL DEFAULT 0');
   } catch (error) {
     if (error.code !== '42701') throw error;
   }

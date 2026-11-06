@@ -868,7 +868,9 @@ function PitchPlayer({
         )}
       </div>
       <div className={nameAbove ? (hasEvents ? 'mb-4.5' : 'mb-1') : 'mt-1'}>
-        <p className="whitespace-nowrap text-[10px] font-semibold text-white drop-shadow">{compactName(player.name)}</p>
+        <p className="whitespace-nowrap text-[10px] font-semibold text-white drop-shadow">
+          {compactName(player.name)}{player.isCaptain ? ' (C)' : ''}
+        </p>
       </div>
     </div>
   );
@@ -1257,7 +1259,10 @@ function BenchList({ title, color, players }: { title: string; color: string; pl
                 {player.number}
               </span>
             )}
-            <span className="min-w-0 flex-1 truncate">{player.name}</span>
+            <span className="min-w-0 flex-1 truncate">
+              {player.name}
+              {player.isCaptain && <span className="ml-1 text-[10px] font-bold text-[#f5c518]">(C)</span>}
+            </span>
             <span className="text-[10px] font-bold uppercase tracking-wide text-white/40">{player.position}</span>
           </li>
         ))}

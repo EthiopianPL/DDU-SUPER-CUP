@@ -369,6 +369,7 @@ function publicPlayer(player, stats) {
     nationality: player.nationality,
     registered: Boolean(player.registered),
     active: Boolean(player.active),
+    isCaptain: Boolean(player.is_captain),
     photoUrl: player.photo_url,
     goals: stats.goals,
     assists: stats.assists,
@@ -748,19 +749,26 @@ export async function savePlayer(db, actor, input, id) {
   let oldStoragePath = null;
   let oldStorageBucket = null;
 
+  const isCaptain = input.isCaptain !== undefined
+    ? (input.isCaptain === true || input.isCaptain === 1 || input.isCaptain === 'true' ? 1 : 0)
+    : (before?.is_captain ? 1 : 0);
+
   if (image) {
     photo = saveMedia(db, 'players', playerId, image, teamId);
   }
 
   try {
     transaction(db, () => {
+      if (isCaptain === 1) {
+        db.prepare('UPDATE players SET is_captain = 0 WHERE team_id = ?').run(teamId);
+      }
       if (id) {
-        db.prepare(`UPDATE players SET team_id=?, name=?, position=?, number=?, nationality=?, photo_url=?, active=? WHERE id=?`).run(
-          teamId, name, position, number, String(input.nationality ?? before.nationality ?? ''), photo, input.active === false ? 0 : 1, id,
+        db.prepare(`UPDATE players SET team_id=?, name=?, position=?, number=?, nationality=?, photo_url=?, active=?, is_captain=? WHERE id=?`).run(
+          teamId, name, position, number, String(input.nationality ?? before.nationality ?? ''), photo, input.active === false ? 0 : 1, isCaptain, id,
         );
       } else {
-        db.prepare(`INSERT INTO players (id, team_id, name, position, number, nationality, photo_url, registered, active) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1)`).run(
-          playerId, teamId, name, position, number, String(input.nationality ?? ''), photo,
+        db.prepare(`INSERT INTO players (id, team_id, name, position, number, nationality, photo_url, registered, active, is_captain) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?)`).run(
+          playerId, teamId, name, position, number, String(input.nationality ?? ''), photo, isCaptain,
         );
       }
 
@@ -816,7 +824,7 @@ export async function savePlayer(db, actor, input, id) {
         );
       }
 
-      audit(db, actor, id ? 'player.update' : 'player.create', 'player', id || playerId, before, { name, teamId, position, number });
+      audit(db, actor, id ? 'player.update' : 'player.create', 'player', id || playerId, before, { name, teamId, position, number, isCaptain: Boolean(isCaptain) });
     });
   } catch (dbError) {
     if (uploadedSupabase) {
