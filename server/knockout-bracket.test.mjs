@@ -200,6 +200,30 @@ test('DDU Super Cup teams pop up on knockout after group stage finishes', async 
       };
       assert.equal(getInitials('Nahom'), 'NA');
       assert.equal(getInitials('Nahom Tadesse'), 'NT');
+
+      // Verify team abbreviation logic: (Information Technology -> IT)
+      const getTeamAbbr = (shortName, name, id) => {
+        const cleanShort = shortName?.trim();
+        if (cleanShort && cleanShort.length > 0 && cleanShort.length <= 4 && !cleanShort.includes(' ')) {
+          return cleanShort.toUpperCase();
+        }
+        const raw = (name?.trim() || cleanShort || id?.trim() || '').trim();
+        if (!raw) return '??';
+        const words = raw.replace(/[-_/&]+/g, ' ').split(/\s+/).filter(Boolean);
+        if (words.length > 1) {
+          const abbr = words.map((w) => w.replace(/[^a-zA-Z0-9]/g, '')[0] || '').join('').toUpperCase();
+          if (abbr.length >= 2) return abbr.slice(0, 4);
+        }
+        if (cleanShort && cleanShort.length <= 4) return cleanShort.toUpperCase();
+        const clean = words[0]?.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() || '';
+        return clean.slice(0, Math.min(3, Math.max(2, clean.length))) || '??';
+      };
+      assert.equal(getTeamAbbr(undefined, 'Information Technology'), 'IT');
+      assert.equal(getTeamAbbr('IT', 'Information Technology'), 'IT');
+      assert.equal(getTeamAbbr('Information Technology', 'Information Technology'), 'IT');
+      assert.equal(getTeamAbbr('BS', 'Bio Statistics'), 'BS');
+      assert.equal(getTeamAbbr(undefined, 'Bio Statistics'), 'BS');
+      assert.equal(getTeamAbbr('MGT', 'Management'), 'MGT');
     } finally {
       db.close();
     }

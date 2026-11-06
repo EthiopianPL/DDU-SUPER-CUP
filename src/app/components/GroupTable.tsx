@@ -124,6 +124,8 @@ export function GroupTable({
 
                 <div className="flex items-center gap-2.5 overflow-hidden">
                   <DepartmentMark
+                    id={row.department.id}
+                    name={row.department.name}
                     shortName={row.department.shortName}
                     color={row.department.color}
                     size={22}

@@ -2,39 +2,96 @@ import { useState } from 'react';
 import { resolveTeamLogoUrl } from '../../config/assets';
 
 interface DepartmentMarkProps {
-  shortName: string;
-  color: string;
+  shortName?: string;
+  name?: string;
+  color?: string;
   size?: number;
   src?: string;
   id?: string;
+  className?: string;
 }
 
-export function DepartmentMark({ shortName, color, size = 40, src, id }: DepartmentMarkProps) {
+export function getTeamAbbr(shortName?: string, name?: string, id?: string): string {
+  // If shortName is already a clean concise abbreviation (<= 4 chars, no spaces), use it directly
+  const cleanShort = shortName?.trim();
+  if (cleanShort && cleanShort.length > 0 && cleanShort.length <= 4 && !cleanShort.includes(' ')) {
+    return cleanShort.toUpperCase();
+  }
+
+  // Next prioritize name, e.g. "Information Technology" -> "IT"
+  const raw = (name?.trim() || cleanShort || id?.trim() || '').trim();
+  if (!raw) return '??';
+
+  // Split words by space, hyphens, slashes, underscores, ampersands
+  const words = raw
+    .replace(/[-_/&]+/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (words.length > 1) {
+    // E.g. "Information Technology" -> "IT", "Bio Statistics" -> "BS"
+    const abbr = words
+      .map((w) => w.replace(/[^a-zA-Z0-9]/g, '')[0] || '')
+      .join('')
+      .toUpperCase();
+    if (abbr.length >= 2) return abbr.slice(0, 4);
+  }
+
+  // Single word: use shortName if available, else first 2-3 characters
+  if (cleanShort && cleanShort.length <= 4) {
+    return cleanShort.toUpperCase();
+  }
+  const clean = words[0]?.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() || '';
+  return clean.slice(0, Math.min(3, Math.max(2, clean.length))) || '??';
+}
+
+export function DepartmentMark({
+  shortName,
+  name,
+  color = '#2450c8',
+  size = 40,
+  src,
+  id,
+  className = '',
+}: DepartmentMarkProps) {
   const [failed, setFailed] = useState(false);
-  const resolvedSrc = src || (id ? resolveTeamLogoUrl(id) : undefined);
+  const resolvedSrc = src && src.trim().length > 0 ? src.trim() : (id ? resolveTeamLogoUrl(id) : undefined);
+  const abbr = getTeamAbbr(shortName, name, id);
+
   if (resolvedSrc && !failed) {
     return (
       <img
         src={resolvedSrc}
-        alt=""
+        alt={name || shortName || abbr}
         onError={() => setFailed(true)}
-        className="inline-block shrink-0 rounded-xl object-cover"
+        className={`inline-block shrink-0 rounded-xl object-cover ${className}`}
         style={{ width: size, height: size }}
       />
     );
   }
+
+  const bg = color || '#2450c8';
+  const isYellow = bg.toLowerCase() === '#f5c518';
+  const textColor = isYellow ? '#102018' : '#ffffff';
+  const fontSize = Math.max(
+    8,
+    Math.round(size * (abbr.length >= 4 ? 0.28 : abbr.length === 3 ? 0.32 : 0.38))
+  );
+
   return (
     <span
-      className="inline-flex shrink-0 items-center justify-center rounded-xl font-black leading-none text-white"
+      className={`inline-flex shrink-0 items-center justify-center rounded-xl font-black leading-none select-none shadow-sm border border-white/10 ${className}`}
       style={{
         width: size,
         height: size,
-        background: color,
-        color: color.toLowerCase() === '#f5c518' ? '#102018' : '#ffffff',
-        fontSize: shortName.length > 3 ? 9 : 11,
+        background: bg,
+        color: textColor,
+        fontSize,
+        letterSpacing: abbr.length <= 2 ? '0.04em' : 'normal',
       }}
+      title={name || shortName || abbr}
     >
-      {shortName}
+      {abbr}
     </span>
   );
 }

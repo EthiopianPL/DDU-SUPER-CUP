@@ -312,6 +312,8 @@ export function DiscoverPage() {
                   <p className="flex items-center gap-2 text-lg font-black text-white"><Portrait name={statLeader.name} src={statLeader.photoUrl || undefined} size={28} />{statLeader.name}</p>
                   <div className="mt-0.5 flex items-center gap-2 text-xs text-white/50">
                     <DepartmentMark
+                      id={statLeader.department.id}
+                      name={statLeader.department.name}
                       shortName={statLeader.department.shortName}
                       color={statLeader.department.color}
                       size={18}
@@ -366,6 +368,8 @@ export function DiscoverPage() {
                     <div className="mt-0.5 flex items-center gap-2 text-xs text-white/45">
                       {player.department && (
                         <DepartmentMark
+                          id={player.department.id}
+                          name={player.department.name}
                           shortName={player.department.shortName}
                           color={player.department.color}
                           size={18}

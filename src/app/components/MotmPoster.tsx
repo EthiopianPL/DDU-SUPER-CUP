@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ArrowUpRight, Download, Check } from 'lucide-react';
-import { DepartmentMark, Portrait } from './DepartmentMark';
+import { DepartmentMark, Portrait, getTeamAbbr } from './DepartmentMark';
 import type { MatchdayHighlight } from '../../data/motm';
 
 interface MotmPosterProps {
@@ -262,7 +262,8 @@ export function MotmPoster({ highlight }: MotmPosterProps) {
       ctx.fillStyle = '#ffffff';
       ctx.font = '900 16px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(department.shortName.slice(0, 3), infoX + 20, deptY - 3);
+      const deptAbbr = getTeamAbbr(department.shortName, department.name, department.id);
+      ctx.fillText(deptAbbr, infoX + 20, deptY - 3);
 
       ctx.fillStyle = '#ffffff';
       ctx.font = '800 22px sans-serif';
@@ -527,6 +528,8 @@ export function MotmPoster({ highlight }: MotmPosterProps) {
               <span className="text-white/30">|</span>
               <div className="inline-flex items-center gap-1 sm:gap-1.5">
                 <DepartmentMark
+                  id={department.id}
+                  name={department.name}
                   shortName={department.shortName}
                   color={department.color}
                   size={14}
@@ -559,6 +562,8 @@ export function MotmPoster({ highlight }: MotmPosterProps) {
           {/* Home Team */}
           <div className="flex flex-1 items-center gap-1.5 sm:gap-3 min-w-0">
             <DepartmentMark
+              id={homeTeam.id}
+              name={homeTeam.name}
               shortName={homeTeam.short_name}
               color={homeTeam.color}
               size={24}
@@ -587,6 +592,8 @@ export function MotmPoster({ highlight }: MotmPosterProps) {
               <span className="hidden sm:block truncate text-[11px] font-medium text-white/50">{awayTeam.name}</span>
             </div>
             <DepartmentMark
+              id={awayTeam.id}
+              name={awayTeam.name}
               shortName={awayTeam.short_name}
               color={awayTeam.color}
               size={24}

@@ -40,7 +40,14 @@ export function TeamDetailsPage() {
       </button>
 
       <div className="rounded-3xl border border-white/10 bg-[#10192b] p-5">
-        <DepartmentMark shortName={department.shortName} color={department.color} size={56} src={department.crestUrl || undefined} />
+        <DepartmentMark
+          id={department.id}
+          name={department.name}
+          shortName={department.shortName}
+          color={department.color}
+          size={56}
+          src={department.crestUrl || undefined}
+        />
         <p className="mt-4 text-[11px] font-semibold tracking-[0.16em] text-[#f5c518]">GROUP {department.group}</p>
         <h1 className="mt-1 text-3xl font-black text-white">{department.name}</h1>
         <p className="mt-1 text-sm text-white/50">{department.college}</p>

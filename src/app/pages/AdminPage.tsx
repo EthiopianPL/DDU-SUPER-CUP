@@ -714,11 +714,11 @@ function MatchDesk({ id, role, onClose, onMessage, onError }: { id: string; role
   );
 }
 
-function TeamBlock({ team, align = 'start' }: { team?: { shortName: string; name: string; color: string; crestUrl?: string }; align?: 'start' | 'end' }) {
+function TeamBlock({ team, align = 'start' }: { team?: { id?: string; shortName: string; name: string; color: string; crestUrl?: string }; align?: 'start' | 'end' }) {
   if (!team) return null;
   return (
     <div className={align === 'end' ? 'text-right' : ''}>
-      <DepartmentMark shortName={team.shortName} color={team.color} size={48} src={team.crestUrl || undefined} />
+      <DepartmentMark id={team.id} name={team.name} shortName={team.shortName} color={team.color} size={48} src={team.crestUrl || undefined} />
       <p className="mt-2 text-sm font-bold">{team.name}</p>
     </div>
   );
@@ -1318,7 +1318,7 @@ function TeamAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
         {departments.map((item) => (
           <li key={item.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#10192b] px-3 py-2.5">
             <span className="flex min-w-0 items-center gap-3 text-sm font-bold">
-              <DepartmentMark shortName={item.shortName} color={item.color} size={36} src={item.crestUrl || undefined} />
+              <DepartmentMark id={item.id} name={item.name} shortName={item.shortName} color={item.color} size={36} src={item.crestUrl || undefined} />
               <span className="min-w-0">
                 <span className="block truncate">{item.name}</span>
                 <span className="block text-xs font-semibold text-white/35">Group {item.group}{item.coach ? ` · ${item.coach}` : ''}</span>
@@ -1520,6 +1520,7 @@ function PlayerAdmin({ onMessage, onError }: { onMessage: (text: string) => void
                 <div className="flex items-center gap-2.5">
                   <DepartmentMark
                     id={deptId}
+                    name={dept?.name}
                     shortName={dept?.shortName ?? deptId}
                     color={dept?.color ?? '#2450c8'}
                     size={34}

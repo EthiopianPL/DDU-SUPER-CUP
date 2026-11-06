@@ -174,6 +174,8 @@ export function MatchDetailsPage() {
             >
               <div className="transition-transform group-hover:scale-105">
                 <DepartmentMark
+                  id={home?.id}
+                  name={home?.name}
                   shortName={home?.shortName ?? '?'}
                   color={home?.color ?? '#2450c8'}
                   size={56}
@@ -237,6 +239,8 @@ export function MatchDetailsPage() {
             >
               <div className="transition-transform group-hover:scale-105">
                 <DepartmentMark
+                  id={away?.id}
+                  name={away?.name}
                   shortName={away?.shortName ?? '?'}
                   color={away?.color ?? '#dc2626'}
                   size={56}
@@ -542,7 +546,7 @@ function TeamBar({
         }`}
     >
       <span className="flex min-w-0 items-center gap-2">
-        <DepartmentMark shortName={shortName} color={color} size={28} src={crest} />
+        <DepartmentMark name={name} shortName={shortName} color={color} size={28} src={crest} />
         <span className="truncate text-sm font-bold text-white">{name}</span>
       </span>
       <span className="shrink-0 rounded-full border border-white/15 bg-[#174e2a] px-2.5 py-0.5 text-[11px] font-bold text-white shadow-sm">
