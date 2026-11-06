@@ -360,33 +360,41 @@ test('DDU Super Cup teams pop up on knockout after group stage finishes', async 
   await t.test('10. Registering a player with captain assignment works and enforces single team captain', async () => {
     const { openDatabase } = await import('./db.mjs');
     const { savePlayer } = await import('./domain.mjs');
+    const previousDbEnv = process.env.DDU_DB;
+    process.env.DDU_DB = join(root, 'data', 'supercup.db');
     const db = openDatabase();
     const adminActor = { id: 'admin', username: 'admin', role: 'super_admin' };
-    const p1Id = 'test-player-captain-1';
-    const p2Id = 'test-player-captain-2';
+    let p1Id = null;
+    let p2Id = null;
+    const fakeImg = {
+      contentType: 'image/png',
+      data: Buffer.from('fake-bytes').toString('base64'),
+    };
     try {
       // 1. Register player 1 with isCaptain = true
-      await savePlayer(db, adminActor, {
+      const created1 = await savePlayer(db, adminActor, {
         name: 'Captain One',
         teamId: 'information-technology',
         position: 'MID',
         number: 88,
         isCaptain: true,
-        image: { contentType: 'image/png', bytes: Buffer.from('fake-bytes') },
-      }, p1Id);
+        image: fakeImg,
+      });
+      p1Id = created1.id;
 
       const saved1 = db.prepare('SELECT is_captain FROM players WHERE id = ?').get(p1Id);
       assert.equal(saved1.is_captain, 1, 'Player 1 should be saved as captain');
 
       // 2. Register player 2 for same team with isCaptain = true
-      await savePlayer(db, adminActor, {
+      const created2 = await savePlayer(db, adminActor, {
         name: 'Captain Two',
         teamId: 'information-technology',
         position: 'FWD',
         number: 89,
         isCaptain: true,
-        image: { contentType: 'image/png', bytes: Buffer.from('fake-bytes') },
-      }, p2Id);
+        image: fakeImg,
+      });
+      p2Id = created2.id;
 
       const saved2 = db.prepare('SELECT is_captain FROM players WHERE id = ?').get(p2Id);
       assert.equal(saved2.is_captain, 1, 'Player 2 should now be captain');
@@ -406,9 +414,17 @@ test('DDU Super Cup teams pop up on knockout after group stage finishes', async 
       const saved2After = db.prepare('SELECT is_captain FROM players WHERE id = ?').get(p2Id);
       assert.equal(saved2After.is_captain, 0, 'Player 2 should now not be captain');
     } finally {
-      db.prepare('DELETE FROM players WHERE id IN (?, ?)').run(p1Id, p2Id);
-      db.prepare('DELETE FROM media WHERE id IN (?, ?)').run(`players/${p1Id}`, `players/${p2Id}`);
-      db.prepare('DELETE FROM media_assets WHERE entity_id IN (?, ?)').run(p1Id, p2Id);
+      process.env.DDU_DB = previousDbEnv;
+      if (p1Id || p2Id) {
+        db.prepare('DELETE FROM players WHERE id IN (?, ?)').run(p1Id, p2Id);
+        db.prepare('DELETE FROM media WHERE id IN (?, ?)').run(`players/${p1Id}`, `players/${p2Id}`);
+        db.prepare('DELETE FROM media_assets WHERE entity_id IN (?, ?)').run(p1Id, p2Id);
+        for (const pid of [p1Id, p2Id]) {
+          if (!pid) continue;
+          const p = join(root, 'public', 'uploads', 'players', 'information-technology', `${pid}.png`);
+          try { import('node:fs').then(fs => fs.unlinkSync(p)).catch(() => {}); } catch {}
+        }
+      }
       db.close();
     }
   });
