@@ -9,9 +9,10 @@
     "server": "node server/index.mjs",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test server/domain.test.mjs server/routing.test.mjs"
+    "test": "node --test server/domain.test.mjs server/routing.test.mjs test/hybrid-media.test.mjs test/production-readiness.test.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.119.0",
     "esbuild": "^0.25.12",
     "lucide-react": "^0.487.0",
     "pg": "^8.23.1",

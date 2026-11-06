@@ -109,6 +109,27 @@ function migrate(db) {
       content_type TEXT NOT NULL,
       bytes BLOB NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS media_assets (
+      id TEXT PRIMARY KEY,
+      provider TEXT NOT NULL DEFAULT 'supabase',
+      bucket TEXT NOT NULL DEFAULT 'ddu-super-cup-media',
+      path TEXT NOT NULL DEFAULT '',
+      public_url TEXT NOT NULL DEFAULT '',
+      public_id TEXT,
+      secure_url TEXT,
+      format TEXT,
+      bytes INTEGER,
+      width INTEGER,
+      height INTEGER,
+      category TEXT NOT NULL,
+      group_id TEXT,
+      team_id TEXT,
+      entity_type TEXT,
+      entity_id TEXT,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_media_assets_team ON media_assets(team_id, category);
+    CREATE INDEX IF NOT EXISTS idx_media_assets_entity ON media_assets(entity_type, entity_id);
     CREATE TABLE IF NOT EXISTS matches (
       id TEXT PRIMARY KEY,
       competition_id TEXT NOT NULL,
@@ -231,6 +252,16 @@ function migrate(db) {
   if (matchColumns.length && !matchColumns.some((column) => column.name === 'motm_photo_url')) {
     db.exec('ALTER TABLE matches ADD COLUMN motm_photo_url TEXT');
   }
+  const mediaAssetColumns = db.prepare('PRAGMA table_info(media_assets)').all();
+  if (mediaAssetColumns.length && !mediaAssetColumns.some((col) => col.name === 'bucket')) {
+    db.exec(`ALTER TABLE media_assets ADD COLUMN bucket TEXT NOT NULL DEFAULT 'ddu-super-cup-media'`);
+  }
+  if (mediaAssetColumns.length && !mediaAssetColumns.some((col) => col.name === 'path')) {
+    db.exec(`ALTER TABLE media_assets ADD COLUMN path TEXT NOT NULL DEFAULT ''`);
+  }
+  if (mediaAssetColumns.length && !mediaAssetColumns.some((col) => col.name === 'public_url')) {
+    db.exec(`ALTER TABLE media_assets ADD COLUMN public_url TEXT NOT NULL DEFAULT ''`);
+  }
 }
 
 function serverFile(name) {
@@ -342,6 +373,9 @@ function finishPostgres(worker, port1, url) {
     db.exec('ALTER TABLE matches ADD COLUMN IF NOT EXISTS finished_at BIGINT NULL');
     db.exec('ALTER TABLE matches ADD COLUMN IF NOT EXISTS motm_player_id VARCHAR(160) NULL REFERENCES players(id)');
     db.exec('ALTER TABLE matches ADD COLUMN IF NOT EXISTS motm_photo_url TEXT NULL');
+    db.exec("ALTER TABLE media_assets ADD COLUMN IF NOT EXISTS bucket VARCHAR(64) NOT NULL DEFAULT 'ddu-super-cup-media'");
+    db.exec('ALTER TABLE media_assets ADD COLUMN IF NOT EXISTS path TEXT NULL');
+    db.exec('ALTER TABLE media_assets ADD COLUMN IF NOT EXISTS public_url TEXT NULL');
   } catch (error) {
     if (error.code !== '42701') throw error;
   }

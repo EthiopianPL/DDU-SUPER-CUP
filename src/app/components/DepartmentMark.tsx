@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 interface DepartmentMarkProps {
   shortName: string;
   color: string;
@@ -6,11 +8,13 @@ interface DepartmentMarkProps {
 }
 
 export function DepartmentMark({ shortName, color, size = 40, src }: DepartmentMarkProps) {
-  if (src) {
+  const [failed, setFailed] = useState(false);
+  if (src && !failed) {
     return (
       <img
         src={src}
         alt=""
+        onError={() => setFailed(true)}
         className="inline-block shrink-0 rounded-xl object-cover"
         style={{ width: size, height: size }}
       />
@@ -33,8 +37,17 @@ export function DepartmentMark({ shortName, color, size = 40, src }: DepartmentM
 }
 
 export function Portrait({ name, src, size = 36 }: { name: string; src?: string; size?: number }) {
-  if (src) {
-    return <img src={src} alt="" className="shrink-0 rounded-full object-cover" style={{ width: size, height: size }} />;
+  const [failed, setFailed] = useState(false);
+  if (src && !failed) {
+    return (
+      <img
+        src={src}
+        alt=""
+        onError={() => setFailed(true)}
+        className="shrink-0 rounded-full object-cover"
+        style={{ width: size, height: size }}
+      />
+    );
   }
   return (
     <span

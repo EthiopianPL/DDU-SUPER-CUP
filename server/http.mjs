@@ -18,6 +18,7 @@ import {
   ensureFinishedStamps,
   ensureNewsStamps,
   deleteTeam,
+  deletePlayer,
   listAudit,
   listUsers,
   recordEvent,
@@ -187,6 +188,7 @@ async function serveApi(request, response, db, url) {
   if (one && request.method === 'PATCH' && one[1] === 'teams') return mutate(response, db, () => saveTeam(db, must(actor), body, decodeURIComponent(one[2])));
   if (one && request.method === 'DELETE' && one[1] === 'teams') return mutate(response, db, () => deleteTeam(db, must(actor), decodeURIComponent(one[2])));
   if (one && request.method === 'PATCH' && one[1] === 'players') return mutate(response, db, () => savePlayer(db, must(actor), body, decodeURIComponent(one[2])));
+  if (one && request.method === 'DELETE' && one[1] === 'players') return mutate(response, db, () => deletePlayer(db, must(actor), decodeURIComponent(one[2])));
   if (one && request.method === 'PATCH' && one[1] === 'news') return mutate(response, db, () => saveNews(db, must(actor), body, decodeURIComponent(one[2])));
   if (one && request.method === 'DELETE' && one[1] === 'news') return mutate(response, db, () => deleteNews(db, must(actor), decodeURIComponent(one[2])));
   if (one && request.method === 'PATCH' && one[1] === 'matches') return mutate(response, db, () => updateMatch(db, must(actor), decodeURIComponent(one[2]), body));
@@ -219,8 +221,8 @@ async function serveApi(request, response, db, url) {
   send(response, 404, { error: 'Not found.' });
 }
 
-function mutate(response, db, work) {
-  const result = withRevision(work);
+async function mutate(response, db, work) {
+  const result = await withRevision(work);
   snapshotCache = null;
   send(response, 200, { ok: true, ...result, snapshot: buildSnapshot(db) });
 }
@@ -328,12 +330,12 @@ function uploadImage(request, response, db, actor, path) {
     return send(response, 403, { error: 'You do not have permission for that action.' });
   }
   const type = String(request.headers['content-type'] ?? '');
-  const extension = type.includes('png') ? 'png' : type.includes('webp') ? 'webp' : type.includes('jpeg') ? 'jpg' : '';
+  const extension = type.includes('png') ? 'png' : type.includes('webp') ? 'webp' : (type.includes('jpeg') || type.includes('jpg')) ? 'jpg' : '';
   if (!extension) return send(response, 400, { error: 'Upload a PNG, JPEG, or WebP image.' });
   const contentType = extension === 'png' ? 'image/png' : extension === 'webp' ? 'image/webp' : 'image/jpeg';
-  return readRaw(request, 1_500_000).then((buffer) => {
+  return readRaw(request, 5_000_000).then(async (buffer) => {
     if (!buffer.length) return send(response, 400, { error: 'The image was empty.' });
-    const saved = withRevision(() => setImage(db, kind, id, { contentType, bytes: buffer }));
+    const saved = await withRevision(() => setImage(db, kind, id, { contentType, bytes: buffer }));
     send(response, 200, { ok: true, url: saved.url, snapshot: buildSnapshot(db) });
   });
 }

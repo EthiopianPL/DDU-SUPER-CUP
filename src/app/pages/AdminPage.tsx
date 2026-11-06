@@ -1602,8 +1602,8 @@ function MotmManager({
       setFileError('Please select a JPG, JPEG, PNG, or WebP image.');
       return;
     }
-    if (file.size > 1_500_000) {
-      setFileError('The image must be smaller than 1.5 MB.');
+    if (file.size > 5_000_000) {
+      setFileError('The image must be smaller than 5 MB.');
       return;
     }
 
@@ -1731,6 +1731,22 @@ function MotmManager({
                 >
                   {previewUrl ? 'Replace Photograph' : 'Choose Photograph'}
                 </button>
+                {selectedPlayer?.photoUrl && previewUrl !== selectedPlayer.photoUrl && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPendingPayload(null);
+                      setPreviewUrl(selectedPlayer.photoUrl);
+                      setCurrentPhotoUrl(selectedPlayer.photoUrl);
+                      setFileError('');
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                    disabled={disabled}
+                    className="rounded-xl border border-[#f5c518]/30 bg-[#f5c518]/10 px-3.5 py-2 text-xs font-bold text-[#f5c518] transition-colors hover:bg-[#f5c518]/20"
+                  >
+                    Use Profile Photo
+                  </button>
+                )}
                 {previewUrl && (
                   <button
                     type="button"

@@ -2,6 +2,17 @@ import { randomUUID } from 'node:crypto';
 import { can, hashPassword, ROLES } from './auth.mjs';
 import { transaction } from './db.mjs';
 import { participation, substitutionCount, yellowCount } from './eligibility.mjs';
+import {
+  getStorageProvider,
+  isSupabaseConfigured,
+  buildStoragePath,
+  validateImageUpload,
+  uploadToSupabaseStorage,
+  deleteFromSupabaseStorage,
+  getOptimizedSupabaseUrl,
+  slugify,
+  DEFAULT_BUCKET,
+} from './supabase-storage.mjs';
 
 export const DEFAULT_RULES = {
   pointsWin: 3,
@@ -539,8 +550,8 @@ function slug(value) {
 function storedImage(input) {
   const image = input?.image;
   if (!image) return null;
-  const contentType = String(image.contentType ?? '');
-  if (!['image/png', 'image/jpeg', 'image/webp'].includes(contentType)) {
+  const contentType = String(image.contentType ?? '').toLowerCase().trim();
+  if (!['image/png', 'image/jpeg', 'image/jpg', 'image/webp'].includes(contentType)) {
     throw new RuleError('Upload a PNG, JPEG, or WebP image.');
   }
   let raw = String(image.data ?? '');
@@ -548,8 +559,8 @@ function storedImage(input) {
   if (raw.startsWith('data:') && comma >= 0) raw = raw.slice(comma + 1);
   const bytes = Buffer.from(raw, 'base64');
   if (!bytes.length) throw new RuleError('The image was empty.');
-  if (bytes.length > 1_500_000) throw new RuleError('That image is larger than 1.5 MB.');
-  return { contentType, bytes };
+  if (bytes.length > 5_000_000) throw new RuleError('That image is larger than 5 MB.');
+  return { contentType, bytes, data: raw };
 }
 
 function saveMedia(db, kind, id, image) {
@@ -558,9 +569,21 @@ function saveMedia(db, kind, id, image) {
   return `/api/media/${kind}/${encodeURIComponent(id)}?v=${Date.now()}`;
 }
 
-export function setImage(db, kind, id, image) {
-  const table = kind === 'teams' ? 'teams' : 'players';
-  const column = kind === 'teams' ? 'crest_url' : 'photo_url';
+export async function setImage(db, kind, id, image) {
+  if (kind === 'players') {
+    const player = playerRow(db, id);
+    return savePlayer(db, { role: 'competition_manager', id: 'system', username: 'system' }, {
+      name: player.name,
+      teamId: player.teamId,
+      position: player.position,
+      number: player.number,
+      nationality: player.nationality,
+      active: player.active !== false,
+      image,
+    }, id);
+  }
+  const table = 'teams';
+  const column = 'crest_url';
   return transaction(db, () => {
     if (!db.prepare(`SELECT id FROM ${table} WHERE id = ?`).get(id)) throw new RuleError('Not found.', 404);
     const url = saveMedia(db, kind, id, image);
@@ -613,7 +636,15 @@ export function deleteTeam(db, actor, id) {
     if (Number(used.total) > 0) throw new RuleError('Delete or reassign this team’s matches before deleting the team.');
     const roster = db.prepare('SELECT id FROM players WHERE team_id = ?').all(id);
     db.prepare('DELETE FROM media WHERE id = ?').run(`teams/${id}`);
-    for (const player of roster) db.prepare('DELETE FROM media WHERE id = ?').run(`players/${player.id}`);
+    for (const player of roster) {
+      db.prepare('DELETE FROM media WHERE id = ?').run(`players/${player.id}`);
+      const assets = db.prepare('SELECT public_id, path, bucket, provider FROM media_assets WHERE entity_type = ? AND entity_id = ?').all('players', player.id);
+      for (const asset of assets) {
+        if (asset.provider === 'supabase') deleteFromSupabaseStorage(asset.bucket || DEFAULT_BUCKET, asset.path || asset.public_id).catch(() => {});
+      }
+      db.prepare('DELETE FROM media_assets WHERE entity_type = ? AND entity_id = ?').run('players', player.id);
+    }
+    db.prepare('DELETE FROM media_assets WHERE team_id = ?').run(id);
     db.prepare('DELETE FROM players WHERE team_id = ?').run(id);
     const result = db.prepare('DELETE FROM teams WHERE id = ?').run(id);
     if (!result.changes) throw new RuleError('Team not found.', 404);
@@ -622,7 +653,30 @@ export function deleteTeam(db, actor, id) {
   });
 }
 
-export function savePlayer(db, actor, input, id) {
+export async function deletePlayer(db, actor, id) {
+  deny(actor, 'player.write');
+  return transaction(db, () => {
+    const before = playerRow(db, id);
+    const used = db.prepare('SELECT COUNT(*) AS total FROM match_squad WHERE player_id = ?').get(id);
+    if (Number(used.total) > 0) {
+      db.prepare('UPDATE players SET active = 0 WHERE id = ?').run(id);
+      audit(db, actor, 'player.deactivate', 'player', id, before, { active: 0 });
+      return { ok: true, deactivated: true };
+    }
+    const assets = db.prepare('SELECT public_id, path, bucket, provider FROM media_assets WHERE entity_type = ? AND entity_id = ?').all('players', id);
+    for (const asset of assets) {
+      if (asset.provider === 'supabase') deleteFromSupabaseStorage(asset.bucket || DEFAULT_BUCKET, asset.path || asset.public_id).catch(() => {});
+    }
+    db.prepare('DELETE FROM media_assets WHERE entity_type = ? AND entity_id = ?').run('players', id);
+    db.prepare('DELETE FROM media WHERE id = ?').run(`players/${id}`);
+    const result = db.prepare('DELETE FROM players WHERE id = ?').run(id);
+    if (!result.changes) throw new RuleError('Player not found.', 404);
+    audit(db, actor, 'player.delete', 'player', id, before, null);
+    return { ok: true, deleted: true };
+  });
+}
+
+export async function savePlayer(db, actor, input, id) {
   deny(actor, 'player.write');
   const name = String(input.name ?? '').trim();
   const teamId = String(input.teamId ?? input.departmentId ?? '').trim();
@@ -633,26 +687,122 @@ export function savePlayer(db, actor, input, id) {
   }
   const image = storedImage(input);
   if (!id && !image) throw new RuleError('A player photo is required.');
-  if (!db.prepare('SELECT id FROM teams WHERE id = ?').get(teamId)) throw new RuleError('Team not found.', 404);
-  return transaction(db, () => {
-    const before = id ? playerRow(db, id) : null;
-    const playerId = id || `${teamId}-${slug(name)}`;
-    if (!id && db.prepare('SELECT id FROM players WHERE id = ?').get(playerId)) throw new RuleError('That player already exists.');
-    const taken = db.prepare('SELECT id FROM players WHERE team_id = ? AND number = ? AND id <> ? AND active = 1').get(teamId, number, playerId);
-    if (taken) throw new RuleError(`Shirt ${number} is already used on this team.`);
-    const photo = image ? saveMedia(db, 'players', playerId, image) : before?.photo_url ?? '';
-    if (id) {
-      db.prepare(`UPDATE players SET team_id=?, name=?, position=?, number=?, nationality=?, photo_url=?, active=? WHERE id=?`).run(
-        teamId, name, position, number, String(input.nationality ?? before.nationality ?? ''), photo, input.active === false ? 0 : 1, id,
-      );
+  const team = db.prepare('SELECT id, name, short_name, group_id FROM teams WHERE id = ?').get(teamId);
+  if (!team) throw new RuleError('Team not found.', 404);
+
+  const before = id ? playerRow(db, id) : null;
+  const playerId = id || `${teamId}-${slug(name)}`;
+  if (!id && db.prepare('SELECT id FROM players WHERE id = ?').get(playerId)) throw new RuleError('That player already exists.');
+  const taken = db.prepare('SELECT id FROM players WHERE team_id = ? AND number = ? AND id <> ? AND active = 1').get(teamId, number, playerId);
+  if (taken) throw new RuleError(`Shirt ${number} is already used on this team.`);
+
+  let photo = before?.photo_url ?? '';
+  let uploadedSupabase = null;
+  let oldStoragePath = null;
+  let oldStorageBucket = null;
+
+  if (image) {
+    const provider = getStorageProvider();
+    if (provider === 'supabase') {
+      const ext = image.contentType?.replace('image/', '') === 'jpeg' ? 'jpg' : (image.contentType?.replace('image/', '') || 'png');
+      const path = buildStoragePath({
+        category: 'players',
+        groupId: team.group_id,
+        teamSlug: team.short_name || teamId,
+        entityId: playerId,
+        filename: `profile.${ext}`,
+      });
+      uploadedSupabase = await uploadToSupabaseStorage({
+        image,
+        path,
+      });
+      photo = getOptimizedSupabaseUrl(uploadedSupabase.publicUrl);
     } else {
-      db.prepare(`INSERT INTO players (id, team_id, name, position, number, nationality, photo_url, registered, active) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1)`).run(
-        playerId, teamId, name, position, number, String(input.nationality ?? ''), photo,
-      );
+      photo = saveMedia(db, 'players', playerId, image);
     }
-    audit(db, actor, id ? 'player.update' : 'player.create', 'player', id || playerId, before, { name, teamId, position, number });
-    return { id: id || playerId };
-  });
+  }
+
+  try {
+    transaction(db, () => {
+      if (id) {
+        db.prepare(`UPDATE players SET team_id=?, name=?, position=?, number=?, nationality=?, photo_url=?, active=? WHERE id=?`).run(
+          teamId, name, position, number, String(input.nationality ?? before.nationality ?? ''), photo, input.active === false ? 0 : 1, id,
+        );
+      } else {
+        db.prepare(`INSERT INTO players (id, team_id, name, position, number, nationality, photo_url, registered, active) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1)`).run(
+          playerId, teamId, name, position, number, String(input.nationality ?? ''), photo,
+        );
+      }
+
+      if (uploadedSupabase) {
+        const assetId = `sb_${uploadedSupabase.path.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+        db.prepare(`
+          INSERT INTO media_assets (id, provider, bucket, path, public_url, public_id, secure_url, format, bytes, width, height, category, group_id, team_id, entity_type, entity_id, created_at)
+          VALUES (?, 'supabase', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'players', ?, ?, 'players', ?, ?)
+        `).run(
+          assetId,
+          uploadedSupabase.bucket,
+          uploadedSupabase.path,
+          uploadedSupabase.publicUrl,
+          uploadedSupabase.path,
+          uploadedSupabase.publicUrl,
+          uploadedSupabase.format || null,
+          uploadedSupabase.bytes || null,
+          uploadedSupabase.width || null,
+          uploadedSupabase.height || null,
+          team.group_id,
+          teamId,
+          playerId,
+          Date.now(),
+        );
+
+        if (id) {
+          const prev = db.prepare('SELECT path, bucket, public_id FROM media_assets WHERE entity_type = ? AND entity_id = ? AND (path <> ? OR public_id <> ?)').get('players', playerId, uploadedSupabase.path, uploadedSupabase.path);
+          if (prev) {
+            oldStoragePath = prev.path || prev.public_id;
+            oldStorageBucket = prev.bucket || DEFAULT_BUCKET;
+            db.prepare('DELETE FROM media_assets WHERE (path = ? OR public_id = ?)').run(oldStoragePath, oldStoragePath);
+          }
+        }
+      } else if (image) {
+        const assetId = `local_players_${playerId}_${Date.now()}`;
+        db.prepare(`
+          INSERT INTO media_assets (id, provider, bucket, path, public_url, public_id, secure_url, format, bytes, width, height, category, group_id, team_id, entity_type, entity_id, created_at)
+          VALUES (?, 'local', 'local', ?, ?, ?, ?, ?, ?, ?, ?, 'players', ?, ?, 'players', ?, ?)
+        `).run(
+          assetId,
+          `players/${playerId}`,
+          photo,
+          `players/${playerId}`,
+          photo,
+          image.contentType.replace('image/', ''),
+          image.bytes.length,
+          null,
+          null,
+          team.group_id,
+          teamId,
+          playerId,
+          Date.now(),
+        );
+      }
+
+      audit(db, actor, id ? 'player.update' : 'player.create', 'player', id || playerId, before, { name, teamId, position, number });
+    });
+  } catch (dbError) {
+    if (uploadedSupabase) {
+      await deleteFromSupabaseStorage(uploadedSupabase.bucket, uploadedSupabase.path).catch(() => {});
+    }
+    throw dbError;
+  }
+
+  if (oldStoragePath) {
+    const motmReuse = db.prepare('SELECT COUNT(*) AS total FROM matches WHERE motm_photo_url LIKE ?').get(`%${oldStoragePath}%`);
+    if (!Number(motmReuse?.total)) {
+      deleteFromSupabaseStorage(oldStorageBucket || DEFAULT_BUCKET, oldStoragePath).catch(() => {});
+    }
+  }
+
+  return { id: id || playerId };
 }
 
 export function saveNews(db, actor, input, id) {
@@ -1388,66 +1538,171 @@ export function listUsers(db, actor) {
 
 export function withRevision(work) {
   const result = work();
+  if (result && typeof result.then === 'function') {
+    return result.then((res) => {
+      touch();
+      return res;
+    });
+  }
   touch();
   return result;
 }
 
-export function saveManOfTheMatch(db, actor, matchId, input) {
+export async function saveManOfTheMatch(db, actor, matchId, input) {
   deny(actor, 'match.write');
-  return transaction(db, () => {
-    const match = matchRow(db, matchId);
-    assertVersion(match, input.version);
+  const match = matchRow(db, matchId);
+  assertVersion(match, input.version);
 
-    const before = {
-      motmPlayerId: match.motm_player_id || null,
-      motmPhotoUrl: match.motm_photo_url || null,
-    };
+  const before = {
+    motmPlayerId: match.motm_player_id || null,
+    motmPhotoUrl: match.motm_photo_url || null,
+  };
 
-    if (!input.playerId) {
+  if (!input.playerId) {
+    let oldMotmPath = null;
+    let oldMotmBucket = null;
+    transaction(db, () => {
+      const prevAsset = db.prepare('SELECT path, bucket, public_id FROM media_assets WHERE entity_type = ? AND entity_id = ? AND category = ?').get('matches', matchId, 'motm');
+      if (prevAsset) {
+        oldMotmPath = prevAsset.path || prevAsset.public_id;
+        oldMotmBucket = prevAsset.bucket || DEFAULT_BUCKET;
+        db.prepare('DELETE FROM media_assets WHERE entity_type = ? AND entity_id = ? AND category = ?').run('matches', matchId, 'motm');
+      }
       db.prepare('UPDATE matches SET motm_player_id = NULL, motm_photo_url = NULL, version = version + 1, updated_at = ? WHERE id = ?').run(
         Date.now(),
         matchId,
       );
       audit(db, actor, 'match.motm.remove', 'match', matchId, before, null);
-      touch();
-      return { ok: true, motmPlayerId: null, motmPhotoUrl: null };
+    });
+    if (oldMotmPath) {
+      const playerReuse = db.prepare('SELECT COUNT(*) AS total FROM players WHERE photo_url LIKE ?').get(`%${oldMotmPath}%`);
+      if (!Number(playerReuse?.total)) {
+        await deleteFromSupabaseStorage(oldMotmBucket || DEFAULT_BUCKET, oldMotmPath).catch(() => {});
+      }
     }
+    return { ok: true, motmPlayerId: null, motmPhotoUrl: null };
+  }
 
-    if (match.status !== 'finished') {
-      throw new RuleError('Man of the Match can only be awarded for completed matches.');
-    }
+  if (match.status !== 'finished') {
+    throw new RuleError('Man of the Match can only be awarded for completed matches.');
+  }
 
-    const playerId = String(input.playerId).trim();
-    const player = playerRow(db, playerId);
+  const playerId = String(input.playerId).trim();
+  const player = playerRow(db, playerId);
 
-    if (player.team_id !== match.home_id && player.team_id !== match.away_id) {
-      throw new RuleError('The selected player does not belong to either participating team.');
-    }
+  if (player.team_id !== match.home_id && player.team_id !== match.away_id) {
+    throw new RuleError('The selected player does not belong to either participating team.');
+  }
 
-    let photoUrl = match.motm_photo_url || null;
+  const team = db.prepare('SELECT id, name, short_name, group_id FROM teams WHERE id = ?').get(player.team_id);
+  const image = input.image ? storedImage(input) : null;
+  let photoUrl = null;
+  let uploadedSupabase = null;
+  let oldMotmPath = null;
+  let oldMotmBucket = null;
 
-    if (input.image) {
-      const image = storedImage(input);
+  if (image) {
+    const provider = getStorageProvider();
+    if (provider === 'supabase') {
+      const ext = image.contentType?.replace('image/', '') === 'jpeg' ? 'jpg' : (image.contentType?.replace('image/', '') || 'png');
+      const path = buildStoragePath({
+        category: 'motm',
+        entityId: matchId,
+        filename: `${player.id}.${ext}`,
+      });
+      uploadedSupabase = await uploadToSupabaseStorage({
+        image,
+        path,
+      });
+      photoUrl = getOptimizedSupabaseUrl(uploadedSupabase.publicUrl);
+    } else {
       photoUrl = saveMedia(db, 'motm', matchId, image);
-    } else if (input.photoUrl !== undefined) {
-      photoUrl = input.photoUrl ? String(input.photoUrl) : null;
     }
+  } else if (input.photoUrl) {
+    photoUrl = String(input.photoUrl).trim();
+  } else if (match.motm_photo_url && match.motm_player_id === player.id) {
+    photoUrl = match.motm_photo_url;
+  }
 
-    if (!photoUrl) {
-      throw new RuleError('A photograph of the Man of the Match is required.');
+  if (!photoUrl) {
+    throw new RuleError('A photograph of the Man of the Match is required.');
+  }
+
+  try {
+    transaction(db, () => {
+      db.prepare('UPDATE matches SET motm_player_id = ?, motm_photo_url = ?, version = version + 1, updated_at = ? WHERE id = ?').run(
+        player.id,
+        photoUrl,
+        Date.now(),
+        matchId,
+      );
+
+      if (uploadedSupabase) {
+        const assetId = `sb_${uploadedSupabase.path.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+        db.prepare(`
+          INSERT INTO media_assets (id, provider, bucket, path, public_url, public_id, secure_url, format, bytes, width, height, category, group_id, team_id, entity_type, entity_id, created_at)
+          VALUES (?, 'supabase', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'motm', ?, ?, 'matches', ?, ?)
+        `).run(
+          assetId,
+          uploadedSupabase.bucket,
+          uploadedSupabase.path,
+          uploadedSupabase.publicUrl,
+          uploadedSupabase.path,
+          uploadedSupabase.publicUrl,
+          uploadedSupabase.format || null,
+          uploadedSupabase.bytes || null,
+          uploadedSupabase.width || null,
+          uploadedSupabase.height || null,
+          team?.group_id || null,
+          player.team_id,
+          matchId,
+          Date.now(),
+        );
+
+        const prev = db.prepare('SELECT path, bucket, public_id FROM media_assets WHERE entity_type = ? AND entity_id = ? AND category = ? AND (path <> ? OR public_id <> ?)').get('matches', matchId, 'motm', uploadedSupabase.path, uploadedSupabase.path);
+        if (prev) {
+          oldMotmPath = prev.path || prev.public_id;
+          oldMotmBucket = prev.bucket || DEFAULT_BUCKET;
+          db.prepare('DELETE FROM media_assets WHERE entity_type = ? AND entity_id = ? AND category = ? AND (path = ? OR public_id = ?)').run('matches', matchId, 'motm', oldMotmPath, oldMotmPath);
+        }
+      } else if (image) {
+        const assetId = `local_motm_${matchId}_${Date.now()}`;
+        db.prepare(`
+          INSERT INTO media_assets (id, provider, bucket, path, public_url, public_id, secure_url, format, bytes, width, height, category, group_id, team_id, entity_type, entity_id, created_at)
+          VALUES (?, 'local', 'local', ?, ?, ?, ?, ?, ?, ?, ?, 'motm', ?, ?, 'matches', ?, ?)
+        `).run(
+          assetId,
+          `motm/${matchId}`,
+          photoUrl,
+          `motm/${matchId}`,
+          photoUrl,
+          image.contentType.replace('image/', ''),
+          image.bytes.length,
+          null,
+          null,
+          team?.group_id || null,
+          player.team_id,
+          matchId,
+          Date.now(),
+        );
+      }
+
+      const after = { motmPlayerId: player.id, motmPhotoUrl: photoUrl };
+      audit(db, actor, 'match.motm.set', 'match', matchId, before, after);
+    });
+  } catch (dbError) {
+    if (uploadedSupabase) {
+      await deleteFromSupabaseStorage(uploadedSupabase.bucket, uploadedSupabase.path).catch(() => {});
     }
+    throw dbError;
+  }
 
-    db.prepare('UPDATE matches SET motm_player_id = ?, motm_photo_url = ?, version = version + 1, updated_at = ? WHERE id = ?').run(
-      player.id,
-      photoUrl,
-      Date.now(),
-      matchId,
-    );
+  if (oldMotmPath) {
+    const playerReuse = db.prepare('SELECT COUNT(*) AS total FROM players WHERE photo_url LIKE ?').get(`%${oldMotmPath}%`);
+    if (!Number(playerReuse?.total)) {
+      deleteFromSupabaseStorage(oldMotmBucket || DEFAULT_BUCKET, oldMotmPath).catch(() => {});
+    }
+  }
 
-    const after = { motmPlayerId: player.id, motmPhotoUrl: photoUrl };
-    audit(db, actor, 'match.motm.set', 'match', matchId, before, after);
-    touch();
-
-    return { ok: true, motmPlayerId: player.id, motmPhotoUrl: photoUrl };
-  });
+  return { ok: true, motmPlayerId: player.id, motmPhotoUrl: photoUrl };
 }

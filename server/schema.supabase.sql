@@ -162,6 +162,33 @@ CREATE TABLE IF NOT EXISTS media (
   bytes BYTEA NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS media_assets (
+  id VARCHAR(160) PRIMARY KEY,
+  provider VARCHAR(32) NOT NULL DEFAULT 'supabase',
+  bucket VARCHAR(64) NOT NULL DEFAULT 'ddu-super-cup-media',
+  path TEXT NOT NULL,
+  public_url TEXT NOT NULL,
+  public_id TEXT,
+  secure_url TEXT,
+  format VARCHAR(16),
+  bytes INT,
+  width INT,
+  height INT,
+  category VARCHAR(32) NOT NULL,
+  group_id VARCHAR(16),
+  team_id VARCHAR(128),
+  entity_type VARCHAR(32),
+  entity_id VARCHAR(160),
+  created_at BIGINT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_media_assets_team ON media_assets (team_id, category);
+CREATE INDEX IF NOT EXISTS idx_media_assets_entity ON media_assets (entity_type, entity_id);
+
+ALTER TABLE media_assets ADD COLUMN IF NOT EXISTS bucket VARCHAR(64) NOT NULL DEFAULT 'ddu-super-cup-media';
+ALTER TABLE media_assets ADD COLUMN IF NOT EXISTS path TEXT;
+ALTER TABLE media_assets ADD COLUMN IF NOT EXISTS public_url TEXT;
+ALTER TABLE media_assets ALTER COLUMN provider SET DEFAULT 'supabase';
 ALTER TABLE teams ALTER COLUMN crest_url TYPE TEXT;
 ALTER TABLE players ALTER COLUMN photo_url TYPE TEXT;
 ALTER TABLE news ADD COLUMN IF NOT EXISTS image_url TEXT NOT NULL DEFAULT '';
