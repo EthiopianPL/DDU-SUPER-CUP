@@ -10,7 +10,7 @@ Set `DDU_DEMO=1` only when a local SQLite file should load the old sample tourna
 
 ## Running the code
 
-Run `npm i` to install the dependencies.
+Run `npm i ` to install the dependencies.
 
 Run `npm run dev` to start the match server and the site at http://127.0.0.1:5173.
 
