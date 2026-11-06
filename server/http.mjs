@@ -55,7 +55,7 @@ const SECURITY_HEADERS = {
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-  'Content-Security-Policy': "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+  'Content-Security-Policy': "default-src 'self'; img-src 'self' data: blob: https://cdn.jsdelivr.net https://raw.githubusercontent.com https://*.supabase.co; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
 };
 
 const TYPES = {
@@ -442,7 +442,7 @@ function readRaw(request, limit) {
 
 function serveUpload(response, pathname) {
   const relative = normalize(pathname.replace(/^\/uploads\//, ''));
-  if (relative.startsWith('..') || relative.includes('\0')) return send(response, 404, { error: 'Not found.' });
+  if (relative.startsWith('..') || relative.includes('\0') || relative.includes(':')) return send(response, 404, { error: 'Not found.' });
   let file = join(root, 'public', 'uploads', relative);
   if (!existsSync(file)) {
     file = join(uploads, relative);
@@ -459,6 +459,9 @@ function serveUpload(response, pathname) {
 function serveStatic(response, pathname) {
   const dist = join(root, 'dist');
   const requested = pathname === '/' ? '/index.html' : pathname;
+  if (requested.endsWith('.map') || requested.includes('.env') || requested.startsWith('/.') || requested.includes('/.')) {
+    return send(response, 404, { error: 'Not found.' });
+  }
   const file = normalize(join(dist, requested));
   const target = inside(dist, file) && existsSync(file) ? file : join(dist, 'index.html');
   if (!existsSync(target)) return send(response, 404, { error: 'Build the site before starting it.' });

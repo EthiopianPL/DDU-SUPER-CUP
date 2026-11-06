@@ -283,7 +283,7 @@ function Login({ onSuccess }: { onSuccess: (user: DeskUser) => void }) {
       >
         <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">MATCH DESK</p>
         <h1 className="mt-2 text-3xl font-black">Sign in</h1>
-        <p className="mt-2 text-sm text-white/50">The desk account is admin. The default password is supercup unless the server was given another one.</p>
+        <p className="mt-2 text-sm text-white/50">Sign in with your authorized credentials to access the administrative match desk.</p>
         <label className="mt-5 block text-xs font-bold text-white/50">Username
           <input className={inputClass} value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" />
         </label>
