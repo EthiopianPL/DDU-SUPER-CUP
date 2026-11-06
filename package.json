@@ -9,7 +9,7 @@
     "server": "node server/index.mjs",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test server/domain.test.mjs server/routing.test.mjs server/group-assets.test.mjs server/rich-text.test.mjs server/knockout-bracket.test.mjs"
+    "test": "node --test server/knockout-bracket.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",

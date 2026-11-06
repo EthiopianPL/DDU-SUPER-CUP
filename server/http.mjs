@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { createReadStream, existsSync, mkdtempSync } from 'node:fs';
+import { createReadStream, existsSync, mkdtempSync, readdirSync } from 'node:fs';
 import { extname, join, normalize, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -346,7 +346,21 @@ function serveMedia(response, db, pathname) {
   const kind = match[1];
   const id = decodeURIComponent(match[2]);
 
-  // Check if a local file exists in public/uploads first
+  // 1. Query Supabase database media table first
+  const row = db.prepare('SELECT content_type, bytes FROM media WHERE id = ?').get(`${kind}/${id}`);
+  const bytes = mediaBytes(row?.bytes);
+  if (bytes?.length) {
+    applySecurity(response);
+    response.writeHead(200, {
+      'Content-Type': row.content_type || 'application/octet-stream',
+      'Cache-Control': 'public, max-age=86400',
+      'Content-Length': bytes.length,
+    });
+    response.end(bytes);
+    return;
+  }
+
+  // 2. Fallback to local files in public/uploads if not found in database
   for (const ext of ['.svg', '.png', '.jpg', '.jpeg', '.webp']) {
     const localFile = join(root, 'public', 'uploads', kind, `${id}${ext}`);
     if (existsSync(localFile)) {
@@ -360,16 +374,32 @@ function serveMedia(response, db, pathname) {
     }
   }
 
-  const row = db.prepare('SELECT content_type, bytes FROM media WHERE id = ?').get(`${match[1]}/${id}`);
-  const bytes = mediaBytes(row?.bytes);
-  if (!bytes?.length) return send(response, 404, { error: 'Not found.' });
-  applySecurity(response);
-  response.writeHead(200, {
-    'Content-Type': row.content_type || 'application/octet-stream',
-    'Cache-Control': 'public, max-age=86400',
-    'Content-Length': bytes.length,
-  });
-  response.end(bytes);
+  // Also check subfolders if kind === 'players' (e.g. public/uploads/players/<team_id>/<id>.<ext>)
+  if (kind === 'players') {
+    const playersDir = join(root, 'public', 'uploads', 'players');
+    if (existsSync(playersDir)) {
+      try {
+        const teams = readdirSync(playersDir, { withFileTypes: true });
+        for (const teamDir of teams) {
+          if (!teamDir.isDirectory()) continue;
+          for (const ext of ['.svg', '.png', '.jpg', '.jpeg', '.webp']) {
+            const nestedFile = join(playersDir, teamDir.name, `${id}${ext}`);
+            if (existsSync(nestedFile)) {
+              applySecurity(response);
+              response.writeHead(200, {
+                'Content-Type': TYPES[ext] || 'application/octet-stream',
+                'Cache-Control': 'public, max-age=86400',
+              });
+              createReadStream(nestedFile).pipe(response);
+              return;
+            }
+          }
+        }
+      } catch {}
+    }
+  }
+
+  return send(response, 404, { error: 'Not found.' });
 }
 
 function mediaBytes(value) {

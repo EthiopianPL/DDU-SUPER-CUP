@@ -599,14 +599,15 @@ export function saveLocalFile(kind, id, image, subfolder = '') {
   return `${urlPrefix}/${filename}?v=${Date.now()}`;
 }
 
-function saveMedia(db, kind, id, image) {
+export function saveMedia(db, kind, id, image, subfolder = '') {
+  db.prepare(`INSERT INTO media (id, content_type, bytes) VALUES (?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET content_type = excluded.content_type, bytes = excluded.bytes`).run(`${kind}/${id}`, image.contentType, image.bytes);
   try {
-    return saveLocalFile(kind, id, image);
-  } catch {
-    db.prepare(`INSERT INTO media (id, content_type, bytes) VALUES (?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET content_type = excluded.content_type, bytes = excluded.bytes`).run(`${kind}/${id}`, image.contentType, image.bytes);
-    return `/api/media/${kind}/${encodeURIComponent(id)}?v=${Date.now()}`;
+    saveLocalFile(kind, id, image, subfolder);
+  } catch (err) {
+    console.warn('Could not mirror media to local disk:', err?.message);
   }
+  return `/api/media/${kind}/${encodeURIComponent(id)}?v=${Date.now()}`;
 }
 
 export async function setImage(db, kind, id, image) {
@@ -742,7 +743,7 @@ export async function savePlayer(db, actor, input, id) {
   let oldStorageBucket = null;
 
   if (image) {
-    photo = saveLocalFile('players', playerId, image, teamId);
+    photo = saveMedia(db, 'players', playerId, image, teamId);
   }
 
   try {
@@ -842,17 +843,7 @@ export async function saveNews(db, actor, input, id) {
 
   let imageUrl = before?.image_url ?? '';
   if (image) {
-    if (isSupabaseConfigured()) {
-      const ext = image.contentType?.replace('image/', '') === 'jpeg' ? 'jpg' : (image.contentType?.replace('image/', '') || 'png');
-      const path = `news/${articleId}-${Date.now()}.${ext}`;
-      const uploaded = await uploadToSupabaseStorage({ image, path });
-      imageUrl = getOptimizedSupabaseUrl(uploaded.publicUrl);
-    } else {
-      // In Supabase PostgreSQL, store in the media table in the Supabase database
-      db.prepare(`INSERT INTO media (id, content_type, bytes) VALUES (?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET content_type = excluded.content_type, bytes = excluded.bytes`).run(`news/${articleId}`, image.contentType, image.bytes);
-      imageUrl = `/api/media/news/${encodeURIComponent(articleId)}?v=${Date.now()}`;
-    }
+    imageUrl = saveMedia(db, 'news', articleId, image);
   }
 
   return transaction(db, () => {
@@ -1647,7 +1638,7 @@ export async function saveManOfTheMatch(db, actor, matchId, input) {
   let oldMotmBucket = null;
 
   if (image) {
-    photoUrl = saveLocalFile('motm', `${matchId}-${player.id}`, image);
+    photoUrl = saveMedia(db, 'motm', `${matchId}-${player.id}`, image);
   } else if (input.photoUrl) {
     let clean = String(input.photoUrl).trim();
     if (!clean.startsWith('http') && !clean.startsWith('/')) {

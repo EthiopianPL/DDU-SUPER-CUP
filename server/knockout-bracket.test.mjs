@@ -204,5 +204,36 @@ test('DDU Super Cup teams pop up on knockout after group stage finishes', async 
       db.close();
     }
   });
+
+  await t.test('8. Uploading a picture from an admin stores in Supabase DB media table', async () => {
+    const { saveMedia } = await import('./domain.mjs');
+    const { openDatabase } = await import('./db.mjs');
+
+    const db = openDatabase();
+    const testId = `test-upload-${Date.now()}`;
+    const fakeBytes = Buffer.from('fake-png-binary-data');
+    const fakeImage = {
+      contentType: 'image/png',
+      bytes: fakeBytes,
+      data: fakeBytes.toString('base64'),
+    };
+
+    try {
+      const url = saveMedia(db, 'players', testId, fakeImage, 'test');
+      assert.ok(url.startsWith(`/api/media/players/${testId}`), 'Returned URL points to /api/media/players/ endpoint');
+
+      const saved = db.prepare('SELECT id, content_type, bytes FROM media WHERE id = ?').get(`players/${testId}`);
+      assert.ok(saved, 'Media row must be present in Supabase DB media table');
+      assert.equal(saved.id, `players/${testId}`);
+      assert.equal(saved.content_type, 'image/png');
+      assert.ok(saved.bytes, 'Media bytes must be stored in database');
+    } finally {
+      db.prepare('DELETE FROM media WHERE id = ?').run(`players/${testId}`);
+      db.close();
+      const { rmSync, existsSync } = await import('node:fs');
+      const testPath = join(root, 'public', 'uploads', 'players', 'test');
+      if (existsSync(testPath)) rmSync(testPath, { recursive: true, force: true });
+    }
+  });
 });
 
