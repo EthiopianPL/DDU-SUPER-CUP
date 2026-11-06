@@ -23,6 +23,9 @@ const rightSemi: Box = { x: rightX[2], y: leftSemi.y };
 const finalBox: Box = { x: finalX, y: leftSemi.y };
 const thirdBox: Box = { x: finalX, y: 478 };
 
+const leftSixteenSlots = [1, 8, 2, 7];
+const rightSixteenSlots = [3, 6, 4, 5];
+
 export function KnockoutRoad() {
   const version = useLeagueVersion();
   const navigate = useNavigate();
@@ -49,10 +52,10 @@ export function KnockoutRoad() {
           <ColumnLabel x={rightX[1]} label="Quarters" />
           <ColumnLabel x={rightX[0]} label="Last 16" />
           {leftSixteen.map((box, index) => (
-            <TieCard key={`l16-${index}`} tie={pick('r16', index + 1)} box={box} onOpen={open} />
+            <TieCard key={`l16-${index}`} tie={pick('r16', leftSixteenSlots[index])} box={box} onOpen={open} />
           ))}
           {rightSixteen.map((box, index) => (
-            <TieCard key={`r16-${index}`} tie={pick('r16', index + 5)} box={box} onOpen={open} />
+            <TieCard key={`r16-${index}`} tie={pick('r16', rightSixteenSlots[index])} box={box} onOpen={open} />
           ))}
           {leftQuarters.map((box, index) => (
             <TieCard key={`lq-${index}`} tie={pick('qf', index + 1)} box={box} onOpen={open} />

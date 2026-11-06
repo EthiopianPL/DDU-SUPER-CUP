@@ -1,5 +1,6 @@
 import {
   GROUPS,
+  departments,
   fixtures,
   getDepartment,
   standingsFor,
@@ -7,6 +8,8 @@ import {
   type Fixture,
   type GroupId,
 } from './supercup';
+
+export { departments, fixtures };
 
 export type Stage = 'group' | 'r16' | 'qf' | 'sf' | 'final';
 
@@ -143,10 +146,34 @@ function feedLabel(stage: Exclude<Stage, 'group'>, slot: number): string {
   return `Winner ${stage} ${slot}`;
 }
 
-const LATER: Array<{ stage: Exclude<Stage, 'group'>; ties: number; feed: Exclude<Stage, 'group'> }> = [
-  { stage: 'qf', ties: 4, feed: 'r16' },
-  { stage: 'sf', ties: 2, feed: 'qf' },
-  { stage: 'final', ties: 1, feed: 'sf' },
+export interface KnockoutTieRule {
+  stage: Exclude<Stage, 'group'>;
+  slot: number;
+  feedStage: Exclude<Stage, 'group'>;
+  homeSlot: number;
+  awaySlot: number;
+}
+
+export const KNOCKOUT_PROGRESSION: KnockoutTieRule[] = [
+  // Quarterfinals
+  // QF1 = R16-1 winner vs R16-8 winner
+  { stage: 'qf', slot: 1, feedStage: 'r16', homeSlot: 1, awaySlot: 8 },
+  // QF2 = R16-2 winner vs R16-7 winner
+  { stage: 'qf', slot: 2, feedStage: 'r16', homeSlot: 2, awaySlot: 7 },
+  // QF3 = R16-3 winner vs R16-6 winner
+  { stage: 'qf', slot: 3, feedStage: 'r16', homeSlot: 3, awaySlot: 6 },
+  // QF4 = R16-4 winner vs R16-5 winner
+  { stage: 'qf', slot: 4, feedStage: 'r16', homeSlot: 4, awaySlot: 5 },
+
+  // Semifinals
+  // SF1 = QF1 winner vs QF2 winner
+  { stage: 'sf', slot: 1, feedStage: 'qf', homeSlot: 1, awaySlot: 2 },
+  // SF2 = QF3 winner vs QF4 winner
+  { stage: 'sf', slot: 2, feedStage: 'qf', homeSlot: 3, awaySlot: 4 },
+
+  // Final
+  // FINAL = SF1 winner vs SF2 winner
+  { stage: 'final', slot: 1, feedStage: 'sf', homeSlot: 1, awaySlot: 2 },
 ];
 
 export function thirdPlaceTie(): RoadTie {
@@ -182,18 +209,14 @@ function buildRoad(settledOnly: boolean): RoadTie[] {
     fixture: tieFixture('r16', index + 1),
   }));
 
-  for (const round of LATER) {
-    for (let slot = 1; slot <= round.ties; slot += 1) {
-      const left = (slot - 1) * 2 + 1;
-      const right = left + 1;
-      ties.push({
-        stage: round.stage,
-        slot,
-        home: side(feedLabel(round.feed, left), winnerId(tieFixture(round.feed, left))),
-        away: side(feedLabel(round.feed, right), winnerId(tieFixture(round.feed, right))),
-        fixture: tieFixture(round.stage, slot),
-      });
-    }
+  for (const rule of KNOCKOUT_PROGRESSION) {
+    ties.push({
+      stage: rule.stage,
+      slot: rule.slot,
+      home: side(feedLabel(rule.feedStage, rule.homeSlot), winnerId(tieFixture(rule.feedStage, rule.homeSlot))),
+      away: side(feedLabel(rule.feedStage, rule.awaySlot), winnerId(tieFixture(rule.feedStage, rule.awaySlot))),
+      fixture: tieFixture(rule.stage, rule.slot),
+    });
   }
 
   return ties.map((tie) => {
