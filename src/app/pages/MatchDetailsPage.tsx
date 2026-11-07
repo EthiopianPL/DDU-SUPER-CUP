@@ -477,46 +477,6 @@ function Pitch({
           {/* Pitch Markings */}
           <PitchLines />
 
-          {/* Home team logo watermark (top half -> right side, LiveScore style) */}
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-1/2 z-[2] flex items-center justify-end pr-3 sm:pr-8 md:pr-10 select-none overflow-hidden">
-            {homeCrest ? (
-              <img
-                src={homeCrest}
-                alt=""
-                aria-hidden="true"
-                className="max-h-[240px] max-w-[240px] sm:max-h-[280px] sm:max-w-[280px] object-contain opacity-15 drop-shadow-xl translate-x-2 sm:translate-x-4"
-              />
-            ) : (
-              <div
-                aria-hidden="true"
-                className="flex h-44 w-44 sm:h-56 sm:w-56 items-center justify-center rounded-3xl border-4 border-current opacity-12 translate-x-2 sm:translate-x-4"
-                style={{ color: homeColor }}
-              >
-                <span className="font-black text-6xl sm:text-7xl tracking-wider">{homeShort}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Away team logo watermark (bottom half -> left side, LiveScore style) */}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 z-[2] flex items-center justify-start pl-3 sm:pl-8 md:pl-10 select-none overflow-hidden">
-            {awayCrest ? (
-              <img
-                src={awayCrest}
-                alt=""
-                aria-hidden="true"
-                className="max-h-[240px] max-w-[240px] sm:max-h-[280px] sm:max-w-[280px] object-contain opacity-15 drop-shadow-xl -translate-x-2 sm:-translate-x-4"
-              />
-            ) : (
-              <div
-                aria-hidden="true"
-                className="flex h-44 w-44 sm:h-56 sm:w-56 items-center justify-center rounded-3xl border-4 border-current opacity-12 -translate-x-2 sm:-translate-x-4"
-                style={{ color: awayColor }}
-              >
-                <span className="font-black text-6xl sm:text-7xl tracking-wider">{awayShort}</span>
-              </div>
-            )}
-          </div>
-
           {homeLines.length === 0 && awayLines.length === 0 && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-6 text-center">
               <div className="rounded-2xl border border-white/10 bg-black/75 px-6 py-5 shadow-2xl backdrop-blur-md max-w-sm">
