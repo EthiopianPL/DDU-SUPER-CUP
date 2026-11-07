@@ -29,7 +29,7 @@ export function HomePage() {
       <AdvertisementPopup
         imageSrc="/advertisement/Shortcut.jpg"
         altText="Add DDU Super Cup to Your Home Screen"
-        durationMs={3000}
+        durationSeconds={3}
       />
 
       <section className="relative mb-6 overflow-hidden rounded-3xl border border-white/10 bg-[#10192b] px-5 py-6">
