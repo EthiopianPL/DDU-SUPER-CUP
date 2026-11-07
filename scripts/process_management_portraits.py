@@ -4,7 +4,7 @@ import numpy as np
 from PIL import Image, ImageOps
 import onnxruntime as ort
 
-MODEL_PATH = "silueta.onnx"
+MODEL_PATH = os.path.join(os.path.expanduser("~"), ".cache", "silueta.onnx") if os.path.exists(os.path.join(os.path.expanduser("~"), ".cache", "silueta.onnx")) else "silueta.onnx"
 
 MANAGEMENT_PLAYERS = [
     ("management-solomon-e", "Solomon E..jpg"),
@@ -141,15 +141,29 @@ def process_single(team_folder, player_id, raw_filename):
         im = im.convert("RGB")
         orig_w, orig_h = im.size
         
-        mask = predict_mask(im)
-        
-        white_bg = Image.new("RGB", (orig_w, orig_h), (255, 255, 255))
-        white_bg.paste(im, (0, 0), mask)
-        
-        l, t, r, b = find_headshot_crop(mask, orig_w, orig_h)
-        cropped = white_bg.crop((l, t, r, b))
-        
-        final_img = cropped.resize((512, 512), Image.LANCZOS)
+        if player_id == "management-ambaye-a":
+            # Raw image is already a 600x600 studio portrait on white background
+            final_img = im.resize((512, 512), Image.LANCZOS)
+        elif player_id == "management-abdurezak-s":
+            # Raw image is already a close-up passport portrait (182x239) with blue background
+            mask = predict_mask(im)
+            white_bg = Image.new("RGB", (orig_w, orig_h), (255, 255, 255))
+            white_bg.paste(im, (0, 0), mask)
+            square_dim = orig_h
+            square_im = Image.new("RGB", (square_dim, square_dim), (255, 255, 255))
+            x_offset = (square_dim - orig_w) // 2
+            square_im.paste(white_bg, (x_offset, 0))
+            final_img = square_im.resize((512, 512), Image.LANCZOS)
+        else:
+            mask = predict_mask(im)
+            
+            white_bg = Image.new("RGB", (orig_w, orig_h), (255, 255, 255))
+            white_bg.paste(im, (0, 0), mask)
+            
+            l, t, r, b = find_headshot_crop(mask, orig_w, orig_h)
+            cropped = white_bg.crop((l, t, r, b))
+            
+            final_img = cropped.resize((512, 512), Image.LANCZOS)
         
         out_dir_pub = os.path.join("public", "uploads", "players", team_folder)
         out_dir_dist = os.path.join("dist", "uploads", "players", team_folder)
