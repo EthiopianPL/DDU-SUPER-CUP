@@ -7,8 +7,8 @@ import { getActiveMatchdayHighlights } from '../../data/motm';
 import { newsArticles } from '../../data/news';
 import { useLeagueVersion } from '../../data/live';
 import { DepartmentMark } from '../components/DepartmentMark';
-import { InstallAppButton } from '../components/InstallAppButton';
 import { stripHtml } from '../utils/richText';
+import { AdvertisementPopup } from '../components/AdvertisementPopup';
 
 export function HomePage() {
   const navigate = useNavigate();
@@ -25,14 +25,18 @@ export function HomePage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-5">
+      {/* 3-Second Poster Popup with (X) Cancel Button */}
+      <AdvertisementPopup
+        imageSrc="/advertisement/Shortcut.jpg"
+        altText="Add DDU Super Cup to Your Home Screen"
+        durationMs={3000}
+      />
+
       <section className="relative mb-6 overflow-hidden rounded-3xl border border-white/10 bg-[#10192b] px-5 py-6">
         <img src="/brand/ddu-logo.png" alt="" className="pointer-events-none absolute -right-1 -top-1 h-35 w-35 object-contain opacity-30" />
         <p className="text-[11px] font-semibold tracking-[0.22em] text-[#f5c518]">DIRE DAWA UNIVERSITY</p>
         <h1 className="mt-2 text-4xl font-black tracking-tight text-white">Super Cup</h1>
         <p className="mt-2 max-w-sm text-sm text-white/60">Department football.</p>
-        <div className="mt-4">
-          <InstallAppButton />
-        </div>
       </section>
 
       <section className="mb-6">
