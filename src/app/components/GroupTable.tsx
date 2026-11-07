@@ -128,7 +128,7 @@ export function GroupTable({
                     name={row.department.name}
                     shortName={row.department.shortName}
                     color={row.department.color}
-                    size={22}
+                    size={28}
                     src={row.department.crestUrl || undefined}
                   />
                   <div className="truncate">
