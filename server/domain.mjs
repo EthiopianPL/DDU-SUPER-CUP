@@ -635,7 +635,10 @@ export async function setImage(db, kind, id, image) {
   const column = 'crest_url';
   return transaction(db, () => {
     if (!db.prepare(`SELECT id FROM ${table} WHERE id = ?`).get(id)) throw new RuleError('Not found.', 404);
-    const url = saveMedia(db, kind, id, image);
+    const url = saveLocalFile(kind, id, image);
+    try {
+      db.prepare('DELETE FROM media WHERE id = ?').run(`teams/${id}`);
+    } catch {}
     db.prepare(`UPDATE ${table} SET ${column} = ? WHERE id = ?`).run(url, id);
     return { id, url };
   });
@@ -659,7 +662,13 @@ export function saveTeam(db, actor, input, id) {
     const pitch = String(input.pitch ?? before?.pitch ?? '').trim();
     const coach = String(input.coach ?? before?.coach ?? '').trim();
     const status = String(input.status ?? before?.status ?? 'active');
-    const crest = image ? saveMedia(db, 'teams', nowId, image) : before?.crest_url ?? '';
+    let crest = before?.crest_url ?? '';
+    if (image) {
+      crest = saveLocalFile('teams', nowId, image);
+      try {
+        db.prepare('DELETE FROM media WHERE id = ?').run(`teams/${nowId}`);
+      } catch {}
+    }
     if (id) {
       db.prepare(`UPDATE teams SET name=?, short_name=?, college=?, group_id=?, color=?, pitch=?, coach=?, crest_url=?, status=? WHERE id=?`).run(
         name, shortName, college, group, color, pitch, coach, crest, status, id,
