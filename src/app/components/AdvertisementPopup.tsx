@@ -10,7 +10,7 @@ interface AdvertisementPopupProps {
 export function AdvertisementPopup({
   imageSrc = '/advertisement/Shortcut.jpg',
   altText = 'Shortcut Poster',
-  durationSeconds = 3,
+  durationSeconds = 5,
 }: AdvertisementPopupProps) {
   const [visible, setVisible] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(durationSeconds);

@@ -25,11 +25,11 @@ export function HomePage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-5">
-      {/* 3-Second Poster Popup with (X) Cancel Button */}
+      {/* 5-Second Poster Popup with (X) Cancel Button */}
       <AdvertisementPopup
         imageSrc="/advertisement/Shortcut.jpg"
         altText="Add DDU Super Cup to Your Home Screen"
-        durationSeconds={3}
+        durationSeconds={5}
       />
 
       <section className="relative mb-6 overflow-hidden rounded-3xl border border-white/10 bg-[#10192b] px-5 py-6">
