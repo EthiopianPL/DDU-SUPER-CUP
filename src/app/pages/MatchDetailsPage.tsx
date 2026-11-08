@@ -27,6 +27,7 @@ import {
   getDepartment,
   getFixture,
   GROUP_COLLEGES,
+  leagueRules,
   manualStats,
   matchSheet,
   matchSubstitutions,
@@ -297,7 +298,7 @@ export function MatchDetailsPage() {
               awayScore={fixture.awayScore ?? 0}
               pensHome={fixture.pensHome ?? null}
               pensAway={fixture.pensAway ?? null}
-              halfMinute={Math.round((fixture.halfSeconds ?? 45 * 60) / 60)}
+              halfMinute={Math.round((fixture.halfSeconds ?? leagueRules.halfMinutes * 60) / 60)}
             />
           )}
         </section>

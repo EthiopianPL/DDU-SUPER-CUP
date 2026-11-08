@@ -132,8 +132,8 @@ export async function handleRequest(db, request, response) {
     response.end(JSON.stringify({ error: 'Not found.' }));
   } catch (error) {
     const status = error instanceof RuleError ? error.status : 500;
-    if (status === 500) console.error(error);
-    if (!response.headersSent) send(response, status, { error: status === 500 ? 'The server could not complete that.' : error.message });
+    if (status === 500) console.error('API 500 Error:', error);
+    if (!response.headersSent) send(response, status, { error: error.message || 'The server could not complete that.' });
   }
 }
 

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { MapPin } from 'lucide-react';
-import { formatKickoff, formatLiveTime, getFixture, teamRedCards } from '../../data/supercup';
+import { formatKickoff, formatLiveTime, getFixture, leagueRules, teamRedCards } from '../../data/supercup';
 import { useLeagueVersion } from '../../data/live';
 import { RedCards } from './RedCards';
 import { useMatchClock } from '../useMatchClock';
@@ -83,9 +83,10 @@ export function MatchCard({
   const isFinished = status === 'finished';
   const isUpcoming = status === 'upcoming';
 
+  const halfMinute = Math.round((fixture?.halfSeconds ?? leagueRules.halfMinutes * 60) / 60);
   const formattedLiveTime = clock
     ? formatLiveTime(clock)
-    : `${liveMinute}'${liveMinute >= 45 && injuryTime > 0 ? ` +${injuryTime}` : ''}`;
+    : `${liveMinute}'${liveMinute >= halfMinute && injuryTime > 0 ? ` +${injuryTime}` : ''}`;
 
   return (
     <div

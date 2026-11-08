@@ -403,6 +403,8 @@ function finishPostgres(worker, port1, url) {
     db.exec('ALTER TABLE media_assets ADD COLUMN IF NOT EXISTS public_url TEXT NULL');
     db.exec('ALTER TABLE players ADD COLUMN IF NOT EXISTS is_captain SMALLINT NOT NULL DEFAULT 0');
     db.exec("ALTER TABLE teams ADD COLUMN IF NOT EXISTS coach_photo_url VARCHAR(255) NOT NULL DEFAULT ''");
+    db.exec('ALTER TABLE matches ADD COLUMN IF NOT EXISTS lineup_home_approved SMALLINT NOT NULL DEFAULT 0');
+    db.exec('ALTER TABLE matches ADD COLUMN IF NOT EXISTS lineup_away_approved SMALLINT NOT NULL DEFAULT 0');
   } catch (error) {
     if (error.code !== '42701') throw error;
   }

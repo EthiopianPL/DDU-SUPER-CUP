@@ -71,7 +71,7 @@ export default async function handler(request, response) {
     if (!response.headersSent) {
       response.statusCode = 500;
       response.setHeader('Content-Type', 'application/json; charset=utf-8');
-      response.end(JSON.stringify({ error: 'The server could not complete that.' }));
+      response.end(JSON.stringify({ error: error?.message || 'The server could not complete that.' }));
     }
   }
 }

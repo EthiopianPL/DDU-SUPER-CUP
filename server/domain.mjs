@@ -22,7 +22,7 @@ import {
 export const DEFAULT_RULES = {
   pointsWin: 3,
   pointsDraw: 1,
-  halfMinutes: 45,
+  halfMinutes: 40,
   extraHalfMinutes: 15,
   maxSubs: 5,
   extraSubs: 1,

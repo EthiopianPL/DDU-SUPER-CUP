@@ -817,7 +817,7 @@ function AddedTime({ period, announced, disabled, onSave }: { period?: string; a
 }
 
 function ClockCorrection({ disabled, onSave }: { disabled: boolean; onSave: (seconds: number) => void }) {
-  const [value, setValue] = useState('45:00');
+  const [value, setValue] = useState('40:00');
   return (
     <form className="mt-3 flex items-end gap-2" onSubmit={(event) => {
       event.preventDefault();
