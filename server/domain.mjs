@@ -1181,18 +1181,27 @@ export function saveLineup(db, actor, matchId, input) {
       return { id: matchId };
     }
 
-    const starters = [...new Set(input.starters ?? [])];
-    const bench = [...new Set(input.bench ?? [])].filter((playerId) => !starters.includes(playerId));
-    if (!starters.length) throw new RuleError('Pick at least one starter.');
-    if (starters.length > 11) throw new RuleError('A team can start at most 11 players.');
+    const formation = String(input.formation ?? match[formationCol] ?? '4-2-3-1').trim();
+    if (input.action === 'set_formation') {
+      db.prepare(`UPDATE matches SET ${formationCol} = ?, version = version + 1, updated_at = ? WHERE id = ?`).run(formation, Date.now(), matchId);
+      audit(db, actor, 'lineup.formation', 'match', matchId, null, { teamId, formation });
+      return { id: matchId, formation };
+    }
 
-    const formation = String(input.formation ?? '4-2-3-1');
-    const roles = formationRoles(formation);
-    if (starters.length !== roles.length) throw new RuleError('Fill every position in the formation.');
-    starters.forEach((playerId, index) => {
-      const player = ensureSquadPlayerSafe(db, playerId, teamId);
-      if (player.position !== roles[index]) throw new RuleError(`${player.name} is a ${player.position} and cannot fill the ${roles[index]} position.`);
-    });
+    const rawStarters = Array.isArray(input.starters) ? input.starters : [];
+    const starters = [...new Set(rawStarters.filter((id) => id != null && String(id).trim() !== '').map(String))];
+    const rawBench = Array.isArray(input.bench) ? input.bench : [];
+    const bench = [...new Set(rawBench.filter((id) => id != null && String(id).trim() !== '' && !starters.includes(id)).map(String))];
+
+    const isApproving = input.approved === true;
+    if (isApproving) {
+      if (starters.length < 11) throw new RuleError('Fill all 11 starter positions before approving the lineup.');
+      if (starters.length > 11) throw new RuleError('A team can start at most 11 players.');
+      starters.forEach((playerId) => ensureSquadPlayerSafe(db, playerId, teamId));
+    } else {
+      if (starters.length > 11) throw new RuleError('A team can start at most 11 players.');
+      starters.forEach((playerId) => ensureSquadPlayerSafe(db, playerId, teamId));
+    }
     for (const playerId of bench) ensureSquadPlayerSafe(db, playerId, teamId);
 
     db.prepare('DELETE FROM match_squad WHERE match_id = ? AND team_id = ?').run(matchId, teamId);
@@ -1200,10 +1209,10 @@ export function saveLineup(db, actor, matchId, input) {
     starters.forEach((playerId, index) => insert.run(matchId, teamId, playerId, 'starter', index));
     bench.forEach((playerId, index) => insert.run(matchId, teamId, playerId, 'bench', index));
 
-    const approvedVal = input.approved === true ? 1 : (input.approved === false ? 0 : (match[approvedCol] || 0));
+    const approvedVal = isApproving ? 1 : (input.approved === false ? 0 : (match[approvedCol] || 0));
     db.prepare(`UPDATE matches SET ${formationCol} = ?, ${approvedCol} = ?, version = version + 1, updated_at = ? WHERE id = ?`).run(formation, approvedVal, Date.now(), matchId);
     audit(db, actor, 'lineup.update', 'match', matchId, null, { teamId, starters, bench, formation, approved: Boolean(approvedVal) });
-    return { id: matchId };
+    return { id: matchId, formation, approved: Boolean(approvedVal) };
   });
 }
 

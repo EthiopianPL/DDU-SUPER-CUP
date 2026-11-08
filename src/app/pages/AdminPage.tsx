@@ -906,7 +906,7 @@ function LineupEditor({ matchId, disabled, onSave }: { matchId: string; disabled
       </div>
 
       <LineupSide
-        key={`${matchId}-${teamId}`}
+        key={`${matchId}-${teamId}-${side === 'home' ? fixture.formationHome : fixture.formationAway}`}
         matchId={matchId}
         teamId={teamId}
         formation={side === 'home' ? fixture.formationHome : fixture.formationAway}
@@ -940,6 +940,12 @@ function LineupSide({
   const [slots, setSlots] = useState<Array<string | null>>(() => seatPlayers(current.filter((row) => row.role === 'starter').sort((a, b) => a.sort - b.sort).map((row) => row.playerId), formation || '4-2-3-1', roster));
   const [bench, setBench] = useState(current.filter((row) => row.role === 'bench').map((row) => row.playerId));
   const [picking, setPicking] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (formation && FORMATIONS.includes(formation)) {
+      setShape(formation);
+    }
+  }, [formation]);
   const plan = formationPlan(shape);
   const roles = plan.flat();
   const chosen = new Set(slots.filter((id): id is string => Boolean(id)));
@@ -982,16 +988,29 @@ function LineupSide({
   return (
     <form onSubmit={(event) => {
       event.preventDefault();
-      if (!ready) return;
-      onSave({ teamId, starters: slots, bench, formation: shape });
+      onSave({
+        teamId,
+        starters: slots.filter((id): id is string => Boolean(id)),
+        bench,
+        formation: shape,
+        approved: false,
+      });
     }}>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <label className="block text-xs font-bold text-white/45">Formation
           <select className={`${inputClass} mt-1`} value={shape} onChange={(event) => {
             const next = event.target.value;
             setShape(next);
-            setSlots((list) => seatPlayers(list.filter((id): id is string => Boolean(id)), next, roster));
+            const seated = seatPlayers(slots.filter((id): id is string => Boolean(id)), next, roster);
+            setSlots(seated);
             setPicking(null);
+            onSave({
+              teamId,
+              formation: next,
+              starters: seated.filter((id): id is string => Boolean(id)),
+              bench,
+              approved: false,
+            });
           }}>
             {FORMATIONS.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
@@ -1083,8 +1102,14 @@ function LineupSide({
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <button
           type="button"
-          disabled={disabled || !ready}
-          onClick={() => onSave({ teamId, starters: slots, bench, formation: shape, approved: false })}
+          disabled={disabled}
+          onClick={() => onSave({
+            teamId,
+            starters: slots.filter((id): id is string => Boolean(id)),
+            bench,
+            formation: shape,
+            approved: false,
+          })}
           className="rounded-xl border border-white/15 bg-white/10 hover:bg-white/15 px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
         >
           Save Draft
@@ -1094,7 +1119,13 @@ function LineupSide({
           <button
             type="button"
             disabled={disabled || !ready}
-            onClick={() => onSave({ teamId, starters: slots, bench, formation: shape, approved: true })}
+            onClick={() => onSave({
+              teamId,
+              starters: slots.filter((id): id is string => Boolean(id)),
+              bench,
+              formation: shape,
+              approved: true,
+            })}
             className="rounded-xl bg-[#2f9e44] hover:bg-[#288339] px-5 py-2 text-sm font-black text-white shadow-lg disabled:opacity-40"
           >
             Approve Lineup

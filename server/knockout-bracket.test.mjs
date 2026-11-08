@@ -353,6 +353,26 @@ test('DDU Super Cup teams pop up on knockout after group stage finishes', async 
 
       const afterUnapprove = db.prepare('SELECT lineup_home_approved FROM matches WHERE id = ?').get(testMatchId);
       assert.equal(afterUnapprove.lineup_home_approved, 0, 'Unapproving lineup sets lineup_home_approved back to 0');
+
+      // 9. Saving formation while filling lineup (partial starters)
+      saveLineup(db, adminActor, testMatchId, {
+        teamId: 'information-technology',
+        formation: '4-3-3',
+        starters: starters.slice(0, 4), // only 4 players seated so far
+        bench: [],
+        approved: false,
+      });
+      const afterPartial = db.prepare('SELECT formation_home FROM matches WHERE id = ?').get(testMatchId);
+      assert.equal(afterPartial.formation_home, '4-3-3', 'Formation 4-3-3 must be saved even with partial lineup');
+
+      // 10. Direct action: set_formation
+      saveLineup(db, adminActor, testMatchId, {
+        teamId: 'information-technology',
+        formation: '3-5-2',
+        action: 'set_formation',
+      });
+      const afterDirect = db.prepare('SELECT formation_home FROM matches WHERE id = ?').get(testMatchId);
+      assert.equal(afterDirect.formation_home, '3-5-2', 'Formation 3-5-2 must be saved via set_formation action');
     } finally {
       process.env.DDU_DB = previousDbEnv;
       if (testMatchId) {
