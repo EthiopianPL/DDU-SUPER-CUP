@@ -374,20 +374,53 @@ function MatchList({ version, onOpen, onMessage, onError }: { version: number; o
         {rows.map((fixture) => {
           const knockout = fixture.stage && fixture.stage !== 'group';
           return (
-            <li key={fixture.id}>
-              <button type="button" onClick={() => onOpen(fixture.id)} className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#10192b] px-3 py-3 text-left">
-                <span className="min-w-0">
-                  <span className="block text-[11px] font-bold uppercase tracking-wide text-[#f5c518]">
-                    {knockout ? `${stageLabel(fixture.stage)} · Tie ${fixture.slot}` : `Group ${fixture.group} · Matchday ${fixture.matchday}`}
-                  </span>
-                  <span className="mt-0.5 block truncate text-sm font-black">{labelOf(fixture.homeId)} vs {labelOf(fixture.awayId)}</span>
-                  <span className="block text-xs text-white/40">{fixture.date} {fixture.time} · {fixture.stadium}</span>
+            <li key={fixture.id} className="relative flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#10192b] p-3 transition-colors hover:border-white/20">
+              <button type="button" onClick={() => onOpen(fixture.id)} className="min-w-0 flex-1 text-left">
+                <span className="block text-[11px] font-bold uppercase tracking-wide text-[#f5c518]">
+                  {knockout ? `${stageLabel(fixture.stage)} · Tie ${fixture.slot}` : `Group ${fixture.group} · Matchday ${fixture.matchday}`}
                 </span>
-                <span className="shrink-0 text-right">
+                <span className="mt-0.5 block truncate text-sm font-black">{labelOf(fixture.homeId)} vs {labelOf(fixture.awayId)}</span>
+                <span className="block text-xs text-white/40">{fixture.date} {fixture.time} · {fixture.stadium}</span>
+              </button>
+
+              <div className="flex shrink-0 items-center gap-3">
+                {!knockout && (
+                  <div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-[#0c1424] px-2 py-1" title="Quick edit Matchday number">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">MD</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="50"
+                      defaultValue={fixture.matchday}
+                      key={`md-${fixture.id}-${fixture.matchday}`}
+                      onBlur={async (e) => {
+                        const val = parseInt(e.target.value, 10);
+                        if (val && val !== fixture.matchday) {
+                          try {
+                            await desk(`/api/matches/${fixture.id}`, {
+                              method: 'PATCH',
+                              body: { matchday: val, version: fixture.version },
+                            });
+                            onMessage(`Matchday updated to ${val} for ${labelOf(fixture.homeId)} vs ${labelOf(fixture.awayId)}.`);
+                          } catch (err) {
+                            onError(err instanceof Error ? err.message : 'Could not update matchday.');
+                          }
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          (e.target as HTMLInputElement).blur();
+                        }
+                      }}
+                      className="w-10 rounded border border-white/15 bg-white/5 px-1 py-0.5 text-center text-xs font-bold text-[#f5c518] focus:border-[#f5c518] focus:bg-black focus:outline-none"
+                    />
+                  </div>
+                )}
+                <button type="button" onClick={() => onOpen(fixture.id)} className="text-right">
                   <span className="block font-mono text-sm font-black">{fixture.status === 'upcoming' ? '–' : `${fixture.homeScore}-${fixture.awayScore}`}</span>
                   <span className="text-[11px] font-bold text-white/40">{fixture.detail}{fixture.confirmed ? ' · confirmed' : ''}</span>
-                </span>
-              </button>
+                </button>
+              </div>
             </li>
           );
         })}
@@ -609,7 +642,8 @@ function MatchDesk({
     { id: 'events', label: 'Events' },
   ];
   if (finished) deskTabs.push({ id: 'motm', label: 'Man of the Match' });
-  if (!finished && !live) deskTabs.push({ id: 'lineup', label: 'Lineup' }, { id: 'fixture', label: 'Fixture' });
+  if (!finished && !live) deskTabs.push({ id: 'lineup', label: 'Lineup' });
+  deskTabs.push({ id: 'fixture', label: 'Fixture' });
   const activeTab = deskTabs.some((item) => item.id === tab) ? tab : deskTabs[0].id;
 
   const handleTabClick = (nextTab: DeskTab) => {
@@ -700,7 +734,7 @@ function MatchDesk({
       )}
 
       {activeTab === 'lineup' && !finished && !live && <LineupEditor matchId={id} disabled={busy || !canRun} onSave={(body) => act(`/api/matches/${id}/lineup`, body)} />}
-      {activeTab === 'fixture' && !finished && !live && (
+      {activeTab === 'fixture' && (
         <FixtureMeta
           fixture={fixture}
           disabled={busy || !canRun}
@@ -842,6 +876,7 @@ function FixtureMeta({
   disabled: boolean;
   onSave: (body: Record<string, unknown>) => void;
 }) {
+  const [matchday, setMatchday] = useState(String(fixture.matchday ?? 1));
   const [date, setDate] = useState(fixture.date);
   const [time, setTime] = useState(fixture.time);
   const [venue, setVenue] = useState(fixture.stadium);
@@ -849,12 +884,25 @@ function FixtureMeta({
   const [assistant1, setAssistant1] = useState(fixture.assistant1 ?? '');
   const [assistant2, setAssistant2] = useState(fixture.assistant2 ?? '');
   const [fourthReferee, setFourthReferee] = useState(fixture.fourthReferee ?? '');
+
+  useEffect(() => {
+    setMatchday(String(fixture.matchday ?? 1));
+    setDate(fixture.date);
+    setTime(fixture.time);
+    setVenue(fixture.stadium);
+    setReferee(fixture.referee ?? '');
+    setAssistant1(fixture.assistant1 ?? '');
+    setAssistant2(fixture.assistant2 ?? '');
+    setFourthReferee(fixture.fourthReferee ?? '');
+  }, [fixture.matchday, fixture.date, fixture.time, fixture.stadium, fixture.referee, fixture.assistant1, fixture.assistant2, fixture.fourthReferee]);
+
   return (
     <form className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-[#10192b] p-4 sm:grid-cols-3 lg:grid-cols-4" onSubmit={(event) => {
       event.preventDefault();
-      onSave({ date, time, venue, referee, assistant1, assistant2, fourthReferee });
+      onSave({ matchday: Number(matchday) || 1, date, time, venue, referee, assistant1, assistant2, fourthReferee });
     }}>
       <h2 className="font-black sm:col-span-3 lg:col-span-4">Fixture and officials</h2>
+      <label className="text-xs font-bold text-white/45">Matchday<input className={inputClass} type="number" min="1" max="50" value={matchday} onChange={(event) => setMatchday(event.target.value)} /></label>
       <label className="text-xs font-bold text-white/45">Date<input className={inputClass} type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
       <label className="text-xs font-bold text-white/45">Kickoff<input className={inputClass} type="time" value={time} onChange={(event) => setTime(event.target.value)} /></label>
       <label className="text-xs font-bold text-white/45">Venue<input className={inputClass} value={venue} onChange={(event) => setVenue(event.target.value)} /></label>

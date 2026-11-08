@@ -1129,15 +1129,23 @@ export function scheduleGroupFixtures(db, actor, input) {
 }
 
 export function updateMatch(db, actor, id, input) {
-  deny(actor, 'match.schedule');
+  if (!can(actor, 'match.schedule') && !can(actor, 'match.write')) {
+    throw new RuleError('You do not have permission to update matches.', 403);
+  }
   return transaction(db, () => {
     const match = matchRow(db, id);
     assertVersion(match, input.version);
-    assertNotFinished(match);
-    if (match.confirmed && !can(actor, 'match.correct')) throw new RuleError('This result is confirmed and locked.');
-    if (match.status !== 'scheduled' && match.status !== 'postponed' && !can(actor, 'match.correct')) {
+    if (match.status === 'finished' && !can(actor, 'match.correct') && !can(actor, 'match.schedule')) {
+      throw new RuleError('A finished match cannot be edited, or ask a competition manager.');
+    }
+    if (match.confirmed && !can(actor, 'match.correct') && !can(actor, 'match.schedule')) {
+      throw new RuleError('This result is confirmed and locked.');
+    }
+    if (match.status !== 'scheduled' && match.status !== 'postponed' && !can(actor, 'match.correct') && !can(actor, 'match.schedule')) {
       throw new RuleError('Reschedule the match before it kicks off, or ask a competition manager.');
     }
+    const rawMatchday = input.matchday != null ? Number(input.matchday) : match.matchday;
+    const matchday = Number.isInteger(rawMatchday) && rawMatchday > 0 ? rawMatchday : match.matchday;
     const date = String(input.date ?? match.kickoff_date);
     const time = String(input.time ?? match.kickoff_time);
     const venue = String(input.venue ?? match.venue);
@@ -1148,10 +1156,13 @@ export function updateMatch(db, actor, id, input) {
     const allowExtra = input.allowExtra == null ? match.allow_extra : input.allowExtra ? 1 : 0;
     const halfMinutes = Number(input.halfMinutes);
     const halfMs = Number.isFinite(halfMinutes) && halfMinutes > 0 ? halfMinutes * 60 * 1000 : match.half_ms;
-    db.prepare(`UPDATE matches SET kickoff_date=?, kickoff_time=?, venue=?, referee=?, assistant1=?, assistant2=?, fourth_referee=?, allow_extra=?, half_ms=?, regulation_ms=?, version=version+1, updated_at=? WHERE id=?`).run(
-      date, time, venue, referee, assistant1, assistant2, fourthReferee, allowExtra, halfMs, halfMs * 2, Date.now(), id,
+    db.prepare(`UPDATE matches SET matchday=?, kickoff_date=?, kickoff_time=?, venue=?, referee=?, assistant1=?, assistant2=?, fourth_referee=?, allow_extra=?, half_ms=?, regulation_ms=?, version=version+1, updated_at=? WHERE id=?`).run(
+      matchday, date, time, venue, referee, assistant1, assistant2, fourthReferee, allowExtra, halfMs, halfMs * 2, Date.now(), id,
     );
-    audit(db, actor, 'match.update', 'match', id, { date: match.kickoff_date, time: match.kickoff_time, venue: match.venue }, { date, time, venue });
+    audit(db, actor, 'match.update', 'match', id,
+      { matchday: match.matchday, date: match.kickoff_date, time: match.kickoff_time, venue: match.venue },
+      { matchday, date, time, venue }
+    );
     return { id };
   });
 }
