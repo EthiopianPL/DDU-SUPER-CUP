@@ -46,7 +46,21 @@ export function ContributorsPage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {/* Contributor 1 — Nahom Bekele */}
           <div className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-white/10 bg-[#10192b] p-5 shadow-lg transition-all duration-200 hover:border-white/20 hover:bg-[#131f36]">
-            <div>
+            {/* Opacity photo watermark - face clearly visible in top right, smoothly blended */}
+            <div className="pointer-events-none absolute -right-2 -top-2 overflow-hidden rounded-2xl">
+              <img
+                src="/uploads/contributors/Nahom.PNG"
+                alt="Nahom Bekele"
+                className="h-44 w-44 sm:h-48 sm:w-48 object-cover opacity-50 transition-all duration-300 group-hover:opacity-75 group-hover:scale-105 select-none"
+                style={{
+                  objectPosition: '50% 25%',
+                  maskImage: 'radial-gradient(ellipse at top right, black 55%, transparent 100%)',
+                  WebkitMaskImage: 'radial-gradient(ellipse at top right, black 55%, transparent 100%)',
+                }}
+              />
+            </div>
+
+            <div className="relative z-10 max-w-[72%] sm:max-w-[70%]">
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center rounded-full border border-[#f5c518]/30 bg-[#f5c518]/10 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-[#f5c518]">
                   Core Contributor
@@ -58,7 +72,7 @@ export function ContributorsPage() {
               </p>
             </div>
 
-            <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-white/10 pt-4">
+            <div className="relative z-10 mt-6 flex flex-wrap items-center gap-3 border-t border-white/10 pt-4">
               <a
                 href="https://github.com/NahomDevX"
                 target="_blank"
@@ -87,7 +101,21 @@ export function ContributorsPage() {
 
           {/* Contributor 2 — Abrham Wendesen */}
           <div className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-white/10 bg-[#10192b] p-5 shadow-lg transition-all duration-200 hover:border-white/20 hover:bg-[#131f36]">
-            <div>
+            {/* Opacity photo watermark - face clearly visible in top right, smoothly blended */}
+            <div className="pointer-events-none absolute -right-2 -top-2 overflow-hidden rounded-2xl">
+              <img
+                src="/uploads/contributors/Abrham.jpg"
+                alt="Abrham Wendesen"
+                className="h-44 w-44 sm:h-48 sm:w-48 object-cover opacity-50 transition-all duration-300 group-hover:opacity-75 group-hover:scale-105 select-none"
+                style={{
+                  objectPosition: '50% 32%',
+                  maskImage: 'radial-gradient(ellipse at top right, black 55%, transparent 100%)',
+                  WebkitMaskImage: 'radial-gradient(ellipse at top right, black 55%, transparent 100%)',
+                }}
+              />
+            </div>
+
+            <div className="relative z-10 max-w-[72%] sm:max-w-[70%]">
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center rounded-full border border-[#f5c518]/30 bg-[#f5c518]/10 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-[#f5c518]">
                   Core Contributor
@@ -99,7 +127,7 @@ export function ContributorsPage() {
               </p>
             </div>
 
-            <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-white/10 pt-4">
+            <div className="relative z-10 mt-6 flex flex-wrap items-center gap-3 border-t border-white/10 pt-4">
               <a
                 href="https://github.com/abrshiz"
                 target="_blank"
