@@ -7,6 +7,9 @@ interface AdvertisementPopupProps {
   durationSeconds?: number;
 }
 
+// Module-level fallback to ensure ad only shows once per site session in SPA navigation
+let hasShownInSession = false;
+
 export function AdvertisementPopup({
   imageSrc = '/advertisement/Shortcut.jpg',
   altText = 'Shortcut Poster',
@@ -27,7 +30,25 @@ export function AdvertisementPopup({
       return;
     }
 
-    // App is not installed -> show popup
+    // Check if ad was already shown during this session / initial site load
+    let alreadyShown = hasShownInSession;
+    try {
+      if (sessionStorage.getItem('ad_popup_shown') === 'true') {
+        alreadyShown = true;
+      }
+    } catch {}
+
+    if (alreadyShown) {
+      return;
+    }
+
+    // Mark as shown so returning/backing to the home page will not display it again
+    hasShownInSession = true;
+    try {
+      sessionStorage.setItem('ad_popup_shown', 'true');
+    } catch {}
+
+    // App is not installed and ad not yet shown -> show popup
     setVisible(true);
 
     // Listen for install event to immediately hide and persist
