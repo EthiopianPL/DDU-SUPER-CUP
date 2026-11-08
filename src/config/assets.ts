@@ -124,11 +124,56 @@ export const PLACEHOLDER_ASSETS = {
   brandingLogo: '/brand/ddu-logo.png',
 };
 
+export const LOCAL_TEAM_LOGO_FILES: Record<string, string> = {
+  'accounting': 'accounting.jpg',
+  'accounting-finance': 'accounting.jpg',
+  'architecture': 'architecture.svg',
+  'arc': 'architecture.svg',
+  'bio-statistics': 'bio-statistics.jpg',
+  'bio-stat': 'bio-statistics.jpg',
+  'biostat': 'bio-statistics.jpg',
+  'chemical-engineering': 'chemical-engineering.jpg',
+  'chemical': 'chemical-engineering.jpg',
+  'civil-engineering': 'civil-engineering.jpg',
+  'civil': 'civil-engineering.jpg',
+  'cotm': 'cotm.jpg',
+  'electrical-engineering': 'electrical-engineering.jpg',
+  'elec': 'electrical-engineering.jpg',
+  'geo-sport': 'geo-sport.svg',
+  'geosport': 'geo-sport.svg',
+  'health': 'health.jpg',
+  'hea': 'health.jpg',
+  'industrial-mechanical': 'industrial-mechanical.jpg',
+  'indu-mecha': 'industrial-mechanical.jpg',
+  'information-technology': 'information-technology.jpg',
+  'it': 'information-technology.jpg',
+  'journalism-sosa': 'journalism-sosa.jpg',
+  'jo-sosa': 'journalism-sosa.jpg',
+  'jososa': 'journalism-sosa.jpg',
+  'law-economics': 'law-economics.svg',
+  'law-eco': 'law-economics.svg',
+  'logistics': 'logistics.jpg',
+  'log': 'logistics.jpg',
+  'management': 'management.jpg',
+  'mgt': 'management.jpg',
+  'marketing': 'marketing.jpg',
+  'mkt': 'marketing.jpg',
+  'p-p-o': 'p-p-o.jpg',
+  'ppo': 'p-p-o.jpg',
+  'padm': 'padm.jpg',
+  'real-properties': 'real-properties.svg',
+  'real': 'real-properties.svg',
+  'software-engineering': 'software-engineering.svg',
+  'soft': 'software-engineering.svg',
+  'survey': 'survey.svg',
+  'surveying': 'survey.svg',
+};
+
 /**
  * Resolves a team logo URL:
  * 1. If explicit custom `crest_url` is stored in DB and non-empty, use it.
- * 2. If team ID has a mapped GitHub static logo path, resolve to GitHub asset repository.
- * 3. Otherwise return empty string to allow DepartmentMark to render its high-contrast SVG badge.
+ * 2. If team ID has a local static logo file, resolve to /uploads/teams/<filename>.
+ * 3. Fallback to /uploads/teams/<teamId>.svg.
  */
 export function resolveTeamLogoUrl(teamId?: string | null, customCrestUrl?: string | null): string {
   if (customCrestUrl && customCrestUrl.trim().length > 0) {
@@ -136,6 +181,10 @@ export function resolveTeamLogoUrl(teamId?: string | null, customCrestUrl?: stri
   }
   if (!teamId) return '';
   const normalizedId = teamId.toLowerCase().trim();
+  const localFileName = LOCAL_TEAM_LOGO_FILES[normalizedId];
+  if (localFileName) {
+    return `/uploads/teams/${localFileName}`;
+  }
   return `/uploads/teams/${normalizedId}.svg`;
 }
 
