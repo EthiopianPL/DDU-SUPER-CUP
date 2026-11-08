@@ -32,6 +32,7 @@ import {
   setImage,
   seedDatabase,
   setNotifier,
+  deleteMatch,
   updateMatch,
   updateRules,
   voidEvent,
@@ -193,6 +194,7 @@ async function serveApi(request, response, db, url) {
   if (one && request.method === 'PATCH' && one[1] === 'news') return mutate(response, db, () => saveNews(db, must(actor), body, decodeURIComponent(one[2])));
   if (one && request.method === 'DELETE' && one[1] === 'news') return mutate(response, db, () => deleteNews(db, must(actor), decodeURIComponent(one[2])));
   if (one && request.method === 'PATCH' && one[1] === 'matches') return mutate(response, db, () => updateMatch(db, must(actor), decodeURIComponent(one[2]), body));
+  if (one && request.method === 'DELETE' && one[1] === 'matches') return mutate(response, db, () => deleteMatch(db, must(actor), decodeURIComponent(one[2])));
 
     if (matchAction && request.method === 'POST' && matchAction[2] === 'motm') {
     return mutate(response, db, () => saveManOfTheMatch(db, must(actor), decodeURIComponent(matchAction[1]), body));

@@ -1170,6 +1170,22 @@ export function updateMatch(db, actor, id, input) {
   });
 }
 
+export function deleteMatch(db, actor, id) {
+  if (actor.role !== 'super_admin') {
+    throw new RuleError('Only a Super Admin can delete matches.', 403);
+  }
+  return transaction(db, () => {
+    const match = matchRow(db, id);
+    db.prepare('DELETE FROM match_events WHERE match_id = ?').run(id);
+    db.prepare('DELETE FROM match_squad WHERE match_id = ?').run(id);
+    db.prepare('DELETE FROM manual_stats WHERE match_id = ?').run(id);
+    const result = db.prepare('DELETE FROM matches WHERE id = ?').run(id);
+    if (!result.changes) throw new RuleError('Match not found.', 404);
+    audit(db, actor, 'match.delete', 'match', id, { homeId: match.home_id, awayId: match.away_id, date: match.kickoff_date }, null);
+    return { id, deleted: true };
+  });
+}
+
 export function saveLineup(db, actor, matchId, input) {
   deny(actor, 'lineup.write');
   const teamId = String(input.teamId ?? '');

@@ -384,7 +384,7 @@ function MatchList({ role, version, onOpen, onMessage, onError }: { role?: Role;
         {rows.map((fixture) => {
           const knockout = fixture.stage && fixture.stage !== 'group';
           return (
-            <li key={fixture.id}>
+            <li key={fixture.id} className="group relative flex items-center gap-2">
               <button type="button" onClick={() => onOpen(fixture.id)} className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#10192b] px-3 py-3 text-left hover:border-white/20 transition-all">
                 <span className="min-w-0">
                   <span className="block text-[11px] font-bold uppercase tracking-wide text-[#f5c518]">
@@ -398,6 +398,25 @@ function MatchList({ role, version, onOpen, onMessage, onError }: { role?: Role;
                   <span className="text-[11px] font-bold text-white/40">{fixture.detail}{fixture.confirmed ? ' · confirmed' : ''}</span>
                 </span>
               </button>
+              {role === 'super_admin' && (
+                <button
+                  type="button"
+                  title="Delete match"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (!window.confirm(`Delete match "${labelOf(fixture.homeId)} vs ${labelOf(fixture.awayId)}"? All lineups and events will be deleted.`)) return;
+                    try {
+                      await desk(`/api/matches/${fixture.id}`, { method: 'DELETE', body: {} });
+                      onMessage('Match deleted successfully.');
+                    } catch (err) {
+                      onError(err instanceof Error ? err.message : 'Could not delete match.');
+                    }
+                  }}
+                  className="hidden group-hover:flex sm:flex items-center justify-center h-10 w-10 rounded-2xl border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/25 hover:border-red-500/40 transition-colors shrink-0"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
             </li>
           );
         })}
@@ -589,6 +608,7 @@ function MatchDesk({
   const clock = useMatchClock(fixture?.status === 'live' ? id : undefined);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<{ label: string; action: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [editingGoal, setEditingGoal] = useState<number | null>(null);
   const [internalTab, setInternalTab] = useState<DeskTab>(() => {
     const current = getFixture(id);
@@ -654,7 +674,58 @@ function MatchDesk({
 
   return (
     <div>
-      <button type="button" onClick={onClose} className="text-sm font-semibold text-white/50 hover:text-white transition-colors">← All matches</button>
+      <div className="flex items-center justify-between">
+        <button type="button" onClick={onClose} className="text-sm font-semibold text-white/50 hover:text-white transition-colors">← All matches</button>
+        {role === 'super_admin' && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setDeleteConfirm(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-400 hover:bg-red-500/20 transition-colors"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span>Delete Match</span>
+          </button>
+        )}
+      </div>
+      {deleteConfirm && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-4">
+          <div>
+            <p className="text-sm font-bold text-red-200">Delete this match permanently?</p>
+            <p className="text-xs text-red-300/70">All lineups, goals, cards, and events recorded for this match will be deleted. This cannot be undone.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await desk(`/api/matches/${id}`, { method: 'DELETE', body: {} });
+                  onMessage('Match deleted successfully.');
+                  onClose();
+                } catch (reason) {
+                  onError(reason instanceof Error ? reason.message : 'Could not delete match.');
+                  setDeleteConfirm(false);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              className="rounded-xl bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-40"
+            >
+              Permanently Delete
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setDeleteConfirm(false)}
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white/60 hover:text-white"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       <div className="mt-3 rounded-3xl border border-white/10 bg-[#10192b] p-4 sm:p-6">
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
           <TeamBlock team={home} />
