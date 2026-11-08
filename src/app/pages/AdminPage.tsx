@@ -229,7 +229,7 @@ export function AdminPage() {
           </p>
         )}
         {section === 'overview' && user.role !== 'match_admin' && <Overview version={version} onOpen={openMatch} />}
-        {section === 'matches' && !matchId && <MatchList version={version} onOpen={openMatch} onMessage={setNotice} onError={setError} />}
+        {section === 'matches' && !matchId && <MatchList role={user.role} version={version} onOpen={openMatch} onMessage={setNotice} onError={setError} />}
         {section === 'matches' && matchId && (
           <MatchDesk
             key={matchId}
@@ -343,8 +343,9 @@ function Stat({ label, value, hint }: { label: string; value: string | number; h
   );
 }
 
-function MatchList({ version, onOpen, onMessage, onError }: { version: number; onOpen: (id: string) => void; onMessage: (text: string) => void; onError: (text: string) => void }) {
+function MatchList({ role, version, onOpen, onMessage, onError }: { role?: Role; version: number; onOpen: (id: string) => void; onMessage: (text: string) => void; onError: (text: string) => void }) {
   void version;
+  const canSchedule = role !== 'match_admin';
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
   const rows = fixtures.filter((fixture) => {
@@ -359,9 +360,17 @@ function MatchList({ version, onOpen, onMessage, onError }: { version: number; o
     <div className="mx-auto max-w-3xl">
       <p className="text-[11px] font-bold tracking-[0.16em] text-[#f5c518]">FIXTURES</p>
       <h1 className="mt-1 text-3xl font-black">Matches</h1>
-      <p className="mt-1 text-sm text-white/45">Nothing is placed on the calendar until you schedule it here.</p>
-      <MatchForm onDone={onMessage} onError={onError} />
-      <GroupRoundForm onDone={onMessage} onError={onError} />
+      <p className="mt-1 text-sm text-white/45">
+        {canSchedule
+          ? 'Nothing is placed on the calendar until you schedule it here.'
+          : 'Select any match below to manage its clock, lineup, and match events.'}
+      </p>
+      {canSchedule && (
+        <>
+          <MatchForm onDone={onMessage} onError={onError} />
+          <GroupRoundForm onDone={onMessage} onError={onError} />
+        </>
+      )}
       <div className="mt-6 flex flex-col gap-2 sm:flex-row">
         <input className={`${inputClass} mt-0`} placeholder="Search teams or venue" value={query} onChange={(event) => setQuery(event.target.value)} />
         <select className={`${inputClass} mt-0 sm:max-w-[180px]`} value={status} onChange={(event) => setStatus(event.target.value)}>
@@ -2460,7 +2469,7 @@ function UserAdmin({ role, onMessage, onError }: { role: Role; onMessage: (text:
   if (role !== 'super_admin') return <p className="text-sm text-white/50">Only a super admin can manage accounts.</p>;
 
   const roleOptions: { id: string; label: string }[] = [
-    { id: 'match_admin', label: 'Match Admin (Matches & News only)' },
+    { id: 'match_admin', label: 'Match Admin (Match management & News only)' },
     { id: 'super_admin', label: 'Super Admin (Full access)' },
   ];
 
@@ -2501,7 +2510,7 @@ function UserAdmin({ role, onMessage, onError }: { role: Role; onMessage: (text:
           />
           {nextRole === 'match_admin' && (
             <p className="mt-1.5 text-xs text-[#f5c518]">
-              ℹ Match Admins have access restricted strictly to the <strong>Matches</strong> and <strong>News</strong> tabs.
+              ℹ Match Admins can only manage existing matches (clock, lineups, events, MOTM) and post news. They cannot create new matches.
             </p>
           )}
         </div>
@@ -2514,7 +2523,7 @@ function UserAdmin({ role, onMessage, onError }: { role: Role; onMessage: (text:
           <li key={account.id} className="flex items-center justify-between px-3 py-2 text-sm">
             <span className="font-semibold">{account.username}</span>
             <span className="text-white/40">
-              {account.role === 'match_admin' ? 'Match Admin (Matches & News only)' : account.role.replaceAll('_', ' ')}
+              {account.role === 'match_admin' ? 'Match Admin (Match management & News only)' : account.role.replaceAll('_', ' ')}
             </span>
           </li>
         ))}
