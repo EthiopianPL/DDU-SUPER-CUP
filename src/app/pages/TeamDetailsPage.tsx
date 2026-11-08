@@ -365,60 +365,6 @@ export function TeamDetailsPage() {
             </div>
           </div>
 
-          {/* Leadership Spotlight (visible when not filtering by search) */}
-          {!search.trim() && posFilter === 'ALL' && (coachName || captain) && (
-            <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0c1424] p-4 shadow-md">
-              <div className="mb-3 flex items-center justify-between border-b border-white/5 pb-2">
-                <span className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-white/70">
-                  <span className="h-2 w-2 rounded-full bg-[#f5c518]" />
-                  Team Leadership
-                </span>
-                <span className="text-[10px] font-bold text-[#f5c518]">Management & Captaincy</span>
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {/* Coach Leader Card */}
-                <div className="flex items-center gap-3.5 rounded-xl border border-white/5 bg-[#10192b] p-3 transition hover:border-[#f5c518]/30">
-                  <div className="relative shrink-0">
-                    <Portrait name={coachName || 'Coach'} src={coachPhoto} size={48} />
-                    <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#f5c518] text-[9px] font-black text-[#102018] shadow">
-                      👔
-                    </span>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <span className="inline-block rounded bg-[#f5c518]/15 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#f5c518]">
-                      Head Coach
-                    </span>
-                    <p className="mt-0.5 truncate text-sm font-black text-white">
-                      {coachName || <span className="text-white/40 italic">Not assigned</span>}
-                    </p>
-                    <p className="text-[11px] font-medium text-white/45">Tactics & Strategy</p>
-                  </div>
-                </div>
-
-                {/* Captain Leader Card */}
-                <div className="flex items-center gap-3.5 rounded-xl border border-white/5 bg-[#10192b] p-3 transition hover:border-[#2450c8]/40">
-                  <div className="relative shrink-0">
-                    <Portrait name={captain?.name || 'Captain'} src={captain?.photoUrl} size={48} id={captain?.id} />
-                    <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#f5c518] text-[9px] font-black text-[#102018] shadow" title="Team Captain">
-                      ©
-                    </span>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <span className="inline-block rounded bg-[#f5c518]/20 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#f5c518]">
-                      © Team Captain
-                    </span>
-                    <p className="mt-0.5 truncate text-sm font-black text-white">
-                      {captain ? `${captain.name} #${captain.number}` : <span className="text-white/40 italic">TBA</span>}
-                    </p>
-                    <p className="text-[11px] font-medium text-white/45">
-                      {captain ? `${captain.position} · ${captain.goals} goals · ${captain.appearances ?? 0} apps` : 'On-Pitch Leader'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Grouped Position List */}
           {squadByPosition.length > 0 ? (
             squadByPosition.map(({ position, label, players: posPlayers }) => (
