@@ -62,7 +62,7 @@ export interface Snapshot {
   serverNow: number;
   revision: number;
   competition: { name?: string; rules: typeof leagueRules } | null;
-  teams: Array<Department & { coach?: string; crestUrl?: string; status?: string }>;
+  teams: Array<Department & { coach?: string; coachPhotoUrl?: string; crestUrl?: string; status?: string }>;
   players: Player[];
   matches: Array<Fixture & {
     detail: string;

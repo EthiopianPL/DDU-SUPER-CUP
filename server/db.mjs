@@ -90,6 +90,7 @@ function migrate(db) {
       color TEXT NOT NULL,
       pitch TEXT NOT NULL,
       coach TEXT NOT NULL DEFAULT '',
+      coach_photo_url TEXT NOT NULL DEFAULT '',
       crest_url TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'active'
     );
@@ -281,6 +282,10 @@ function migrate(db) {
   if (playerColumns.length && !playerColumns.some((col) => col.name === 'is_captain')) {
     db.exec(`ALTER TABLE players ADD COLUMN is_captain INTEGER NOT NULL DEFAULT 0`);
   }
+  const teamCols = db.prepare('PRAGMA table_info(teams)').all();
+  if (teamCols.length && !teamCols.some((col) => col.name === 'coach_photo_url')) {
+    db.exec(`ALTER TABLE teams ADD COLUMN coach_photo_url TEXT NOT NULL DEFAULT ''`);
+  }
 }
 
 function serverFile(name) {
@@ -397,6 +402,7 @@ function finishPostgres(worker, port1, url) {
     db.exec('ALTER TABLE media_assets ADD COLUMN IF NOT EXISTS path TEXT NULL');
     db.exec('ALTER TABLE media_assets ADD COLUMN IF NOT EXISTS public_url TEXT NULL');
     db.exec('ALTER TABLE players ADD COLUMN IF NOT EXISTS is_captain SMALLINT NOT NULL DEFAULT 0');
+    db.exec("ALTER TABLE teams ADD COLUMN IF NOT EXISTS coach_photo_url VARCHAR(255) NOT NULL DEFAULT ''");
   } catch (error) {
     if (error.code !== '42701') throw error;
   }

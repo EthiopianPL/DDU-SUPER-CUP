@@ -451,6 +451,7 @@ export function buildSnapshot(db, now = Date.now()) {
       color: team.color,
       pitch: team.pitch,
       coach: team.coach,
+      coachPhotoUrl: team.coach_photo_url || '',
       crestUrl: team.crest_url,
       status: team.status,
     })),
@@ -631,6 +632,13 @@ export async function setImage(db, kind, id, image) {
       image,
     }, id);
   }
+  if (kind === 'coaches') {
+    const team = db.prepare('SELECT id FROM teams WHERE id = ?').get(id);
+    if (!team) throw new RuleError('Team not found.', 404);
+    const url = saveMedia(db, 'coaches', id, image, 'coaches');
+    db.prepare('UPDATE teams SET coach_photo_url = ? WHERE id = ?').run(url, id);
+    return { id, url };
+  }
   const table = 'teams';
   const column = 'crest_url';
   return transaction(db, () => {
@@ -669,13 +677,18 @@ export function saveTeam(db, actor, input, id) {
         db.prepare('DELETE FROM media WHERE id = ?').run(`teams/${nowId}`);
       } catch {}
     }
+    let coachPhoto = input.coachPhotoUrl !== undefined ? String(input.coachPhotoUrl ?? '') : (before?.coach_photo_url ?? '');
+    const coachImage = input.coachImage ? storedImage({ image: input.coachImage }) : (input.coachPhoto ? storedImage({ image: input.coachPhoto }) : null);
+    if (coachImage) {
+      coachPhoto = saveMedia(db, 'coaches', nowId, coachImage, 'coaches');
+    }
     if (id) {
-      db.prepare(`UPDATE teams SET name=?, short_name=?, college=?, group_id=?, color=?, pitch=?, coach=?, crest_url=?, status=? WHERE id=?`).run(
-        name, shortName, college, group, color, pitch, coach, crest, status, id,
+      db.prepare(`UPDATE teams SET name=?, short_name=?, college=?, group_id=?, color=?, pitch=?, coach=?, coach_photo_url=?, crest_url=?, status=? WHERE id=?`).run(
+        name, shortName, college, group, color, pitch, coach, coachPhoto, crest, status, id,
       );
     } else {
-      db.prepare(`INSERT INTO teams (id, name, short_name, college, group_id, color, pitch, coach, crest_url, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-        nowId, name, shortName, college, group, color, pitch, coach, crest, status,
+      db.prepare(`INSERT INTO teams (id, name, short_name, college, group_id, color, pitch, coach, coach_photo_url, crest_url, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        nowId, name, shortName, college, group, color, pitch, coach, coachPhoto, crest, status,
       );
     }
     audit(db, actor, id ? 'team.update' : 'team.create', 'team', nowId, before, { name, shortName, group });
@@ -694,6 +707,7 @@ export function deleteTeam(db, actor, id) {
     if (Number(used.total) > 0) throw new RuleError('Delete or reassign this team’s matches before deleting the team.');
     const roster = db.prepare('SELECT id FROM players WHERE team_id = ?').all(id);
     db.prepare('DELETE FROM media WHERE id = ?').run(`teams/${id}`);
+    db.prepare('DELETE FROM media WHERE id = ?').run(`coaches/${id}`);
     for (const player of roster) {
       db.prepare('DELETE FROM media WHERE id = ?').run(`players/${player.id}`);
       const assets = db.prepare('SELECT public_id, path, bucket, provider FROM media_assets WHERE entity_type = ? AND entity_id = ?').all('players', player.id);

@@ -324,10 +324,10 @@ async function readJson(request) {
 }
 
 function uploadImage(request, response, db, actor, path) {
-  const match = path.match(/^\/api\/(teams|players)\/([^/]+)\/image$/);
+  const match = path.match(/^\/api\/(teams|players|coaches)\/([^/]+)\/image$/);
   const kind = match[1];
   const id = decodeURIComponent(match[2]);
-  if (!actor || !can(actor, kind === 'teams' ? 'team.write' : 'player.write')) {
+  if (!actor || !can(actor, (kind === 'teams' || kind === 'coaches') ? 'team.write' : 'player.write')) {
     return send(response, 403, { error: 'You do not have permission for that action.' });
   }
   const type = String(request.headers['content-type'] ?? '');
@@ -342,7 +342,7 @@ function uploadImage(request, response, db, actor, path) {
 }
 
 function serveMedia(response, db, pathname) {
-  const match = pathname.match(/^\/api\/media\/(teams|players|news|motm)\/([^/]+)$/);
+  const match = pathname.match(/^\/api\/media\/(teams|players|news|motm|coaches)\/([^/]+)$/);
   if (!match) return send(response, 404, { error: 'Not found.' });
   const kind = match[1];
   const id = decodeURIComponent(match[2]);

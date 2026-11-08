@@ -10,6 +10,7 @@ export interface Department {
   color: string;
   pitch: string;
   coach?: string;
+  coachPhotoUrl?: string;
   crestUrl?: string;
   status?: string;
 }

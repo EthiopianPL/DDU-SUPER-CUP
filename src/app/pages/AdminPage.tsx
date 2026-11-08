@@ -1494,12 +1494,15 @@ function TeamAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
           <li key={item.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#10192b] px-3 py-2.5">
             <span className="flex min-w-0 items-center gap-3 text-sm font-bold">
               <DepartmentMark id={item.id} name={item.name} shortName={item.shortName} color={item.color} size={36} src={item.crestUrl || undefined} />
+              {item.coachPhotoUrl ? (
+                <Portrait name={item.coach || 'Coach'} src={item.coachPhotoUrl} size={30} />
+              ) : null}
               <span className="min-w-0">
                 <span className="block truncate">{item.name}</span>
-                <span className="block text-xs font-semibold text-white/35">Group {item.group}{item.coach ? ` · ${item.coach}` : ''}</span>
+                <span className="block text-xs font-semibold text-white/35">Group {item.group}{item.coach ? ` · Coach: ${item.coach}` : ''}</span>
               </span>
             </span>
-            <button type="button" onClick={() => setEditing(item.id)} className="shrink-0 rounded-full bg-white/5 px-3 py-1.5 text-xs font-bold text-[#f5c518]">Edit</button>
+            <button type="button" onClick={() => setEditing(item.id)} className="shrink-0 rounded-full bg-white/5 px-3 py-1.5 text-xs font-bold text-[#f5c518] hover:bg-white/10 transition">Edit</button>
           </li>
         ))}
       </ul>
@@ -1516,6 +1519,11 @@ function TeamEditor({ initial, onDone, onError, onCancel }: { initial?: (typeof 
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState(initial?.crestUrl ?? '');
   const [logoKey, setLogoKey] = useState(0);
+
+  const [coachFile, setCoachFile] = useState<File | null>(null);
+  const [coachPreview, setCoachPreview] = useState(initial?.coachPhotoUrl ?? '');
+  const [coachPhotoKey, setCoachPhotoKey] = useState(0);
+
   const chooseLogo = (next: File | null) => {
     setFile(next);
     setPreview((current) => {
@@ -1523,15 +1531,35 @@ function TeamEditor({ initial, onDone, onError, onCancel }: { initial?: (typeof 
       return next ? URL.createObjectURL(next) : (initial?.crestUrl ?? '');
     });
   };
+
+  const chooseCoachPhoto = (next: File | null) => {
+    setCoachFile(next);
+    setCoachPreview((current) => {
+      if (current.startsWith('blob:')) URL.revokeObjectURL(current);
+      return next ? URL.createObjectURL(next) : (initial?.coachPhotoUrl ?? '');
+    });
+  };
+
   return (
     <form className="mt-5 rounded-3xl border border-white/10 bg-[#10192b] p-5" onSubmit={async (event) => {
       event.preventDefault();
       try {
         if (!initial && !file) throw new Error('A team logo is required.');
         const image = file ? await imagePayload(file) : undefined;
+        const coachImage = coachFile ? await imagePayload(coachFile) : undefined;
         await desk(initial ? `/api/teams/${initial.id}` : '/api/teams', {
           method: initial ? 'PATCH' : 'POST',
-          body: { name, shortName, group, coach, pitch, college: initial?.college ?? '', color: initial?.color ?? '#2450c8', ...(image ? { image } : {}) },
+          body: {
+            name,
+            shortName,
+            group,
+            coach,
+            pitch,
+            college: initial?.college ?? '',
+            color: initial?.color ?? '#2450c8',
+            ...(image ? { image } : {}),
+            ...(coachImage ? { coachImage } : {}),
+          },
         });
         if (!initial) {
           setName('');
@@ -1541,6 +1569,12 @@ function TeamEditor({ initial, onDone, onError, onCancel }: { initial?: (typeof 
           setFile(null);
           setLogoKey((value) => value + 1);
           setPreview((current) => {
+            if (current.startsWith('blob:')) URL.revokeObjectURL(current);
+            return '';
+          });
+          setCoachFile(null);
+          setCoachPhotoKey((value) => value + 1);
+          setCoachPreview((current) => {
             if (current.startsWith('blob:')) URL.revokeObjectURL(current);
             return '';
           });
@@ -1557,8 +1591,11 @@ function TeamEditor({ initial, onDone, onError, onCancel }: { initial?: (typeof 
         </div>
         {initial && <button type="button" onClick={onCancel} className="text-sm font-bold text-white/45">Cancel</button>}
       </div>
-      <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:items-start">
-        <PicturePicker preview={preview} empty="Team logo" required={!initial} inputKey={logoKey} onFile={chooseLogo} />
+      <div className="mt-5 flex flex-col gap-5 lg:flex-row lg:items-start">
+        <div className="flex flex-wrap gap-4 sm:flex-nowrap">
+          <PicturePicker preview={preview} empty="Team logo" required={!initial} inputKey={logoKey} onFile={chooseLogo} />
+          <PicturePicker preview={coachPreview} empty="Coach photo" round inputKey={coachPhotoKey} onFile={chooseCoachPhoto} />
+        </div>
         <div className="grid flex-1 gap-3 sm:grid-cols-2">
           <Field label="Department name" value={name} onChange={setName} placeholder="Computer Science" required />
           <Field label="Short name" value={shortName} onChange={setShortName} placeholder="CS" required maxLength={8} />
