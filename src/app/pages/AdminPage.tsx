@@ -374,53 +374,20 @@ function MatchList({ version, onOpen, onMessage, onError }: { version: number; o
         {rows.map((fixture) => {
           const knockout = fixture.stage && fixture.stage !== 'group';
           return (
-            <li key={fixture.id} className="relative flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#10192b] p-3 transition-colors hover:border-white/20">
-              <button type="button" onClick={() => onOpen(fixture.id)} className="min-w-0 flex-1 text-left">
-                <span className="block text-[11px] font-bold uppercase tracking-wide text-[#f5c518]">
-                  {knockout ? `${stageLabel(fixture.stage)} · Tie ${fixture.slot}` : `Group ${fixture.group} · Matchday ${fixture.matchday}`}
+            <li key={fixture.id}>
+              <button type="button" onClick={() => onOpen(fixture.id)} className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#10192b] px-3 py-3 text-left hover:border-white/20 transition-all">
+                <span className="min-w-0">
+                  <span className="block text-[11px] font-bold uppercase tracking-wide text-[#f5c518]">
+                    {knockout ? `${stageLabel(fixture.stage)} · Tie ${fixture.slot}` : `Group ${fixture.group} · Matchday ${fixture.matchday}`}
+                  </span>
+                  <span className="mt-0.5 block truncate text-sm font-black">{labelOf(fixture.homeId)} vs {labelOf(fixture.awayId)}</span>
+                  <span className="block text-xs text-white/40">{fixture.date} {fixture.time} · {fixture.stadium}</span>
                 </span>
-                <span className="mt-0.5 block truncate text-sm font-black">{labelOf(fixture.homeId)} vs {labelOf(fixture.awayId)}</span>
-                <span className="block text-xs text-white/40">{fixture.date} {fixture.time} · {fixture.stadium}</span>
-              </button>
-
-              <div className="flex shrink-0 items-center gap-3">
-                {!knockout && (
-                  <div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-[#0c1424] px-2 py-1" title="Quick edit Matchday number">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">MD</span>
-                    <input
-                      type="number"
-                      min="1"
-                      max="50"
-                      defaultValue={fixture.matchday}
-                      key={`md-${fixture.id}-${fixture.matchday}`}
-                      onBlur={async (e) => {
-                        const val = parseInt(e.target.value, 10);
-                        if (val && val !== fixture.matchday) {
-                          try {
-                            await desk(`/api/matches/${fixture.id}`, {
-                              method: 'PATCH',
-                              body: { matchday: val, version: fixture.version },
-                            });
-                            onMessage(`Matchday updated to ${val} for ${labelOf(fixture.homeId)} vs ${labelOf(fixture.awayId)}.`);
-                          } catch (err) {
-                            onError(err instanceof Error ? err.message : 'Could not update matchday.');
-                          }
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          (e.target as HTMLInputElement).blur();
-                        }
-                      }}
-                      className="w-10 rounded border border-white/15 bg-white/5 px-1 py-0.5 text-center text-xs font-bold text-[#f5c518] focus:border-[#f5c518] focus:bg-black focus:outline-none"
-                    />
-                  </div>
-                )}
-                <button type="button" onClick={() => onOpen(fixture.id)} className="text-right">
+                <span className="shrink-0 text-right">
                   <span className="block font-mono text-sm font-black">{fixture.status === 'upcoming' ? '–' : `${fixture.homeScore}-${fixture.awayScore}`}</span>
                   <span className="text-[11px] font-bold text-white/40">{fixture.detail}{fixture.confirmed ? ' · confirmed' : ''}</span>
-                </button>
-              </div>
+                </span>
+              </button>
             </li>
           );
         })}
