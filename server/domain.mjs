@@ -1135,6 +1135,9 @@ export function updateMatch(db, actor, id, input) {
   return transaction(db, () => {
     const match = matchRow(db, id);
     assertVersion(match, input.version);
+    if (match.confirmed && actor.role === 'match_admin') {
+      throw new RuleError('This match is confirmed and cannot be edited by a match admin.', 403);
+    }
     if (match.status === 'finished' && !can(actor, 'match.correct') && !can(actor, 'match.schedule')) {
       throw new RuleError('A finished match cannot be edited, or ask a competition manager.');
     }
@@ -1179,6 +1182,9 @@ export function saveLineup(db, actor, matchId, input) {
     const approvedCol = teamId === match.home_id ? 'lineup_home_approved' : 'lineup_away_approved';
 
     if (input.action === 'approve') {
+      if (actor.role !== 'super_admin' && actor.role !== 'competition_manager') {
+        throw new RuleError('Lineup approval requires Super Admin privileges.', 403);
+      }
       const starters = db.prepare(`SELECT COUNT(*) AS total FROM match_squad WHERE match_id = ? AND team_id = ? AND role = 'starter'`).get(matchId, teamId);
       if (!starters || starters.total < 11) throw new RuleError('Fill all 11 starter positions before approving the lineup.');
       db.prepare(`UPDATE matches SET ${approvedCol} = 1, version = version + 1, updated_at = ? WHERE id = ?`).run(Date.now(), matchId);
@@ -1187,6 +1193,9 @@ export function saveLineup(db, actor, matchId, input) {
     }
 
     if (input.action === 'unapprove' || input.action === 'revoke') {
+      if (actor.role !== 'super_admin' && actor.role !== 'competition_manager') {
+        throw new RuleError('Revoking lineup approval requires Super Admin privileges.', 403);
+      }
       db.prepare(`UPDATE matches SET ${approvedCol} = 0, version = version + 1, updated_at = ? WHERE id = ?`).run(Date.now(), matchId);
       audit(db, actor, 'lineup.unapprove', 'match', matchId, null, { teamId, approved: false });
       return { id: matchId };
@@ -1206,6 +1215,9 @@ export function saveLineup(db, actor, matchId, input) {
 
     const isApproving = input.approved === true;
     if (isApproving) {
+      if (actor.role !== 'super_admin' && actor.role !== 'competition_manager') {
+        throw new RuleError('Lineup approval requires Super Admin privileges.', 403);
+      }
       if (starters.length < 11) throw new RuleError('Fill all 11 starter positions before approving the lineup.');
       if (starters.length > 11) throw new RuleError('A team can start at most 11 players.');
       starters.forEach((playerId) => ensureSquadPlayerSafe(db, playerId, teamId));

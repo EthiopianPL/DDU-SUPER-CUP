@@ -349,6 +349,7 @@ function MatchList({ role, version, onOpen, onMessage, onError }: { role?: Role;
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
   const rows = fixtures.filter((fixture) => {
+    if (role === 'match_admin' && fixture.confirmed) return false;
     const home = getDepartment(fixture.homeId);
     const away = getDepartment(fixture.awayId);
     const text = `${home?.name ?? ''} ${away?.name ?? ''} ${fixture.stadium} ${fixture.group} ${fixture.stage ?? ''}`.toLowerCase();
@@ -606,6 +607,16 @@ function MatchDesk({
 
   void version;
   if (!fixture) return <p className="text-sm text-white/50">That match is no longer on the server.</p>;
+  if (role === 'match_admin' && fixture.confirmed) {
+    return (
+      <div className="mx-auto max-w-xl rounded-3xl border border-white/10 bg-[#10192b] p-6 text-center">
+        <p className="text-sm font-semibold text-white/70">This match is already confirmed and closed. Confirmed matches are not accessible to match admins.</p>
+        <button type="button" onClick={onClose} className="mt-4 rounded-xl bg-white/10 px-4 py-2 text-xs font-bold text-white hover:bg-white/15">
+          ← Back to matches
+        </button>
+      </div>
+    );
+  }
   const home = getDepartment(fixture.homeId);
   const away = getDepartment(fixture.awayId);
   const events = matchEvents.filter((event) => event.matchId === id && !event.voided);
@@ -709,7 +720,7 @@ function MatchDesk({
         </section>
       )}
 
-      {activeTab === 'lineup' && !finished && !live && <LineupEditor matchId={id} disabled={busy || !canRun} onSave={(body) => act(`/api/matches/${id}/lineup`, body)} />}
+      {activeTab === 'lineup' && !finished && !live && <LineupEditor matchId={id} role={role} disabled={busy || !canRun} onSave={(body) => act(`/api/matches/${id}/lineup`, body)} />}
       {activeTab === 'fixture' && (
         <FixtureMeta
           fixture={fixture}
@@ -891,7 +902,7 @@ function FixtureMeta({
   );
 }
 
-function LineupEditor({ matchId, disabled, onSave }: { matchId: string; disabled: boolean; onSave: (body: Record<string, unknown>) => void }) {
+function LineupEditor({ matchId, role, disabled, onSave }: { matchId: string; role?: Role; disabled: boolean; onSave: (body: Record<string, unknown>) => void }) {
   const fixture = getFixture(matchId);
   const [side, setSide] = useState<'home' | 'away'>('home');
   if (!fixture) return null;
@@ -935,6 +946,7 @@ function LineupEditor({ matchId, disabled, onSave }: { matchId: string; disabled
         teamId={teamId}
         formation={side === 'home' ? fixture.formationHome : fixture.formationAway}
         isApproved={isApproved}
+        isSuperAdmin={role === 'super_admin'}
         disabled={disabled}
         onSave={onSave}
       />
@@ -947,6 +959,7 @@ function LineupSide({
   teamId,
   formation,
   isApproved,
+  isSuperAdmin,
   disabled,
   onSave,
 }: {
@@ -954,6 +967,7 @@ function LineupSide({
   teamId: string;
   formation?: string;
   isApproved?: boolean;
+  isSuperAdmin?: boolean;
   disabled: boolean;
   onSave: (body: Record<string, unknown>) => void;
 }) {
@@ -1139,7 +1153,7 @@ function LineupSide({
           Save Draft
         </button>
 
-        {!isApproved ? (
+        {isSuperAdmin && (!isApproved ? (
           <button
             type="button"
             disabled={disabled || !ready}
@@ -1163,6 +1177,12 @@ function LineupSide({
           >
             Revoke Approval (Set to Draft)
           </button>
+        ))}
+
+        {!isSuperAdmin && (
+          <span className="text-xs text-white/40 italic">
+            {isApproved ? 'Approved by Super Admin' : 'Lineup approval requires Super Admin'}
+          </span>
         )}
       </div>
     </form>
