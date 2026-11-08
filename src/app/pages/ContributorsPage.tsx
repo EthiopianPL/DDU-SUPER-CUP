@@ -49,7 +49,7 @@ export function ContributorsPage() {
             {/* Opacity photo watermark - face clearly visible in top right, smoothly blended */}
             <div className="pointer-events-none absolute -right-2 -top-2 overflow-hidden rounded-2xl">
               <img
-                src="/uploads/contributors/Nahom.PNG"
+                src="/uploads/contributors/Nahom.png"
                 alt="Nahom Bekele"
                 className="h-44 w-44 sm:h-48 sm:w-48 object-cover opacity-50 transition-all duration-300 group-hover:opacity-75 group-hover:scale-105 select-none"
                 style={{
@@ -104,7 +104,7 @@ export function ContributorsPage() {
             {/* Opacity photo watermark - face clearly visible in top right, smoothly blended */}
             <div className="pointer-events-none absolute -right-2 -top-2 overflow-hidden rounded-2xl">
               <img
-                src="/uploads/contributors/Abrham.jpg"
+                src="/uploads/contributors/Abrham.png"
                 alt="Abrham Wendesen"
                 className="h-44 w-44 sm:h-48 sm:w-48 object-cover opacity-50 transition-all duration-300 group-hover:opacity-75 group-hover:scale-105 select-none"
                 style={{
