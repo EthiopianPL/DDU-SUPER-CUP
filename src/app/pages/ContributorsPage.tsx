@@ -52,6 +52,12 @@ export function ContributorsPage() {
                 src="/uploads/contributors/Nahom.png"
                 alt="Nahom Bekele"
                 className="h-44 w-44 sm:h-48 sm:w-48 object-cover opacity-50 transition-all duration-300 group-hover:opacity-75 group-hover:scale-105 select-none"
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  if (!target.src.includes('.PNG')) {
+                    target.src = '/uploads/contributors/Nahom.PNG';
+                  }
+                }}
                 style={{
                   objectPosition: '50% 25%',
                   maskImage: 'radial-gradient(ellipse at top right, black 55%, transparent 100%)',
@@ -107,6 +113,12 @@ export function ContributorsPage() {
                 src="/uploads/contributors/Abrham.png"
                 alt="Abrham Wendesen"
                 className="h-44 w-44 sm:h-48 sm:w-48 object-cover opacity-50 transition-all duration-300 group-hover:opacity-75 group-hover:scale-105 select-none"
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  if (!target.src.includes('.jpg')) {
+                    target.src = '/uploads/contributors/Abrham.jpg';
+                  }
+                }}
                 style={{
                   objectPosition: '50% 32%',
                   maskImage: 'radial-gradient(ellipse at top right, black 55%, transparent 100%)',
