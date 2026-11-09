@@ -257,3 +257,72 @@ export function getActiveMatchdayHighlights(
     highlights,
   };
 }
+
+/**
+ * Returns the latest finished games that have an official awarded Man of the Match,
+ * sorted by most recently played / finished (up to `limit`, default 2).
+ */
+export function getLatestMotmHighlights(
+  limit = 2,
+  fixtureList: Fixture[] = fixtures,
+  playerPool: Player[] = players,
+  eventPool: MatchEventRecord[] = matchEvents,
+  deptPool: Department[] = departments,
+): MatchdayHighlight[] {
+  const finishedWithMotm = fixtureList.filter((m) => {
+    const isFinished = m.status === 'finished' || m.detail === 'finished';
+    return isFinished && getManOfTheMatch(m, playerPool, eventPool) !== null;
+  });
+
+  // Sort by newest finished:
+  // 1. finishedAt timestamp if present
+  // 2. date descending, time descending, id descending
+  finishedWithMotm.sort((a, b) => {
+    const finishA = a.finishedAt ?? 0;
+    const finishB = b.finishedAt ?? 0;
+    if (finishA && finishB && finishA !== finishB) {
+      return finishB - finishA;
+    }
+    const dateA = a.date || '';
+    const dateB = b.date || '';
+    if (dateA !== dateB) return dateB.localeCompare(dateA);
+    const timeA = a.time || '';
+    const timeB = b.time || '';
+    if (timeA !== timeB) return timeB.localeCompare(timeA);
+    return b.id.localeCompare(a.id);
+  });
+
+  const chosen = finishedWithMotm.slice(0, limit);
+  const highlights: MatchdayHighlight[] = [];
+
+  for (const match of chosen) {
+    const motm = getManOfTheMatch(match, playerPool, eventPool);
+    if (!motm) continue;
+
+    const homeDept = deptPool.find((d) => d.id === match.homeId);
+    const awayDept = deptPool.find((d) => d.id === match.awayId);
+    const playerDept = deptPool.find((d) => d.id === motm.player.departmentId) || homeDept;
+    const opponentDept = motm.player.departmentId === match.homeId ? awayDept : homeDept;
+
+    if (!playerDept || !opponentDept) continue;
+
+    highlights.push({
+      matchId: match.id,
+      fixture: match,
+      matchday: match.matchday ?? 1,
+      stage: match.stage || (match.group ? `Group ${match.group}` : 'Super Cup'),
+      date: match.date,
+      player: motm.player,
+      photoUrl: motm.photoUrl,
+      department: playerDept,
+      opponent: opponentDept,
+      homeTeam: cardTeam(match.homeId),
+      awayTeam: cardTeam(match.awayId),
+      homeScore: match.homeScore ?? 0,
+      awayScore: match.awayScore ?? 0,
+      stats: motm.stats,
+    });
+  }
+
+  return highlights;
+}

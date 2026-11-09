@@ -1,9 +1,9 @@
 import { useNavigate } from 'react-router';
 import { ChevronRight, Flame, Calendar, Newspaper, Award } from 'lucide-react';
 import { MatchCard } from '../components/MatchCard';
-import { MotmPoster } from '../components/MotmPoster';
+import { MotmSlider } from '../components/MotmSlider';
 import { cardTeam, competitionName, fixtures, latestResults, topScorers, sortFixturesByPriority } from '../../data/supercup';
-import { getActiveMatchdayHighlights } from '../../data/motm';
+import { getLatestMotmHighlights } from '../../data/motm';
 import { newsArticles } from '../../data/news';
 import { useLeagueVersion } from '../../data/live';
 import { DepartmentMark } from '../components/DepartmentMark';
@@ -22,7 +22,7 @@ export function HomePage() {
   const leader = topScorers(1)[0];
   const results = latestResults(2);
   const stories = [...newsArticles].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)).slice(0, 2);
-  const { matchday: activeMatchday, highlights } = getActiveMatchdayHighlights(fixtures);
+  const motmHighlights = getLatestMotmHighlights(2, fixtures);
 
   return (
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-5">
@@ -68,28 +68,21 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* MATCHDAY HIGHLIGHTS */}
-      {highlights.length > 0 && (
+      {/* MAN OF THE MATCH / MATCHDAY HIGHLIGHTS */}
+      {motmHighlights.length > 0 && (
         <section className="mb-6">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-lg font-black tracking-wide text-white">
               <Award className="h-5 w-5 text-[#f5c518]" />
-              MATCHDAY HIGHLIGHTS
+              MAN OF THE MATCH
             </h2>
-            {activeMatchday != null && (
+            {motmHighlights.length > 1 && (
               <span className="text-[11px] font-bold tracking-wider text-[#f5c518]">
-                MATCHDAY {activeMatchday}
+                LATEST {motmHighlights.length} GAMES
               </span>
             )}
           </div>
-          <div
-            className={`grid gap-4 ${highlights.length > 1 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'
-              }`}
-          >
-            {highlights.map((highlight) => (
-              <MotmPoster key={highlight.matchId} highlight={highlight} showDownload={false} />
-            ))}
-          </div>
+          <MotmSlider highlights={motmHighlights} />
         </section>
       )}
 
