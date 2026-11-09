@@ -162,12 +162,14 @@ export const LOCAL_TEAM_LOGO_FILES: Record<string, string> = {
   'p-p-o': 'p-p-o.jpg',
   'ppo': 'p-p-o.jpg',
   'padm': 'padm.jpg',
-  'real-properties': 'real-properties.svg',
-  'real': 'real-properties.svg',
+  'real-properties': 'real-properties.jpg',
+  'real': 'real-properties.jpg',
+  'rp': 'real-properties.jpg',
   'software-engineering': 'software-engineering.svg',
   'soft': 'software-engineering.svg',
-  'survey': 'survey.svg',
-  'surveying': 'survey.svg',
+  'survey': 'survey.jpg',
+  'surveying': 'survey.jpg',
+  'su': 'survey.jpg',
 };
 
 /**
