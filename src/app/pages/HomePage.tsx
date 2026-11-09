@@ -87,7 +87,7 @@ export function HomePage() {
               }`}
           >
             {highlights.map((highlight) => (
-              <MotmPoster key={highlight.matchId} highlight={highlight} />
+              <MotmPoster key={highlight.matchId} highlight={highlight} showDownload={false} />
             ))}
           </div>
         </section>

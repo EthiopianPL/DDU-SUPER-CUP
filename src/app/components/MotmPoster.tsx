@@ -6,9 +6,10 @@ import type { MatchdayHighlight } from '../../data/motm';
 
 interface MotmPosterProps {
   highlight: MatchdayHighlight;
+  showDownload?: boolean;
 }
 
-export function MotmPoster({ highlight }: MotmPosterProps) {
+export function MotmPoster({ highlight, showDownload = false }: MotmPosterProps) {
   const navigate = useNavigate();
   const [downloading, setDownloading] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
@@ -621,27 +622,29 @@ export function MotmPoster({ highlight }: MotmPosterProps) {
           Match details <ArrowUpRight className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-[#f5c518]" />
         </button>
 
-        <button
-          type="button"
-          onClick={handleDownload}
-          disabled={downloading}
-          className="inline-flex items-center gap-1 sm:gap-1.5 rounded-lg sm:rounded-xl border border-[#f5c518]/40 bg-[#f5c518]/10 px-2.5 py-1 sm:px-4 sm:py-2 text-[10px] sm:text-xs font-black uppercase tracking-wider text-[#f5c518] transition-all hover:bg-[#f5c518] hover:text-[#080c14] active:scale-95 shadow-md"
-          title="Download official Man of the Match poster (PNG)"
-        >
-          {downloaded ? (
-            <>
-              <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-400" />
-              <span className="text-emerald-400">Downloaded</span>
-            </>
-          ) : downloading ? (
-            <span>Exporting...</span>
-          ) : (
-            <>
-              <Download className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span>Download Poster</span>
-            </>
-          )}
-        </button>
+        {showDownload && (
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={downloading}
+            className="inline-flex items-center gap-1 sm:gap-1.5 rounded-lg sm:rounded-xl border border-[#f5c518]/40 bg-[#f5c518]/10 px-2.5 py-1 sm:px-4 sm:py-2 text-[10px] sm:text-xs font-black uppercase tracking-wider text-[#f5c518] transition-all hover:bg-[#f5c518] hover:text-[#080c14] active:scale-95 shadow-md"
+            title="Download official Man of the Match poster (PNG)"
+          >
+            {downloaded ? (
+              <>
+                <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-400" />
+                <span className="text-emerald-400">Downloaded</span>
+              </>
+            ) : downloading ? (
+              <span>Exporting...</span>
+            ) : (
+              <>
+                <Download className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span>Download Poster</span>
+              </>
+            )}
+          </button>
+        )}
       </div>
     </div>
   );
