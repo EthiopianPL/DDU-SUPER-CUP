@@ -611,7 +611,10 @@ function MatchDesk({
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<{ label: string; action: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [editingGoal, setEditingGoal] = useState<number | null>(null);
+  const [editingEventId, setEditingEventId] = useState<number | null>(null);
+  const [voidingEvent, setVoidingEvent] = useState<{ id: number; line: string; isGoal: boolean } | null>(null);
+  const [voidReason, setVoidReason] = useState('Incorrect entry');
+  const [disallowGoal, setDisallowGoal] = useState(true);
   const [internalTab, setInternalTab] = useState<DeskTab>(() => {
     const current = getFixture(id);
     if (!current || current.status === 'live' || (current.detail === 'finished' && current.confirmed)) return 'events';
@@ -641,8 +644,10 @@ function MatchDesk({
   }
   const home = getDepartment(fixture.homeId);
   const away = getDepartment(fixture.awayId);
-  const events = matchEvents.filter((event) => event.matchId === id && !event.voided);
-  const canCorrect = role === 'super_admin' || role === 'competition_manager';
+  const allMatchEvents = matchEvents.filter((event) => event.matchId === id);
+  const events = allMatchEvents.filter((event) => !event.voided);
+  const voidedEvents = allMatchEvents.filter((event) => event.voided);
+  const canCorrect = role === 'super_admin' || role === 'competition_manager' || role === 'match_admin';
   const canRun = role === 'super_admin' || role === 'match_admin' || role === 'competition_manager';
   const finished = fixture.detail === 'finished';
   const live = fixture.status === 'live' || fixture.detail === 'suspended';
@@ -666,7 +671,8 @@ function MatchDesk({
       await desk(path, { method, body: { ...body, version: getFixture(id)?.version } });
       onMessage('Saved.');
       setConfirm(null);
-      setEditingGoal(null);
+      setEditingEventId(null);
+      setVoidingEvent(null);
     } catch (reason) {
       onError(reason instanceof Error ? reason.message : 'Could not update the match.');
     } finally {
@@ -840,35 +846,143 @@ function MatchDesk({
         />
       )}
 
-      {activeTab === 'events' && <section className="mt-4 rounded-2xl border border-white/10 bg-[#10192b] p-4">
-        <h2 className="font-black">Event history</h2>
-        <ul className="mt-3 space-y-2">
-          {events.filter(shownEvent).map((event) => (
-            <li key={event.id} className="border-t border-white/5 py-2 text-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span>{historyLine(event)}</span>
-                {!finished && (
-                  <span className="flex gap-3">
-                    {canCorrect && event.type === 'goal' && (
-                      <button type="button" className="text-xs font-bold text-[#f5c518]" onClick={() => setEditingGoal(event.id)}>Correct</button>
-                    )}
-                    {canRun && (
-                      <button type="button" className="text-xs font-bold text-red-300" onClick={() => {
-                        const reason = window.prompt('Reason for removing this event');
-                        if (reason) act(`/api/matches/${id}/events/${event.id}/void`, { reason, disallowed: event.type === 'goal' });
-                      }}>Void</button>
-                    )}
-                  </span>
+      {activeTab === 'events' && (
+        <section className="mt-4 rounded-2xl border border-white/10 bg-[#10192b] p-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-black text-white">Event history</h2>
+            <span className="text-xs text-white/40">{events.length} active event{events.length === 1 ? '' : 's'}</span>
+          </div>
+          <ul className="mt-3 space-y-2">
+            {events.filter(shownEvent).map((event) => (
+              <li key={event.id} className="border-t border-white/5 py-2.5 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium text-white/90">{historyLine(event)}</span>
+                  {!fixture.confirmed && (
+                    <span className="flex items-center gap-3">
+                      {canCorrect && (event.type === 'goal' || event.type === 'card') && (
+                        <button
+                          type="button"
+                          className="text-xs font-bold text-[#f5c518] hover:underline"
+                          onClick={() => setEditingEventId(editingEventId === event.id ? null : event.id)}
+                        >
+                          {editingEventId === event.id ? 'Close' : 'Correct'}
+                        </button>
+                      )}
+                      {canRun && (
+                        <button
+                          type="button"
+                          className="text-xs font-bold text-red-400 hover:text-red-300 hover:underline"
+                          onClick={() => {
+                            setVoidReason('Incorrect entry');
+                            setDisallowGoal(true);
+                            setVoidingEvent({ id: event.id, line: historyLine(event), isGoal: event.type === 'goal' });
+                          }}
+                        >
+                          Void
+                        </button>
+                      )}
+                    </span>
+                  )}
+                </div>
+                {!fixture.confirmed && editingEventId === event.id && event.type === 'goal' && (
+                  <GoalCorrect
+                    event={event}
+                    matchId={id}
+                    disabled={busy}
+                    onSave={(body) => act(`/api/matches/${id}/events/${event.id}`, body, 'PATCH')}
+                    onCancel={() => setEditingEventId(null)}
+                  />
                 )}
-              </div>
-              {!finished && editingGoal === event.id && event.type === 'goal' && (
-                <GoalCorrect event={event} matchId={id} disabled={busy} onSave={(body) => act(`/api/matches/${id}/events/${event.id}`, body, 'PATCH')} />
-              )}
-            </li>
-          ))}
-          {!events.some(shownEvent) && <li className="text-sm text-white/40">No goals, cards, or substitutions yet.</li>}
-        </ul>
-      </section>}
+                {!fixture.confirmed && editingEventId === event.id && event.type === 'card' && (
+                  <CardCorrect
+                    event={event}
+                    matchId={id}
+                    disabled={busy}
+                    onSave={(body) => act(`/api/matches/${id}/events/${event.id}`, body, 'PATCH')}
+                    onCancel={() => setEditingEventId(null)}
+                  />
+                )}
+              </li>
+            ))}
+            {!events.some(shownEvent) && <li className="text-sm text-white/40">No goals, cards, or substitutions yet.</li>}
+          </ul>
+
+          {voidedEvents.length > 0 && (
+            <div className="mt-6 border-t border-white/10 pt-4">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-red-400/80">Voided records ({voidedEvents.length})</h3>
+              <ul className="mt-2 space-y-1.5">
+                {voidedEvents.map((event) => (
+                  <li key={event.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-red-950/20 border border-red-500/15 px-3 py-2 text-xs text-white/50">
+                    <span className="line-through">{historyLine(event)}</span>
+                    <span className="rounded-md bg-red-500/20 px-2 py-0.5 text-[10px] font-semibold text-red-300">
+                      Voided: {event.voidReason || 'Removed by admin'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
+
+      {voidingEvent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-red-500/30 bg-[#10192b] p-5 shadow-2xl">
+            <h3 className="text-base font-black text-red-400">Void Recorded Event</h3>
+            <p className="mt-2 text-sm text-white/70">
+              Are you sure you want to void this record? It will be removed from official match statistics.
+            </p>
+            <div className="mt-3 rounded-xl bg-black/40 p-3 text-xs text-white/80 border border-white/5">
+              {voidingEvent.line}
+            </div>
+            <label className="mt-4 block text-xs font-bold text-white/50">
+              Reason for voiding
+              <input
+                className="mt-1 w-full rounded-xl border border-white/10 bg-[#0a101d] px-3 py-2 text-sm text-white focus:border-[#f5c518] focus:outline-none"
+                value={voidReason}
+                onChange={(e) => setVoidReason(e.target.value)}
+                placeholder="Reason (e.g. Referee overturned, mistaken identity)"
+              />
+            </label>
+            {voidingEvent.isGoal && (
+              <label className="mt-3 flex items-center gap-2 text-xs font-medium text-white/70 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={disallowGoal}
+                  onChange={(e) => setDisallowGoal(e.target.checked)}
+                  className="rounded border-white/20 text-[#f5c518] focus:ring-0"
+                />
+                Mark as disallowed goal (adds note in match log)
+              </label>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setVoidingEvent(null)}
+                className="rounded-xl bg-white/10 px-4 py-2 text-xs font-bold text-white hover:bg-white/15"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy || voidReason.trim().length < 3}
+                onClick={async () => {
+                  const ev = voidingEvent;
+                  setVoidingEvent(null);
+                  await act(`/api/matches/${id}/events/${ev.id}/void`, {
+                    reason: voidReason.trim(),
+                    disallowed: ev.isGoal && disallowGoal,
+                  });
+                }}
+                className="rounded-xl bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-500 disabled:opacity-40"
+              >
+                {busy ? 'Voiding...' : 'Confirm Void Record'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1333,11 +1447,13 @@ function GoalCorrect({
   matchId,
   disabled,
   onSave,
+  onCancel,
 }: {
   event: (typeof matchEvents)[number];
   matchId: string;
   disabled: boolean;
   onSave: (body: Record<string, unknown>) => void;
+  onCancel?: () => void;
 }) {
   const fixture = getFixture(matchId);
   const pitch = usePitch(matchId);
@@ -1355,7 +1471,7 @@ function GoalCorrect({
   const scorers = onTeam(scorerTeam);
   const assisters = [...pitch.entries()].filter(([, row]) => row.teamId === credited && row.on).map(([id]) => id).filter((id) => id !== playerId);
   return (
-    <form className="mt-2 grid w-full grid-cols-2 gap-2" onSubmit={(submit) => {
+    <form className="mt-2 grid w-full grid-cols-2 gap-2 rounded-xl border border-white/10 bg-[#0c1424] p-3" onSubmit={(submit) => {
       submit.preventDefault();
       onSave({ side, goalType, playerId, assistId: goalType === 'own_goal' ? '' : assistId, minute: Number(minute), addedMinute: Number(addedMinute), detail });
     }}>
@@ -1367,7 +1483,80 @@ function GoalCorrect({
       <label className="text-xs font-bold text-white/45">Added<input className={inputClass} value={addedMinute} onChange={(input) => setAddedMinute(input.target.value)} /></label>
       <label className="col-span-2 text-xs font-bold text-white/45">Note<input className={inputClass} value={detail} onChange={(input) => setDetail(input.target.value)} /></label>
       {goalType === 'own_goal' && <p className="col-span-2 text-xs font-semibold text-[#f5c518]">The selected team receives the goal. The scorer is on the other team, and no assist is recorded.</p>}
-      <button type="submit" disabled={disabled || !playerId} className="col-span-2 rounded-xl bg-[#f5c518] px-3 py-2 text-sm font-black text-[#102018] disabled:opacity-40">Save correction</button>
+      <div className="col-span-2 flex justify-end gap-2 pt-1">
+        {onCancel && (
+          <button type="button" onClick={onCancel} disabled={disabled} className="rounded-xl bg-white/10 px-3 py-2 text-xs font-bold text-white hover:bg-white/15">
+            Cancel
+          </button>
+        )}
+        <button type="submit" disabled={disabled || !playerId} className="rounded-xl bg-[#f5c518] px-3 py-2 text-xs font-black text-[#102018] hover:bg-[#ffd700] disabled:opacity-40">
+          Save goal correction
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function CardCorrect({
+  event,
+  matchId,
+  disabled,
+  onSave,
+  onCancel,
+}: {
+  event: (typeof matchEvents)[number];
+  matchId: string;
+  disabled: boolean;
+  onSave: (body: Record<string, unknown>) => void;
+  onCancel?: () => void;
+}) {
+  const fixture = getFixture(matchId);
+  const pitch = usePitch(matchId);
+  const [side, setSide] = useState<'home' | 'away'>(fixture && event.teamId === fixture.awayId ? 'away' : 'home');
+  const [playerId, setPlayerId] = useState(event.playerId || '');
+  const [cardType, setCardType] = useState(event.cardType === 'second_yellow' ? 'yellow' : (event.cardType || 'yellow'));
+  const [minute, setMinute] = useState(String(event.minute));
+  const [addedMinute, setAddedMinute] = useState(String(event.addedMinute || 0));
+  const [detail, setDetail] = useState(event.detail || '');
+
+  if (!fixture) return null;
+  const teamId = side === 'home' ? fixture.homeId : fixture.awayId;
+  const onTeam = (tid: string) =>
+    [...pitch.entries()]
+      .filter(([id, row]) => row.teamId === tid && (row.on || id === playerId))
+      .map(([id]) => id);
+  const players = onTeam(teamId);
+  const priorYellow = Boolean(playerId) && matchEvents.some((ev) =>
+    ev.matchId === matchId && !ev.voided && ev.id !== event.id && ev.playerId === playerId && ev.type === 'card' && ev.cardType === 'yellow'
+  );
+
+  return (
+    <form className="mt-2 grid w-full grid-cols-2 gap-2 rounded-xl border border-white/10 bg-[#0c1424] p-3" onSubmit={(submit) => {
+      submit.preventDefault();
+      onSave({ side, playerId, cardType, minute: Number(minute), addedMinute: Number(addedMinute), detail });
+    }}>
+      <Select label="Team" value={side} onChange={(value) => { setSide(value as 'home' | 'away'); setPlayerId(''); }} options={sidesOf(fixture)} />
+      <Select label="Card" value={cardType} onChange={setCardType} options={[
+        { id: 'yellow', label: priorYellow ? 'Second yellow (red card)' : 'Yellow' },
+        { id: 'red', label: 'Direct red card' },
+      ]} />
+      <div className="col-span-2">
+        <Select label="Player" value={playerId} onChange={setPlayerId} options={[{ id: '', label: 'Choose player' }, ...players.map((id) => ({ id, label: playerName(id) }))]} />
+      </div>
+      <label className="text-xs font-bold text-white/45">Minute<input className={inputClass} value={minute} onChange={(input) => setMinute(input.target.value)} /></label>
+      <label className="text-xs font-bold text-white/45">Added<input className={inputClass} value={addedMinute} onChange={(input) => setAddedMinute(input.target.value)} /></label>
+      <label className="col-span-2 text-xs font-bold text-white/45">Reason / note<input className={inputClass} value={detail} onChange={(input) => setDetail(input.target.value)} placeholder="e.g. Foul, Unsporting conduct" /></label>
+      {priorYellow && cardType === 'yellow' && <p className="col-span-2 text-xs font-semibold text-[#f5c518]">This player already has a yellow card. Saving as yellow will record as a second yellow (sent off).</p>}
+      <div className="col-span-2 flex justify-end gap-2 pt-1">
+        {onCancel && (
+          <button type="button" onClick={onCancel} disabled={disabled} className="rounded-xl bg-white/10 px-3 py-2 text-xs font-bold text-white hover:bg-white/15">
+            Cancel
+          </button>
+        )}
+        <button type="submit" disabled={disabled || !playerId} className="rounded-xl bg-[#f5c518] px-3 py-2 text-xs font-black text-[#102018] hover:bg-[#ffd700] disabled:opacity-40">
+          Save card correction
+        </button>
+      </div>
     </form>
   );
 }

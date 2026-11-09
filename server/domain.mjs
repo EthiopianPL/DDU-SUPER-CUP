@@ -1610,11 +1610,11 @@ export function recordEvent(db, actor, matchId, input) {
 }
 
 export function correctEvent(db, actor, matchId, eventId, input) {
-  deny(actor, 'match.correct');
+  if (!can(actor, 'match.correct') && !can(actor, 'match.write')) throw new RuleError('You do not have permission for that action.', 403);
   return transaction(db, () => {
     const match = matchRow(db, matchId);
     assertVersion(match, input.version);
-    assertNotFinished(match);
+    if (match.confirmed && !can(actor, 'match.correct')) throw new RuleError('This result is confirmed and locked.');
     const event = db.prepare('SELECT * FROM match_events WHERE id = ? AND match_id = ?').get(eventId, matchId);
     if (!event || event.voided) throw new RuleError('Event not found.', 404);
     const before = { ...event };
@@ -1636,7 +1636,22 @@ export function correctEvent(db, actor, matchId, eventId, input) {
       db.prepare(`UPDATE match_events SET team_id=?, credited_team_id=?, player_id=?, assist_id=?, minute=?, added_minute=?, goal_type=?, detail=? WHERE id=?`).run(
         scorerTeamId, creditedTeamId, playerId, assistId, minute, stamped.addedMinute, goalType, String(input.detail ?? event.detail), event.id,
       );
-    } else if (event.type === 'card' || event.type === 'substitution') {
+    } else if (event.type === 'card') {
+      const stamped = splitPlayedMinute(match, Number(input.minute ?? event.minute), Number(input.addedMinute ?? event.added_minute) || 0, event.period);
+      const minute = stamped.minute;
+      let cardType = String(input.cardType ?? event.card_type ?? 'yellow');
+      if (!['yellow', 'second_yellow', 'red'].includes(cardType)) throw new RuleError('Choose a card type.');
+      const teamId = input.side ? sideTeam(match, input.side) : (input.teamId || event.team_id);
+      const playerId = input.playerId || event.player_id;
+      if (!playerId) throw new RuleError('Choose the player.');
+      onPitch(db, match, playerId, teamId, event.id);
+      const yellows = yellowCount(activeEvents(db, match.id, event.id), playerId);
+      if (cardType === 'yellow' && yellows >= 1) cardType = 'second_yellow';
+      if (cardType === 'second_yellow' && yellows < 1) throw new RuleError('A second yellow needs one yellow card first.');
+      db.prepare('UPDATE match_events SET team_id=?, player_id=?, card_type=?, minute=?, added_minute=?, detail=? WHERE id=?').run(
+        teamId, playerId, cardType, minute, stamped.addedMinute, String(input.detail ?? event.detail), event.id,
+      );
+    } else if (event.type === 'substitution') {
       db.prepare('UPDATE match_events SET minute=?, added_minute=?, detail=? WHERE id=?').run(
         Number(input.minute ?? event.minute), Number(input.addedMinute ?? event.added_minute), String(input.detail ?? event.detail), event.id,
       );
@@ -1654,7 +1669,6 @@ export function voidEvent(db, actor, matchId, eventId, input) {
   if (!can(actor, 'match.correct') && !can(actor, 'match.write')) throw new RuleError('You do not have permission for that action.', 403);
   return transaction(db, () => {
     const match = matchRow(db, matchId);
-    assertNotFinished(match);
     if (match.confirmed && !can(actor, 'match.correct')) throw new RuleError('This result is confirmed and locked.');
     assertVersion(match, input.version);
     const event = db.prepare('SELECT * FROM match_events WHERE id = ? AND match_id = ?').get(eventId, matchId);

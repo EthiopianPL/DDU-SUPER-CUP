@@ -2,7 +2,7 @@ import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 
 const PERMISSIONS = {
   super_admin: ['*'],
-  match_admin: ['match.write', 'match.clock', 'lineup.write', 'news.write'],
+  match_admin: ['match.write', 'match.clock', 'match.correct', 'lineup.write', 'news.write'],
   competition_manager: ['match.write', 'match.clock', 'match.correct', 'match.confirm', 'match.schedule', 'team.write', 'player.write', 'news.write', 'rules.write', 'lineup.write'],
   team_manager: ['team.write', 'player.write'],
   reader: [],
