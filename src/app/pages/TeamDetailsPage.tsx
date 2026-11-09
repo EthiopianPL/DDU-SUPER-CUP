@@ -10,6 +10,7 @@ import {
   getDepartment,
   playersForDepartment,
   standingsFor,
+  getPlayerSuspension,
   type Player,
 } from '../../data/supercup';
 
@@ -379,44 +380,70 @@ export function TeamDetailsPage() {
                 </div>
 
                 <div className="divide-y divide-white/5">
-                  {posPlayers.map((player) => (
-                    <div
-                      key={player.id}
-                      className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-white/[0.02] transition"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Portrait name={player.name} src={player.photoUrl || undefined} size={36} id={player.id} />
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/10 text-xs font-black text-[#f5c518]">
-                          {player.number}
-                        </span>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <p className="truncate text-sm font-bold text-white">{player.name}</p>
-                            {player.isCaptain && (
-                              <span
-                                className="inline-flex items-center gap-0.5 rounded border border-[#f5c518]/40 bg-[#f5c518]/20 px-1.5 py-0.2 text-[9px] font-black text-[#f5c518] tracking-wider uppercase"
-                                title="Team Captain"
-                              >
-                                © CAPTAIN
-                              </span>
-                            )}
+                  {posPlayers.map((player) => {
+                    const sus = getPlayerSuspension(player.id, player.departmentId);
+                    return (
+                      <div
+                        key={player.id}
+                        className={`flex items-center justify-between gap-3 px-4 py-3 transition ${
+                          sus.suspended ? 'bg-red-500/[0.04] hover:bg-red-500/[0.08]' : 'hover:bg-white/[0.02]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Portrait name={player.name} src={player.photoUrl || undefined} size={36} id={player.id} />
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/10 text-xs font-black text-[#f5c518]">
+                            {player.number}
+                          </span>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="truncate text-sm font-bold text-white">{player.name}</p>
+                              {player.isCaptain && (
+                                <span
+                                  className="inline-flex items-center gap-0.5 rounded border border-[#f5c518]/40 bg-[#f5c518]/20 px-1.5 py-0.2 text-[9px] font-black text-[#f5c518] tracking-wider uppercase"
+                                  title="Team Captain"
+                                >
+                                  © CAPTAIN
+                                </span>
+                              )}
+                              {sus.suspended && (
+                                <span
+                                  className="inline-flex items-center gap-1 rounded border border-red-500/40 bg-red-500/20 px-1.5 py-0.2 text-[9px] font-black text-red-400 tracking-wider uppercase"
+                                  title={sus.detail}
+                                >
+                                  SUSPENDED
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] font-semibold text-white/40">
+                              {player.position} · {player.appearances ?? 0} apps
+                              {sus.suspended ? <span className="ml-1 text-red-400 font-bold">· {sus.detail}</span> : null}
+                            </p>
                           </div>
-                          <p className="text-[11px] font-semibold text-white/40">
-                            {player.position} · {player.appearances ?? 0} apps
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <p className="text-xs font-bold text-white/80">
+                            {player.goals} {player.goals === 1 ? 'goal' : 'goals'}
                           </p>
+                          <div className="mt-0.5 flex items-center justify-end gap-2 text-[10px] text-white/50">
+                            {player.assists ? <span>{player.assists} assists</span> : null}
+                            {player.yellowCards ? (
+                              <span className="inline-flex items-center gap-0.5 font-bold text-[#f5c518]" title={`${player.yellowCards} Yellow cards`}>
+                                <span className="inline-block h-2.5 w-1.5 rounded-xs bg-[#f5c518]" />
+                                {player.yellowCards}
+                              </span>
+                            ) : null}
+                            {player.redCards ? (
+                              <span className="inline-flex items-center gap-0.5 font-bold text-red-400" title={`${player.redCards} Red cards`}>
+                                <span className="inline-block h-2.5 w-1.5 rounded-xs bg-red-500" />
+                                {player.redCards}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
-
-                      <div className="text-right shrink-0">
-                        <p className="text-xs font-bold text-white/80">
-                          {player.goals} {player.goals === 1 ? 'goal' : 'goals'}
-                        </p>
-                        {player.assists ? (
-                          <p className="text-[10px] text-white/40">{player.assists} assists</p>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))

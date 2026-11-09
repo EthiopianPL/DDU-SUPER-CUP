@@ -12,6 +12,8 @@ import {
   fixtures,
   topAssists,
   topScorers,
+  topYellowCards,
+  topRedCards,
   sortFixturesByPriority,
   type GroupId,
 } from '../../data/supercup';
@@ -49,8 +51,8 @@ export function DiscoverPage() {
     setSearchParams(next, { replace: true });
   };
 
-  // State for Stats tab (goals vs assists)
-  const [statCategory, setStatCategory] = useState<'goals' | 'assists'>('goals');
+  // State for Stats tab (goals vs assists vs discipline)
+  const [statCategory, setStatCategory] = useState<'goals' | 'assists' | 'yellows' | 'reds'>('goals');
   const version = useLeagueVersion();
 
   // Groups data sorted by smart priority: LIVE -> UPCOMING -> FINISHED
@@ -62,7 +64,16 @@ export function DiscoverPage() {
   // Tournament statistics data
   const topScorersList = useMemo(() => topScorers(10), [version]);
   const topAssistsList = useMemo(() => topAssists(10), [version]);
-  const activeStatsList = statCategory === 'goals' ? topScorersList : topAssistsList;
+  const topYellowCardsList = useMemo(() => topYellowCards(10), [version]);
+  const topRedCardsList = useMemo(() => topRedCards(10), [version]);
+  const activeStatsList =
+    statCategory === 'goals'
+      ? topScorersList
+      : statCategory === 'assists'
+      ? topAssistsList
+      : statCategory === 'yellows'
+      ? topYellowCardsList
+      : topRedCardsList;
   const statLeader = activeStatsList[0];
 
   // Tournament aggregate summary
@@ -266,29 +277,53 @@ export function DiscoverPage() {
             </div>
           </div>
 
-          {/* Goals vs Assists Sub-tabs */}
-          <div className="flex gap-2">
+          {/* Stats Sub-tabs: Goals, Assists, Yellow Cards, Red Cards */}
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => setStatCategory('goals')}
-              className={`rounded-full px-4 py-2 text-xs font-bold transition-all sm:text-sm ${
+              className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition-all sm:text-sm ${
                 statCategory === 'goals'
                   ? 'bg-[#f5c518] text-[#102018] shadow-sm'
                   : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
               }`}
             >
-              Top Scorers (Goals)
+              Top Scorers
             </button>
             <button
               type="button"
               onClick={() => setStatCategory('assists')}
-              className={`rounded-full px-4 py-2 text-xs font-bold transition-all sm:text-sm ${
+              className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition-all sm:text-sm ${
                 statCategory === 'assists'
                   ? 'bg-[#f5c518] text-[#102018] shadow-sm'
                   : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
               }`}
             >
-              Top Playmakers (Assists)
+              Assists
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatCategory('yellows')}
+              className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all sm:text-sm ${
+                statCategory === 'yellows'
+                  ? 'bg-[#f5c518] text-[#102018] shadow-sm'
+                  : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              <span className="inline-block h-2.5 w-1.5 rounded-xs bg-[#f5c518]" />
+              Yellow Cards
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatCategory('reds')}
+              className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all sm:text-sm ${
+                statCategory === 'reds'
+                  ? 'bg-red-500 text-white shadow-sm'
+                  : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              <span className="inline-block h-2.5 w-1.5 rounded-xs bg-red-500" />
+              Red Cards
             </button>
           </div>
 
@@ -300,13 +335,23 @@ export function DiscoverPage() {
               className="flex w-full items-center justify-between rounded-2xl border border-[#f5c518]/30 bg-gradient-to-r from-[#10192b] to-[#162238] p-4 text-left transition-all hover:border-[#f5c518]/60"
             >
               <div className="flex items-center gap-3.5">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#f5c518]/20 text-[#f5c518]">
+                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${
+                  statCategory === 'reds' ? 'bg-red-500/20 text-red-400' : 'bg-[#f5c518]/20 text-[#f5c518]'
+                }`}>
                   <Award className="h-6 w-6" />
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-[#f5c518]">
-                      {statCategory === 'goals' ? 'Golden Boot Leader' : 'Assist Leader'}
+                    <span className={`text-[10px] font-black uppercase tracking-wider ${
+                      statCategory === 'reds' ? 'text-red-400' : 'text-[#f5c518]'
+                    }`}>
+                      {statCategory === 'goals'
+                        ? 'Golden Boot Leader'
+                        : statCategory === 'assists'
+                        ? 'Assist Leader'
+                        : statCategory === 'yellows'
+                        ? 'Most Yellow Cards'
+                        : 'Most Red Cards'}
                     </span>
                   </div>
                   <p className="flex items-center gap-2 text-lg font-black text-white"><Portrait name={statLeader.name} src={statLeader.photoUrl || undefined} size={28} />{statLeader.name}</p>
@@ -324,10 +369,18 @@ export function DiscoverPage() {
                 </div>
               </div>
               <div className="text-right">
-                <span className="block text-3xl font-black text-[#f5c518]">
-                  {statCategory === 'goals' ? statLeader.goals : statLeader.assists}
+                <span className={`block text-3xl font-black ${statCategory === 'reds' ? 'text-red-400' : 'text-[#f5c518]'}`}>
+                  {statCategory === 'goals'
+                    ? statLeader.goals
+                    : statCategory === 'assists'
+                    ? statLeader.assists
+                    : statCategory === 'yellows'
+                    ? statLeader.yellowCards ?? 0
+                    : statLeader.redCards ?? 0}
                 </span>
-                <span className="text-[10px] uppercase tracking-wide text-white/40">{statCategory}</span>
+                <span className="text-[10px] uppercase tracking-wide text-white/40">
+                  {statCategory === 'goals' ? 'goals' : statCategory === 'assists' ? 'assists' : statCategory === 'yellows' ? 'yellows' : 'reds'}
+                </span>
               </div>
             </button>
           )}
@@ -335,7 +388,13 @@ export function DiscoverPage() {
           {/* Top 10 Table */}
           <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#10192b]">
             <div className="border-b border-white/10 px-4 py-2.5 text-[10px] uppercase tracking-wide text-white/40">
-              Top 10 {statCategory === 'goals' ? 'Goalscorers' : 'Assist Providers'}
+              {statCategory === 'goals'
+                ? 'Top 10 Goalscorers'
+                : statCategory === 'assists'
+                ? 'Top 10 Assist Providers'
+                : statCategory === 'yellows'
+                ? 'Most Yellow Cards'
+                : 'Most Red Cards'}
             </div>
             {activeStatsList.map((player, index) => {
               const rank = index + 1;
@@ -348,6 +407,15 @@ export function DiscoverPage() {
                     : rank === 3
                       ? 'bg-amber-700 text-white'
                       : 'text-white/40';
+
+              const metricCount =
+                statCategory === 'goals'
+                  ? player.goals
+                  : statCategory === 'assists'
+                  ? player.assists
+                  : statCategory === 'yellows'
+                  ? player.yellowCards ?? 0
+                  : player.redCards ?? 0;
 
               return (
                 <button
@@ -380,10 +448,12 @@ export function DiscoverPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="block text-xl font-black text-[#f5c518]">
-                      {statCategory === 'goals' ? player.goals : player.assists}
+                    <span className={`block text-xl font-black ${statCategory === 'reds' ? 'text-red-400' : 'text-[#f5c518]'}`}>
+                      {metricCount}
                     </span>
-                    <span className="text-[10px] uppercase tracking-wide text-white/40">{statCategory}</span>
+                    <span className="text-[10px] uppercase tracking-wide text-white/40">
+                      {statCategory === 'goals' ? 'goals' : statCategory === 'assists' ? 'assists' : statCategory === 'yellows' ? 'yellows' : 'reds'}
+                    </span>
                   </div>
                 </button>
               );

@@ -23,6 +23,7 @@ import {
   periodText,
   players,
   squads,
+  getPlayerSuspension,
   type GroupId,
   type Player,
 } from '../../data/supercup';
@@ -1060,19 +1061,25 @@ function LineupSide({
   const roles = plan.flat();
   const chosen = new Set(slots.filter((id): id is string => Boolean(id)));
   const place = (index: number, playerId: string | null) => {
+    if (playerId) {
+      const sus = getPlayerSuspension(playerId, teamId, matchId);
+      if (sus.suspended) return;
+    }
     setSlots((list) => list.map((id, slot) => (slot === index ? playerId : id === playerId ? null : id)));
     if (playerId) setBench((list) => list.filter((id) => id !== playerId));
     setPicking(null);
   };
   const toggleBench = (playerId: string) => {
     if (chosen.has(playerId)) return;
+    const sus = getPlayerSuspension(playerId, teamId, matchId);
+    if (sus.suspended) return;
     setBench((list) => list.includes(playerId) ? list.filter((id) => id !== playerId) : [...list, playerId]);
   };
   const autoFill = () => {
     const used = new Set<string>();
     const newSlots: Array<string | null> = [];
     for (const role of roles) {
-      const candidate = roster.find((p) => p.position === role && !used.has(p.id));
+      const candidate = roster.find((p) => p.position === role && !used.has(p.id) && !getPlayerSuspension(p.id, teamId, matchId).suspended);
       if (candidate) {
         newSlots.push(candidate.id);
         used.add(candidate.id);
@@ -1080,7 +1087,10 @@ function LineupSide({
         newSlots.push(null);
       }
     }
-    const newBench = roster.filter((p) => !used.has(p.id)).slice(0, 9).map((p) => p.id);
+    const newBench = roster
+      .filter((p) => !used.has(p.id) && !getPlayerSuspension(p.id, teamId, matchId).suspended)
+      .slice(0, 9)
+      .map((p) => p.id);
     setSlots(newSlots);
     setBench(newBench);
     setPicking(null);
@@ -1181,15 +1191,38 @@ function LineupSide({
         <div className="mt-3 rounded-2xl border border-white/10 bg-[#0c1424] p-3">
           <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">{openRole === 'GK' ? 'Goalkeepers only' : `${openRole} only`}</p>
           <ul className="mt-2 max-h-40 space-y-1 overflow-auto">
-            {choices.map((player) => (
-              <li key={player.id}>
-                <button type="button" className="flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-sm hover:bg-white/5" onClick={() => place(picking!, player.id)}>
-                  {player.photoUrl ? <img src={player.photoUrl} alt="" className="h-7 w-7 rounded-full object-cover" /> : <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-[10px] font-black">{player.number}</span>}
-                  <span className="min-w-0 flex-1 truncate">{player.name}</span>
-                  <span className="text-[10px] font-bold text-white/40">{player.position}</span>
-                </button>
-              </li>
-            ))}
+            {choices.map((player) => {
+              const sus = getPlayerSuspension(player.id, teamId, matchId);
+              return (
+                <li key={player.id}>
+                  <button
+                    type="button"
+                    disabled={sus.suspended}
+                    className={`flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-sm ${
+                      sus.suspended ? 'opacity-40 cursor-not-allowed bg-red-500/10' : 'hover:bg-white/5'
+                    }`}
+                    onClick={() => !sus.suspended && place(picking!, player.id)}
+                    title={sus.suspended ? sus.detail : undefined}
+                  >
+                    {player.photoUrl ? (
+                      <img src={player.photoUrl} alt="" className="h-7 w-7 rounded-full object-cover" />
+                    ) : (
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-[10px] font-black">
+                        {player.number}
+                      </span>
+                    )}
+                    <span className="min-w-0 flex-1 truncate">{player.name}</span>
+                    {sus.suspended ? (
+                      <span className="rounded bg-red-500/20 px-1.5 py-0.5 text-[9px] font-bold text-red-300">
+                        {sus.reason === 'red_card' ? 'Red card' : '5 Yellows'}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-white/40">{player.position}</span>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
             {!choices.length && <li className="text-sm text-white/40">No {openRole} is free for this place.</li>}
           </ul>
           <button type="button" className="mt-2 text-xs font-bold text-white/50" onClick={() => { if (picking != null) place(picking, null); }}>Clear this place</button>
@@ -1198,13 +1231,29 @@ function LineupSide({
       <div className="mt-3">
         <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">Substitutes</p>
         <ul className="mt-2 flex flex-wrap gap-2">
-          {roster.filter((player) => !chosen.has(player.id)).map((player) => (
-            <li key={player.id}>
-              <button type="button" onClick={() => toggleBench(player.id)} className={`rounded-full px-3 py-1 text-xs font-bold ${bench.includes(player.id) ? 'bg-[#f5c518] text-[#102018]' : 'bg-white/10 text-white/70'}`}>
-                {player.number} {player.name}
-              </button>
-            </li>
-          ))}
+          {roster.filter((player) => !chosen.has(player.id)).map((player) => {
+            const sus = getPlayerSuspension(player.id, teamId, matchId);
+            return (
+              <li key={player.id}>
+                <button
+                  type="button"
+                  disabled={sus.suspended}
+                  onClick={() => toggleBench(player.id)}
+                  title={sus.suspended ? sus.detail : undefined}
+                  className={`rounded-full px-3 py-1 text-xs font-bold transition-all ${
+                    sus.suspended
+                      ? 'border border-red-500/40 bg-red-500/20 text-red-300 cursor-not-allowed opacity-60'
+                      : bench.includes(player.id)
+                      ? 'bg-[#f5c518] text-[#102018]'
+                      : 'bg-white/10 text-white/70 hover:bg-white/20'
+                  }`}
+                >
+                  {player.number} {player.name}
+                  {sus.suspended ? ' (Suspended)' : ''}
+                </button>
+              </li>
+            );
+          })}
           {!roster.length && <li className="text-sm text-white/40">Register players for this team before setting a lineup.</li>}
         </ul>
       </div>

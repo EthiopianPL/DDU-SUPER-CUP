@@ -6,7 +6,7 @@ import { can, hashPassword, ROLES } from './auth.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 import { transaction } from './db.mjs';
-import { participation, substitutionCount, yellowCount } from './eligibility.mjs';
+import { participation, substitutionCount, yellowCount, checkPlayerSuspension } from './eligibility.mjs';
 import {
   getStorageProvider,
   isSupabaseConfigured,
@@ -1284,12 +1284,12 @@ export function saveLineup(db, actor, matchId, input) {
       }
       if (starters.length < 11) throw new RuleError('Fill all 11 starter positions before approving the lineup.');
       if (starters.length > 11) throw new RuleError('A team can start at most 11 players.');
-      starters.forEach((playerId) => ensureSquadPlayerSafe(db, playerId, teamId));
+      starters.forEach((playerId) => ensureSquadPlayerSafe(db, playerId, teamId, matchId));
     } else {
       if (starters.length > 11) throw new RuleError('A team can start at most 11 players.');
-      starters.forEach((playerId) => ensureSquadPlayerSafe(db, playerId, teamId));
+      starters.forEach((playerId) => ensureSquadPlayerSafe(db, playerId, teamId, matchId));
     }
-    for (const playerId of bench) ensureSquadPlayerSafe(db, playerId, teamId);
+    for (const playerId of bench) ensureSquadPlayerSafe(db, playerId, teamId, matchId);
 
     db.prepare('DELETE FROM match_squad WHERE match_id = ? AND team_id = ?').run(matchId, teamId);
     const insert = db.prepare('INSERT INTO match_squad (match_id, team_id, player_id, role, sort_index) VALUES (?, ?, ?, ?, ?)');
@@ -1312,9 +1312,17 @@ function formationRoles(formation) {
   return roles;
 }
 
-function ensureSquadPlayerSafe(db, playerId, teamId) {
+function ensureSquadPlayerSafe(db, playerId, teamId, matchId) {
   const player = playerRow(db, playerId);
   if (player.team_id !== teamId || !player.active) throw new RuleError(`${player.name} is not an active player for this team.`);
+  if (matchId) {
+    const teamMatches = db.prepare('SELECT * FROM matches WHERE home_id = ? OR away_id = ?').all(teamId, teamId);
+    const events = db.prepare('SELECT * FROM match_events WHERE voided = 0').all();
+    const check = checkPlayerSuspension(teamMatches, events, playerId, matchId);
+    if (check.suspended) {
+      throw new RuleError(`Cannot add ${player.name} to lineup: ${check.detail}`);
+    }
+  }
   return player;
 }
 

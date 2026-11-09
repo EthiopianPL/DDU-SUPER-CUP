@@ -402,6 +402,125 @@ export function topAssists(limit = 5) {
     }));
 }
 
+export function topYellowCards(limit = 10) {
+  return players
+    .filter((player) => player.registered !== false && (player.yellowCards ?? 0) > 0)
+    .sort((a, b) => (b.yellowCards ?? 0) - (a.yellowCards ?? 0) || (b.redCards ?? 0) - (a.redCards ?? 0) || b.goals - a.goals)
+    .slice(0, limit)
+    .map((player) => ({
+      ...player,
+      department: getDepartment(player.departmentId),
+    }));
+}
+
+export function topRedCards(limit = 10) {
+  return players
+    .filter((player) => player.registered !== false && (player.redCards ?? 0) > 0)
+    .sort((a, b) => (b.redCards ?? 0) - (a.redCards ?? 0) || (b.yellowCards ?? 0) - (a.yellowCards ?? 0) || b.goals - a.goals)
+    .slice(0, limit)
+    .map((player) => ({
+      ...player,
+      department: getDepartment(player.departmentId),
+    }));
+}
+
+export interface PlayerSuspension {
+  suspended: boolean;
+  reason?: 'red_card' | 'yellow_cards';
+  detail?: string;
+}
+
+export function getPlayerSuspension(
+  playerId: string,
+  teamId?: string,
+  targetMatchId?: string,
+): PlayerSuspension {
+  const p = players.find((x) => x.id === playerId);
+  const deptId = teamId || p?.departmentId;
+  if (!deptId) return { suspended: false };
+
+  const teamMatches = fixtures
+    .filter((m) => (m.homeId === deptId || m.awayId === deptId) && m.status !== 'cancelled')
+    .sort((a, b) => {
+      const dateA = a.date || '';
+      const dateB = b.date || '';
+      if (dateA !== dateB) return dateA.localeCompare(dateB);
+      const timeA = a.time || '';
+      const timeB = b.time || '';
+      if (timeA !== timeB) return timeA.localeCompare(timeB);
+      return a.id.localeCompare(b.id);
+    });
+
+  const effectiveTargetId =
+    targetMatchId ||
+    teamMatches.find((m) => m.status !== 'finished' && m.detail !== 'finished')?.id;
+
+  if (!effectiveTargetId) return { suspended: false };
+
+  let accumulatedYellows = 0;
+  let servingRedSuspension = false;
+  let servingYellowSuspension = false;
+
+  for (const match of teamMatches) {
+    if (match.id === effectiveTargetId) {
+      if (servingRedSuspension) {
+        return {
+          suspended: true,
+          reason: 'red_card',
+          detail: 'Suspended (Red card in previous match)',
+        };
+      }
+      if (servingYellowSuspension) {
+        return {
+          suspended: true,
+          reason: 'yellow_cards',
+          detail: 'Suspended (Accumulated 5 yellow cards)',
+        };
+      }
+      return { suspended: false };
+    }
+
+    const isFinished = match.status === 'finished' || match.detail === 'finished';
+    if (isFinished) {
+      if (servingRedSuspension) servingRedSuspension = false;
+      if (servingYellowSuspension) servingYellowSuspension = false;
+    }
+
+    const currentMatchEvents = matchEvents.filter((e) => !e.voided && e.matchId === match.id);
+    for (const e of currentMatchEvents) {
+      if (e.playerId === playerId) {
+        if (e.type === 'card') {
+          if (e.cardType === 'red' || e.cardType === 'second_yellow') {
+            servingRedSuspension = true;
+          } else if (e.cardType === 'yellow') {
+            accumulatedYellows += 1;
+            if (accumulatedYellows > 0 && accumulatedYellows % 5 === 0) {
+              servingYellowSuspension = true;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (servingRedSuspension) {
+    return {
+      suspended: true,
+      reason: 'red_card',
+      detail: 'Suspended (Red card in previous match)',
+    };
+  }
+  if (servingYellowSuspension) {
+    return {
+      suspended: true,
+      reason: 'yellow_cards',
+      detail: 'Suspended (Accumulated 5 yellow cards)',
+    };
+  }
+
+  return { suspended: false };
+}
+
 export interface GoalEvent {
   minute: number;
   teamId: string;
