@@ -7,6 +7,7 @@ import { can, hashPassword, newToken, verifyPassword } from './auth.mjs';
 import { openDatabase } from './db.mjs';
 import {
   buildSnapshot,
+  cleanupExpiredMotm,
   clockPayload,
   controlMatch,
   correctEvent,
@@ -100,6 +101,11 @@ function ensureKeepAlive() {
 }
 
 export function pushClock(db) {
+  try {
+    cleanupExpiredMotm(db);
+  } catch (error) {
+    console.error('MOTM expiration check failed:', error?.message);
+  }
   const payload = clockPayload(db);
   if (payload.matches.length) broadcast(payload);
 }

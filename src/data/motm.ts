@@ -123,6 +123,59 @@ export function getPlayerMatchStats(
 }
 
 /**
+ * Checks whether an official Man of the Match has expired:
+ * 1. Next game started: expires when a subsequent session/matchday game kicks off.
+ * 2. 24-hour timeout: if no subsequent game, expires 24 hours after the match finishes.
+ */
+export function isMotmExpired(
+  fixture: Fixture,
+  fixtureList: Fixture[] = fixtures,
+  now: number = Date.now(),
+): boolean {
+  const isFinished = fixture.status === 'finished' || fixture.detail === 'finished';
+  if (!isFinished) return false;
+
+  // 1. 24-hour expiration rule
+  const finishTime = fixture.finishedAt ?? (fixture.date ? new Date(`${fixture.date}T${fixture.time || '00:00'}:00`).getTime() : 0);
+  if (finishTime > 0 && now - finishTime >= 24 * 60 * 60 * 1000) {
+    return true;
+  }
+
+  // 2. Next game start rule
+  const sorted = [...fixtureList].sort((a, b) => {
+    const dateCmp = (a.date || '').localeCompare(b.date || '');
+    if (dateCmp !== 0) return dateCmp;
+    const timeCmp = (a.time || '').localeCompare(b.time || '');
+    if (timeCmp !== 0) return timeCmp;
+    return a.id.localeCompare(b.id);
+  });
+
+  const currentIndex = sorted.findIndex((m) => m.id === fixture.id);
+  if (currentIndex === -1) return false;
+
+  for (let j = currentIndex + 1; j < sorted.length; j++) {
+    const nextMatch = sorted[j];
+    const isNextSession =
+      (typeof nextMatch.matchday === 'number' && typeof fixture.matchday === 'number' && nextMatch.matchday > fixture.matchday) ||
+      (nextMatch.date && fixture.date && nextMatch.date > fixture.date) ||
+      (j - currentIndex >= 2);
+
+    if (isNextSession) {
+      const hasStarted =
+        ['live', 'halftime', 'extra_time', 'penalties', 'finished'].includes(nextMatch.status) ||
+        ['live', 'halftime', 'extra_time', 'penalties', 'finished'].includes(nextMatch.detail || '') ||
+        Boolean(nextMatch.runningSince);
+
+      if (hasStarted) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
  * Retrieves the official Man of the Match for a given fixture.
  *
  * Rules:
@@ -131,14 +184,21 @@ export function getPlayerMatchStats(
  * - Never publishes a poster without an official admin selection AND uploaded photograph.
  * - Validates that the selected player belongs to one of the two participating teams.
  * - Returns null if the match is not finished, selection is missing, or selection was removed.
+ * - Returns null if the Man of the Match has expired (24h timeout or next game started).
  */
 export function getManOfTheMatch(
   fixture: Fixture,
   playerPool: Player[] = players,
   eventPool: MatchEventRecord[] = matchEvents,
+  fixtureList: Fixture[] = fixtures,
+  now: number = Date.now(),
 ): { player: Player; photoUrl: string; stats: PlayerMatchStats } | null {
   const isFinished = fixture.status === 'finished' || fixture.detail === 'finished';
   if (!isFinished) return null;
+
+  if (isMotmExpired(fixture, fixtureList, now)) {
+    return null;
+  }
 
   const playerId = fixture.motmPlayerId;
   const photoUrl = fixture.motmPhotoUrl;
@@ -203,7 +263,7 @@ export function getActiveMatchdayHighlights(
     const matches = matchdays.get(md) || [];
     return matches.some((match) => {
       const isFinished = match.status === 'finished' || match.detail === 'finished';
-      return isFinished && getManOfTheMatch(match, playerPool, eventPool) !== null;
+      return isFinished && getManOfTheMatch(match, playerPool, eventPool, fixtureList) !== null;
     });
   });
 
@@ -224,7 +284,7 @@ export function getActiveMatchdayHighlights(
     const isFinished = match.status === 'finished' || match.detail === 'finished';
     if (!isFinished) continue;
 
-    const motm = getManOfTheMatch(match, playerPool, eventPool);
+    const motm = getManOfTheMatch(match, playerPool, eventPool, fixtureList);
     if (!motm) continue;
 
     const homeDept = deptPool.find((d) => d.id === match.homeId);
@@ -271,7 +331,7 @@ export function getLatestMotmHighlights(
 ): MatchdayHighlight[] {
   const finishedWithMotm = fixtureList.filter((m) => {
     const isFinished = m.status === 'finished' || m.detail === 'finished';
-    return isFinished && getManOfTheMatch(m, playerPool, eventPool) !== null;
+    return isFinished && getManOfTheMatch(m, playerPool, eventPool, fixtureList) !== null;
   });
 
   // Sort by newest finished:
@@ -296,7 +356,7 @@ export function getLatestMotmHighlights(
   const highlights: MatchdayHighlight[] = [];
 
   for (const match of chosen) {
-    const motm = getManOfTheMatch(match, playerPool, eventPool);
+    const motm = getManOfTheMatch(match, playerPool, eventPool, fixtureList);
     if (!motm) continue;
 
     const homeDept = deptPool.find((d) => d.id === match.homeId);

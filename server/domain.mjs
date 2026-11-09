@@ -394,7 +394,104 @@ export function ensureNewsStamps(db) {
   }
 }
 
+export function cleanupExpiredMotm(db, now = Date.now(), shouldTouch = true) {
+  const matchesWithMotm = db.prepare(`
+    SELECT id, matchday, kickoff_date, kickoff_time, status, running_since, finished_at, updated_at, motm_player_id, motm_photo_url
+    FROM matches
+    WHERE motm_player_id IS NOT NULL AND motm_photo_url IS NOT NULL
+  `).all();
+
+  if (!matchesWithMotm.length) return 0;
+
+  const allMatches = db.prepare(`
+    SELECT id, matchday, kickoff_date, kickoff_time, status, running_since, finished_at, updated_at
+    FROM matches
+    ORDER BY kickoff_date ASC, kickoff_time ASC, id ASC
+  `).all();
+
+  const expiredMatches = [];
+
+  for (const m of matchesWithMotm) {
+    let finishedAt = Number(m.finished_at || 0);
+    if (!finishedAt) {
+      finishedAt = Number(m.updated_at || 0);
+    }
+
+    // 1. 24-hour expiration rule: if 24 hours have elapsed since the match finished
+    const isOver24Hours = finishedAt > 0 && (now - finishedAt >= 24 * 60 * 60 * 1000);
+
+    // 2. Next game start rule:
+    // If any subsequent session/matchday match has started
+    const currentIndex = allMatches.findIndex((item) => item.id === m.id);
+    let nextGameStarted = false;
+
+    if (currentIndex !== -1) {
+      for (let j = currentIndex + 1; j < allMatches.length; j++) {
+        const nextMatch = allMatches[j];
+        const isNextSession =
+          (nextMatch.matchday != null && m.matchday != null && nextMatch.matchday > m.matchday) ||
+          (nextMatch.kickoff_date && m.kickoff_date && nextMatch.kickoff_date > m.kickoff_date) ||
+          (j - currentIndex >= 2);
+
+        if (isNextSession) {
+          const hasStarted =
+            ['live', 'halftime', 'extra_first', 'extra_second', 'penalties', 'finished'].includes(nextMatch.status) ||
+            nextMatch.running_since != null;
+
+          if (hasStarted) {
+            nextGameStarted = true;
+            break;
+          }
+        }
+      }
+    }
+
+    if (isOver24Hours || nextGameStarted) {
+      expiredMatches.push({
+        id: m.id,
+        before: { motmPlayerId: m.motm_player_id, motmPhotoUrl: m.motm_photo_url },
+        reason: isOver24Hours ? 'expired_24hr' : 'next_game_started',
+      });
+    }
+  }
+
+  if (!expiredMatches.length) return 0;
+
+  const assetsToDelete = [];
+  transaction(db, () => {
+    for (const item of expiredMatches) {
+      const matchId = item.id;
+      const prevAsset = db.prepare('SELECT path, bucket, public_id FROM media_assets WHERE entity_type = ? AND entity_id = ? AND category = ?').get('matches', matchId, 'motm');
+      if (prevAsset) {
+        assetsToDelete.push({ path: prevAsset.path || prevAsset.public_id, bucket: prevAsset.bucket || DEFAULT_BUCKET });
+        db.prepare('DELETE FROM media_assets WHERE entity_type = ? AND entity_id = ? AND category = ?').run('matches', matchId, 'motm');
+      }
+      db.prepare('DELETE FROM media WHERE id = ? OR id LIKE ?').run(`motm/${matchId}`, `motm/${matchId}%`);
+      db.prepare('UPDATE matches SET motm_player_id = NULL, motm_photo_url = NULL, version = version + 1, updated_at = ? WHERE id = ?').run(
+        Date.now(),
+        matchId,
+      );
+      audit(db, { id: 'system', username: 'system', role: 'system' }, 'match.motm.expire', 'match', matchId, item.before, { reason: item.reason });
+    }
+  });
+
+  for (const asset of assetsToDelete) {
+    if (asset.path) {
+      const playerReuse = db.prepare('SELECT COUNT(*) AS total FROM players WHERE photo_url LIKE ?').get(`%${asset.path}%`);
+      if (!Number(playerReuse?.total)) {
+        deleteFromSupabaseStorage(asset.bucket || DEFAULT_BUCKET, asset.path).catch(() => {});
+      }
+    }
+  }
+
+  if (shouldTouch) {
+    touch();
+  }
+  return expiredMatches.length;
+}
+
 export function buildSnapshot(db, now = Date.now()) {
+  cleanupExpiredMotm(db, now, false);
   const competition = db.prepare('SELECT * FROM competitions WHERE id = ?').get('super-cup');
   const teams = db.prepare('SELECT * FROM teams ORDER BY name').all();
   const players = db.prepare('SELECT * FROM players').all();
