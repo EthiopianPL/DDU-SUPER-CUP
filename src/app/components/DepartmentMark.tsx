@@ -55,7 +55,7 @@ export function DepartmentMark({
   className = '',
 }: DepartmentMarkProps) {
   const [failed, setFailed] = useState(false);
-  const resolvedSrc = src && src.trim().length > 0 ? src.trim() : (id ? resolveTeamLogoUrl(id) : undefined);
+  const resolvedSrc = resolveTeamLogoUrl(id, src) || (src && src.trim().length > 0 ? src.trim() : undefined);
   const abbr = getTeamAbbr(shortName, name, id);
 
   if (resolvedSrc && !failed) {

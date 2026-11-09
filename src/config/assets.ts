@@ -175,20 +175,29 @@ export const LOCAL_TEAM_LOGO_FILES: Record<string, string> = {
 /**
  * Resolves a team logo URL:
  * 1. If explicit custom `crest_url` is stored in DB and non-empty, use it.
+ *    If it points to a fallback SVG and a static photo exists in LOCAL_TEAM_LOGO_FILES, use the static photo.
  * 2. If team ID has a local static logo file, resolve to /uploads/teams/<filename>.
  * 3. Fallback to /uploads/teams/<teamId>.svg.
  */
 export function resolveTeamLogoUrl(teamId?: string | null, customCrestUrl?: string | null): string {
+  const normalizedId = teamId ? teamId.toLowerCase().trim() : '';
+  const localFileName = normalizedId ? LOCAL_TEAM_LOGO_FILES[normalizedId] : null;
+
   if (customCrestUrl && customCrestUrl.trim().length > 0) {
-    return customCrestUrl.trim();
+    const trimmed = customCrestUrl.trim();
+    if (localFileName && trimmed.toLowerCase().endsWith('.svg') && localFileName.toLowerCase().endsWith('.jpg')) {
+      return `/uploads/teams/${localFileName}`;
+    }
+    return trimmed;
   }
-  if (!teamId) return '';
-  const normalizedId = teamId.toLowerCase().trim();
-  const localFileName = LOCAL_TEAM_LOGO_FILES[normalizedId];
+
   if (localFileName) {
     return `/uploads/teams/${localFileName}`;
   }
-  return `/uploads/teams/${normalizedId}.svg`;
+  if (normalizedId) {
+    return `/uploads/teams/${normalizedId}.svg`;
+  }
+  return '';
 }
 
 /**
