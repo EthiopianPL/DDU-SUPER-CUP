@@ -220,6 +220,7 @@ function migrate(db) {
       summary TEXT NOT NULL,
       body TEXT NOT NULL,
       image_url TEXT NOT NULL DEFAULT '',
+      image_urls TEXT NOT NULL DEFAULT '[]',
       created_at INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS audit_log (
@@ -237,6 +238,9 @@ function migrate(db) {
   const newsColumns = db.prepare('PRAGMA table_info(news)').all();
   if (newsColumns.length && !newsColumns.some((column) => column.name === 'image_url')) {
     db.exec(`ALTER TABLE news ADD COLUMN image_url TEXT NOT NULL DEFAULT ''`);
+  }
+  if (newsColumns.length && !newsColumns.some((column) => column.name === 'image_urls')) {
+    db.exec(`ALTER TABLE news ADD COLUMN image_urls TEXT NOT NULL DEFAULT '[]'`);
   }
   if (newsColumns.length && !newsColumns.some((column) => column.name === 'created_at')) {
     db.exec(`ALTER TABLE news ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0`);

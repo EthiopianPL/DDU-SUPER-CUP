@@ -528,16 +528,27 @@ export function buildSnapshot(db, now = Date.now()) {
       sort: row.sort_index,
     })),
     stats: stats.map((row) => ({ matchId: row.match_id, teamId: row.team_id, metric: row.metric, value: row.value })),
-    news: news.map((article) => ({
-      id: article.id,
-      title: article.title,
-      category: article.category,
-      time: article.time_label,
-      summary: article.summary,
-      body: article.body,
-      imageUrl: article.image_url || '',
-      createdAt: Number(article.created_at) || 0,
-    })),
+    news: news.map((article) => {
+      let imageUrls = [];
+      try {
+        if (article.image_urls) imageUrls = JSON.parse(article.image_urls);
+      } catch {}
+      if (!Array.isArray(imageUrls) || !imageUrls.length) {
+        if (article.image_url) imageUrls = [article.image_url];
+        else imageUrls = [];
+      }
+      return {
+        id: article.id,
+        title: article.title,
+        category: article.category,
+        time: article.time_label,
+        summary: article.summary,
+        body: article.body,
+        imageUrl: article.image_url || imageUrls[0] || '',
+        imageUrls,
+        createdAt: Number(article.created_at) || 0,
+      };
+    }),
   };
 }
 
@@ -872,21 +883,58 @@ export async function saveNews(db, actor, input, id) {
   const summary = String(input.summary ?? '').trim();
   const body = String(input.body ?? '').trim();
   if (!title || !summary || !body) throw new RuleError('Title, summary, and story are required.');
-  const image = storedImage(input);
   const articleId = id || slug(title);
-  const before = id ? db.prepare('SELECT id, image_url FROM news WHERE id = ?').get(id) : null;
+  const before = id ? db.prepare('SELECT id, image_url, image_urls FROM news WHERE id = ?').get(id) : null;
   if (id && !before) throw new RuleError('Story not found.', 404);
   if (!id && db.prepare('SELECT id FROM news WHERE id = ?').get(articleId)) throw new RuleError('A story with that title already exists.');
 
-  let imageUrl = before?.image_url ?? '';
-  if (image) {
-    imageUrl = saveMedia(db, 'news', articleId, image);
+  let finalImageUrls = [];
+  if (Array.isArray(input.images)) {
+    for (let i = 0; i < input.images.length; i++) {
+      const item = input.images[i];
+      if (!item) continue;
+      if (typeof item === 'string' && !item.startsWith('data:')) {
+        finalImageUrls.push(item);
+      } else if (item.url && typeof item.url === 'string' && !item.url.startsWith('data:')) {
+        finalImageUrls.push(item.url);
+      } else {
+        const img = storedImage(item.image ? item : { image: item });
+        if (img) {
+          const mediaId = `${articleId}-${i}-${Date.now().toString(36)}`;
+          const url = saveMedia(db, 'news', mediaId, img);
+          finalImageUrls.push(url);
+        }
+      }
+    }
+  } else if (input.image) {
+    const img = storedImage(input);
+    if (img) {
+      const url = saveMedia(db, 'news', articleId, img);
+      finalImageUrls.push(url);
+    }
+  } else if (before) {
+    try {
+      if (before.image_urls) finalImageUrls = JSON.parse(before.image_urls);
+    } catch {}
+    if (!finalImageUrls.length && before.image_url) {
+      finalImageUrls = [before.image_url];
+    }
   }
 
+  const primaryImageUrl = finalImageUrls[0] || '';
+
   return transaction(db, () => {
-    const fields = [title, String(input.category ?? 'News').trim() || 'News', String(input.time ?? 'Today').trim() || 'Today', summary, body, imageUrl];
-    if (id) db.prepare('UPDATE news SET title=?, category=?, time_label=?, summary=?, body=?, image_url=? WHERE id=?').run(...fields, id);
-    else db.prepare('INSERT INTO news (title, category, time_label, summary, body, image_url, id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(...fields, articleId, Date.now());
+    const fields = [
+      title,
+      String(input.category ?? 'News').trim() || 'News',
+      String(input.time ?? 'Today').trim() || 'Today',
+      summary,
+      body,
+      primaryImageUrl,
+      JSON.stringify(finalImageUrls),
+    ];
+    if (id) db.prepare('UPDATE news SET title=?, category=?, time_label=?, summary=?, body=?, image_url=?, image_urls=? WHERE id=?').run(...fields, id);
+    else db.prepare('INSERT INTO news (title, category, time_label, summary, body, image_url, image_urls, id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(...fields, articleId, Date.now());
     audit(db, actor, id ? 'news.update' : 'news.create', 'news', id || articleId, null, { title });
     return { id: id || articleId };
   });
@@ -904,7 +952,7 @@ export function deleteNews(db, actor, id) {
   return transaction(db, () => {
     const result = db.prepare('DELETE FROM news WHERE id = ?').run(id);
     if (!result.changes) throw new RuleError('Story not found.', 404);
-    db.prepare('DELETE FROM media WHERE id = ?').run(`news/${id}`);
+    db.prepare('DELETE FROM media WHERE id = ? OR id LIKE ?').run(`news/${id}`, `news/${id}-%`);
     audit(db, actor, 'news.delete', 'news', id, null, null);
     return { ok: true };
   });

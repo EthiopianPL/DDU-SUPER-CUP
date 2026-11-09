@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
-import { Eye, EyeOff, Edit3, Plus, X, Trash2, Search, ExternalLink, LogOut, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, Edit3, Plus, X, Trash2, Search, ExternalLink, LogOut, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { desk, imagePayload } from '../../data/api';
 import { useLeagueVersion } from '../../data/live';
 import { newsArticles } from '../../data/news';
@@ -9,6 +9,7 @@ import { DepartmentMark, Portrait } from '../components/DepartmentMark';
 import { MatchLoading } from '../components/Layout';
 import { RichTextEditor } from '../components/RichTextEditor';
 import { RichTextContent } from '../components/RichTextContent';
+import { NewsImageSlider, getArticleImages } from '../components/NewsImageSlider';
 import { stripHtml } from '../utils/richText';
 import {
   departments,
@@ -2181,6 +2182,13 @@ function PlayerEditor({
   );
 }
 
+interface NewsPhotoItem {
+  id: string;
+  file?: File;
+  preview: string;
+  url?: string;
+}
+
 function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; onError: (text: string) => void }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
@@ -2188,18 +2196,54 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
   const [timeLabel, setTimeLabel] = useState('Today');
   const [summary, setSummary] = useState('');
   const [body, setBody] = useState('');
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState('');
-  const [photoKey, setPhotoKey] = useState(0);
+  const [photos, setPhotos] = useState<NewsPhotoItem[]>([]);
+  const [photoInputKey, setPhotoInputKey] = useState(0);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
 
-  const choosePhoto = (next: File | null) => {
-    setFile(next);
-    setPreview((current) => {
-      if (current.startsWith('blob:')) URL.revokeObjectURL(current);
-      return next ? URL.createObjectURL(next) : '';
+  const addPhotos = (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    const incoming: NewsPhotoItem[] = [];
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+        onError('Please select PNG, JPEG, or WebP images only.');
+        continue;
+      }
+      if (file.size > 1_500_000) {
+        onError(`"${file.name}" is larger than 1.5 MB. Please select images under 1.5 MB.`);
+        continue;
+      }
+      incoming.push({
+        id: `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${i}`,
+        file,
+        preview: URL.createObjectURL(file),
+      });
+    }
+    if (incoming.length > 0) {
+      setPhotos((prev) => [...prev, ...incoming]);
+    }
+    setPhotoInputKey((k) => k + 1);
+  };
+
+  const removePhoto = (id: string) => {
+    setPhotos((prev) => {
+      const target = prev.find((p) => p.id === id);
+      if (target?.preview.startsWith('blob:')) {
+        URL.revokeObjectURL(target.preview);
+      }
+      return prev.filter((p) => p.id !== id);
+    });
+  };
+
+  const movePhoto = (fromIndex: number, toIndex: number) => {
+    setPhotos((prev) => {
+      if (toIndex < 0 || toIndex >= prev.length) return prev;
+      const copy = [...prev];
+      const [item] = copy.splice(fromIndex, 1);
+      copy.splice(toIndex, 0, item);
+      return copy;
     });
   };
 
@@ -2210,12 +2254,13 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
     setTimeLabel('Today');
     setSummary('');
     setBody('');
-    setFile(null);
-    setPhotoKey((value) => value + 1);
-    setPreview((current) => {
-      if (current.startsWith('blob:')) URL.revokeObjectURL(current);
-      return '';
+    setPhotos((prev) => {
+      for (const p of prev) {
+        if (p.preview.startsWith('blob:')) URL.revokeObjectURL(p.preview);
+      }
+      return [];
     });
+    setPhotoInputKey((value) => value + 1);
     setIsPreviewMode(false);
   };
 
@@ -2226,8 +2271,20 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
     setTimeLabel(article.time || 'Today');
     setSummary(article.summary || '');
     setBody(article.body || '');
-    setFile(null);
-    setPreview(article.imageUrl || '');
+    setPhotos((prev) => {
+      for (const p of prev) {
+        if (p.preview.startsWith('blob:')) URL.revokeObjectURL(p.preview);
+      }
+      return [];
+    });
+    const existingUrls = getArticleImages(article);
+    setPhotos(
+      existingUrls.map((url, i) => ({
+        id: `existing-${article.id}-${i}`,
+        preview: url,
+        url,
+      }))
+    );
     setIsPreviewMode(false);
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
@@ -2249,15 +2306,28 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
 
     setIsSubmitting(true);
     try {
-      const image = file ? await imagePayload(file) : undefined;
-      const payload = {
+      const imagesPayload = [];
+      for (const item of photos) {
+        if (item.file) {
+          const payload = await imagePayload(item.file);
+          imagesPayload.push(payload);
+        } else if (item.url) {
+          imagesPayload.push({ url: item.url });
+        }
+      }
+
+      const firstData = imagesPayload[0]?.data;
+      const payload: Record<string, unknown> = {
         title: title.trim(),
         summary: summary.trim(),
         body: body.trim(),
         category: category.trim() || 'News',
         time: timeLabel.trim() || 'Today',
-        ...(image ? { image } : {}),
+        images: imagesPayload,
       };
+      if (firstData) {
+        payload.image = { contentType: imagesPayload[0].contentType, data: firstData };
+      }
 
       if (editingId) {
         await desk(`/api/news/${editingId}`, {
@@ -2352,8 +2422,14 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
               <span className="text-white/40">{timeLabel || 'Today'}</span>
             </div>
             <h1 className="text-2xl font-black text-white">{title || 'Story headline will appear here'}</h1>
-            {preview && (
-              <img src={preview} alt="" className="h-56 w-full rounded-2xl object-cover" />
+            {photos.length > 0 && (
+              <div className="overflow-hidden rounded-2xl">
+                <NewsImageSlider
+                  images={photos.map((p) => p.preview)}
+                  alt={title}
+                  className="h-60 sm:h-72 w-full"
+                />
+              </div>
             )}
             <p className="text-sm font-semibold text-white/60 italic">{summary || 'Summary line'}</p>
             <div className="border-t border-white/10 pt-4">
@@ -2363,13 +2439,121 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
         ) : (
           /* EDITING FORM FIELDS */
           <div className="mt-5 grid gap-4">
-            <PicturePicker
-              preview={preview}
-              empty={editingId ? 'Change photo (optional)' : 'Story photo'}
-              wide
-              inputKey={photoKey}
-              onFile={choosePhoto}
-            />
+            {/* Multiple Photos Manager */}
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <div>
+                  <label className="text-[11px] font-bold uppercase tracking-wide text-white/40">
+                    Story Photos ({photos.length})
+                  </label>
+                  <p className="text-xs text-white/50">
+                    Add multiple photos. If 2 or more are uploaded, readers can swipe through them on Home and News.
+                  </p>
+                </div>
+                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/80 hover:border-white/30 hover:bg-white/10 hover:text-white transition-colors">
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Add photos</span>
+                  <input
+                    key={photoInputKey}
+                    type="file"
+                    multiple
+                    accept="image/png,image/jpeg,image/webp"
+                    className="sr-only"
+                    onChange={(e) => addPhotos(e.target.files)}
+                  />
+                </label>
+              </div>
+
+              {photos.length === 0 ? (
+                <label className="flex h-36 w-full cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/15 bg-[#0c1424] hover:border-[#f5c518]/50 hover:bg-white/[0.02] transition-colors">
+                  <div className="flex flex-col items-center text-center p-4">
+                    <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-[#f5c518]">
+                      <Plus className="h-5 w-5" />
+                    </div>
+                    <span className="text-xs font-bold text-white">Click or tap to upload photos</span>
+                    <span className="mt-1 text-[11px] text-white/40">PNG, JPEG, WebP up to 1.5 MB each · Multi-select enabled</span>
+                  </div>
+                  <input
+                    key={photoInputKey}
+                    type="file"
+                    multiple
+                    accept="image/png,image/jpeg,image/webp"
+                    className="sr-only"
+                    onChange={(e) => addPhotos(e.target.files)}
+                  />
+                </label>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                  {photos.map((item, index) => (
+                    <div
+                      key={item.id}
+                      className="group relative overflow-hidden rounded-2xl border border-white/10 bg-[#0c1424] p-1.5 shadow-sm"
+                    >
+                      <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-black/40">
+                        <img
+                          src={item.preview}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                        <div className="absolute left-1.5 top-1.5">
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
+                              index === 0
+                                ? 'bg-[#f5c518] text-[#102018]'
+                                : 'bg-black/70 text-white backdrop-blur-sm'
+                            }`}
+                          >
+                            {index === 0 ? 'Cover' : `#${index + 1}`}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mt-1.5 flex items-center justify-between px-1">
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            disabled={index === 0}
+                            onClick={() => movePhoto(index, index - 1)}
+                            className="flex h-6 w-6 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/70 hover:bg-white/15 disabled:opacity-20 transition-colors"
+                            title="Move left"
+                          >
+                            <ChevronLeft className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={index === photos.length - 1}
+                            onClick={() => movePhoto(index, index + 1)}
+                            className="flex h-6 w-6 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/70 hover:bg-white/15 disabled:opacity-20 transition-colors"
+                            title="Move right"
+                          >
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removePhoto(item.id)}
+                          className="flex h-6 w-6 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/25 transition-colors"
+                          title="Remove photo"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <label className="flex aspect-video cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-white/20 bg-white/[0.02] text-white/50 hover:border-[#f5c518] hover:text-[#f5c518] transition-colors">
+                    <Plus className="h-5 w-5 mb-1" />
+                    <span className="text-[11px] font-bold">Add more</span>
+                    <input
+                      key={`more-${photoInputKey}`}
+                      type="file"
+                      multiple
+                      accept="image/png,image/jpeg,image/webp"
+                      className="sr-only"
+                      onChange={(e) => addPhotos(e.target.files)}
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
 
             <Field
               label="Title"
@@ -2490,7 +2674,16 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
                     : 'border-white/10 hover:border-white/20'
                   }`}
               >
-                {article.imageUrl && <img src={article.imageUrl} alt="" className="h-36 w-full object-cover" />}
+                {(() => {
+                  const imgs = getArticleImages(article);
+                  return imgs.length > 0 ? (
+                    <NewsImageSlider
+                      images={imgs}
+                      alt={stripHtml(article.title)}
+                      className="h-44 w-full"
+                    />
+                  ) : null;
+                })()}
                 <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">

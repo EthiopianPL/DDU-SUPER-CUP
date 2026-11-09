@@ -6,6 +6,7 @@ export interface NewsArticle {
   summary: string;
   body: string;
   imageUrl?: string;
+  imageUrls?: string[];
   createdAt?: number;
 }
 
