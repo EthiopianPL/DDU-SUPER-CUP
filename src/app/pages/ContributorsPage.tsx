@@ -153,7 +153,7 @@ export function ContributorsPage() {
               </a>
 
               <a
-                href="https://abrshiz.vercel.app/"
+                href="https://abrshiz.pro.et"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80 transition-all hover:border-[#f5c518]/40 hover:bg-[#f5c518]/10 hover:text-[#f5c518]"
