@@ -21,7 +21,15 @@ export function HomePage() {
   ).slice(0, 2);
   const leader = topScorers(1)[0];
   const results = latestResults(2);
-  const stories = [...newsArticles].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)).slice(0, 2);
+  const HOME_NEWS_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+  const now = Date.now();
+  const stories = [...newsArticles]
+    .filter((article) => {
+      const created = article.createdAt ?? 0;
+      return created > 0 && now - created < HOME_NEWS_MAX_AGE_MS;
+    })
+    .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+    .slice(0, 2);
   const motmHighlights = getLatestMotmHighlights(2, fixtures);
 
   return (
@@ -203,7 +211,18 @@ export function HomePage() {
               </div>
             );
           })}
-          {!stories.length && <p className="rounded-2xl border border-white/10 bg-[#10192b] px-4 py-6 text-sm text-white/50">No stories yet.</p>}
+          {!stories.length && (
+            <div className="rounded-2xl border border-white/10 bg-[#10192b] px-4 py-6 text-center text-sm text-white/50">
+              <p>No recent news in the last 24 hours.</p>
+              <button
+                type="button"
+                onClick={() => navigate('/news')}
+                className="mt-2 inline-flex items-center text-xs font-semibold text-[#f5c518] hover:underline"
+              >
+                Browse all previous stories <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
         </div>
       </section>
     </div>
