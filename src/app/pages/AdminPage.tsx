@@ -155,9 +155,8 @@ export function AdminPage() {
                 key={item.id}
                 type="button"
                 onClick={() => navigate(`/admin/${item.id}`)}
-                className={`flex shrink-0 items-center rounded-xl px-3 py-2 text-left text-sm font-bold transition-colors ${
-                  section === item.id ? 'bg-[#f5c518] text-[#102018]' : 'text-white/60 hover:bg-white/5 hover:text-white'
-                }`}
+                className={`flex shrink-0 items-center rounded-xl px-3 py-2 text-left text-sm font-bold transition-colors ${section === item.id ? 'bg-[#f5c518] text-[#102018]' : 'text-white/60 hover:bg-white/5 hover:text-white'
+                  }`}
               >
                 {item.label}
               </button>
@@ -1162,7 +1161,15 @@ function LineupSide({
   const currentIds = new Set(current.map((row) => row.playerId));
   const roster = players.filter((player) => player.departmentId === teamId && player.active !== false && (player.registered !== false || currentIds.has(player.id)));
   const [shape, setShape] = useState(formation && FORMATIONS.includes(formation) ? formation : '4-2-3-1');
-  const [slots, setSlots] = useState<Array<string | null>>(() => seatPlayers(current.filter((row) => row.role === 'starter').sort((a, b) => a.sort - b.sort).map((row) => row.playerId), formation || '4-2-3-1', roster));
+  const [slots, setSlots] = useState<Array<string | null>>(() => {
+    const saved = current.filter((row) => row.role === 'starter').sort((a, b) => a.sort - b.sort).map((row) => row.playerId);
+    const initialShape = formation && FORMATIONS.includes(formation) ? formation : '4-2-3-1';
+    const planRoles = formationPlan(initialShape).flat();
+    if (saved.length === planRoles.length) {
+      return saved;
+    }
+    return seatPlayers(saved, initialShape, roster);
+  });
   const [bench, setBench] = useState(current.filter((row) => row.role === 'bench').map((row) => row.playerId));
   const [picking, setPicking] = useState<number | null>(null);
 
@@ -1191,14 +1198,26 @@ function LineupSide({
   };
   const autoFill = () => {
     const used = new Set<string>();
-    const newSlots: Array<string | null> = [];
-    for (const role of roles) {
-      const candidate = roster.find((p) => p.position === role && !used.has(p.id) && !getPlayerSuspension(p.id, teamId, matchId).suspended);
+    const newSlots: Array<string | null> = Array.from({ length: roles.length }, () => null);
+    for (let i = 0; i < roles.length; i++) {
+      const role = roles[i];
+      const candidate = roster.find(
+        (p) => p.position === role && !used.has(p.id) && !getPlayerSuspension(p.id, teamId, matchId).suspended
+      );
       if (candidate) {
-        newSlots.push(candidate.id);
+        newSlots[i] = candidate.id;
         used.add(candidate.id);
-      } else {
-        newSlots.push(null);
+      }
+    }
+    for (let i = 0; i < roles.length; i++) {
+      if (!newSlots[i]) {
+        const candidate = roster.find(
+          (p) => !used.has(p.id) && !getPlayerSuspension(p.id, teamId, matchId).suspended
+        );
+        if (candidate) {
+          newSlots[i] = candidate.id;
+          used.add(candidate.id);
+        }
       }
     }
     const newBench = roster
@@ -1216,7 +1235,16 @@ function LineupSide({
   };
   const ready = slots.every(Boolean);
   const openRole = picking == null ? null : roles[picking];
-  const choices = openRole ? roster.filter((player) => player.position === openRole && !bench.includes(player.id) && (slots[picking!] === player.id || !chosen.has(player.id))) : [];
+  const choices = openRole
+    ? roster
+      .filter((player) => !bench.includes(player.id) && (slots[picking!] === player.id || !chosen.has(player.id)))
+      .sort((a, b) => {
+        const aMatch = a.position === openRole ? 1 : 0;
+        const bMatch = b.position === openRole ? 1 : 0;
+        if (aMatch !== bMatch) return bMatch - aMatch;
+        return a.number - b.number;
+      })
+    : [];
   const tops = band(plan.length, 12, 88);
 
   return (
@@ -1303,18 +1331,29 @@ function LineupSide({
       </div>
       {openRole && (
         <div className="mt-3 rounded-2xl border border-white/10 bg-[#0c1424] p-3">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">{openRole === 'GK' ? 'Goalkeepers only' : `${openRole} only`}</p>
-          <ul className="mt-2 max-h-40 space-y-1 overflow-auto">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
+              Slot: <span className="text-[#f5c518]">{openRole}</span> · Any player can be placed here
+            </p>
+            <button
+              type="button"
+              className="text-xs font-bold text-white/50 hover:text-white"
+              onClick={() => setPicking(null)}
+            >
+              Close
+            </button>
+          </div>
+          <ul className="mt-2 max-h-48 space-y-1 overflow-auto">
             {choices.map((player) => {
               const sus = getPlayerSuspension(player.id, teamId, matchId);
+              const isNatural = player.position === openRole;
               return (
                 <li key={player.id}>
                   <button
                     type="button"
                     disabled={sus.suspended}
-                    className={`flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-sm ${
-                      sus.suspended ? 'opacity-40 cursor-not-allowed bg-red-500/10' : 'hover:bg-white/5'
-                    }`}
+                    className={`flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-sm ${sus.suspended ? 'opacity-40 cursor-not-allowed bg-red-500/10' : 'hover:bg-white/5'
+                      }`}
                     onClick={() => !sus.suspended && place(picking!, player.id)}
                     title={sus.suspended ? sus.detail : undefined}
                   >
@@ -1331,15 +1370,32 @@ function LineupSide({
                         {sus.reason === 'red_card' ? 'Red card' : '5 Yellows'}
                       </span>
                     ) : (
-                      <span className="text-[10px] font-bold text-white/40">{player.position}</span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isNatural ? 'bg-emerald-500/20 text-emerald-300' : 'text-white/40'}`}>
+                        {player.position}
+                      </span>
                     )}
                   </button>
                 </li>
               );
             })}
-            {!choices.length && <li className="text-sm text-white/40">No {openRole} is free for this place.</li>}
+            {!choices.length && <li className="text-sm text-white/40">No available player for this place.</li>}
           </ul>
-          <button type="button" className="mt-2 text-xs font-bold text-white/50" onClick={() => { if (picking != null) place(picking, null); }}>Clear this place</button>
+          <div className="mt-2 flex items-center justify-between border-t border-white/5 pt-2">
+            <button
+              type="button"
+              className="text-xs font-bold text-red-400 hover:text-red-300"
+              onClick={() => { if (picking != null) place(picking, null); }}
+            >
+              Clear this place
+            </button>
+            <button
+              type="button"
+              className="text-xs font-bold text-white/50 hover:text-white"
+              onClick={() => setPicking(null)}
+            >
+              Done
+            </button>
+          </div>
         </div>
       )}
       <div className="mt-3">
@@ -1354,13 +1410,12 @@ function LineupSide({
                   disabled={sus.suspended}
                   onClick={() => toggleBench(player.id)}
                   title={sus.suspended ? sus.detail : undefined}
-                  className={`rounded-full px-3 py-1 text-xs font-bold transition-all ${
-                    sus.suspended
+                  className={`rounded-full px-3 py-1 text-xs font-bold transition-all ${sus.suspended
                       ? 'border border-red-500/40 bg-red-500/20 text-red-300 cursor-not-allowed opacity-60'
                       : bench.includes(player.id)
-                      ? 'bg-[#f5c518] text-[#102018]'
-                      : 'bg-white/10 text-white/70 hover:bg-white/20'
-                  }`}
+                        ? 'bg-[#f5c518] text-[#102018]'
+                        : 'bg-white/10 text-white/70 hover:bg-white/20'
+                    }`}
                 >
                   {player.number} {player.name}
                   {sus.suspended ? ' (Suspended)' : ''}
@@ -2143,11 +2198,10 @@ function PlayerAdmin({ onMessage, onError }: { onMessage: (text: string) => void
                   return (
                     <li
                       key={player.id}
-                      className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-[#10192b] px-3.5 py-2.5 transition-all ${
-                        isEditing
+                      className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-[#10192b] px-3.5 py-2.5 transition-all ${isEditing
                           ? 'border-[#f5c518] ring-1 ring-[#f5c518]/50 shadow-lg'
                           : 'border-white/5 hover:border-white/15'
-                      }`}
+                        }`}
                     >
                       <div className="flex min-w-0 items-center gap-3">
                         <Portrait name={player.name} src={player.photoUrl || undefined} size={38} id={player.id} />
@@ -2180,11 +2234,10 @@ function PlayerAdmin({ onMessage, onError }: { onMessage: (text: string) => void
                         <button
                           type="button"
                           onClick={() => handleStartEdit(player)}
-                          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition ${
-                            isEditing
+                          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition ${isEditing
                               ? 'bg-[#f5c518] text-[#102018]'
                               : 'bg-white/10 text-white hover:bg-[#f5c518] hover:text-[#102018]'
-                          }`}
+                            }`}
                         >
                           <Edit3 className="h-3.5 w-3.5" />
                           {isEditing ? 'Editing' : 'Edit'}
@@ -2364,22 +2417,20 @@ function PlayerEditor({
               <button
                 type="button"
                 onClick={() => setIsCaptain(false)}
-                className={`rounded-full px-3.5 py-1.5 text-xs font-black transition ${
-                  !isCaptain
+                className={`rounded-full px-3.5 py-1.5 text-xs font-black transition ${!isCaptain
                     ? 'bg-[#f5c518] text-[#102018]'
                     : 'bg-white/5 text-white/70 hover:bg-white/10'
-                }`}
+                  }`}
               >
                 No (Squad Player)
               </button>
               <button
                 type="button"
                 onClick={() => setIsCaptain(true)}
-                className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-black transition ${
-                  isCaptain
+                className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-black transition ${isCaptain
                     ? 'bg-[#f5c518] text-[#102018] shadow-md shadow-[#f5c518]/20'
                     : 'bg-white/5 text-white/70 hover:bg-white/10'
-                }`}
+                  }`}
               >
                 <span>© Yes (Team Captain)</span>
               </button>
@@ -2630,8 +2681,8 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
               type="button"
               onClick={() => setIsPreviewMode(!isPreviewMode)}
               className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition-all ${isPreviewMode
-                  ? 'border-[#f5c518] bg-[#f5c518] text-[#102018]'
-                  : 'border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white'
+                ? 'border-[#f5c518] bg-[#f5c518] text-[#102018]'
+                : 'border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white'
                 }`}
             >
               {isPreviewMode ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
@@ -2735,11 +2786,10 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
                         />
                         <div className="absolute left-1.5 top-1.5">
                           <span
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
-                              index === 0
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-black ${index === 0
                                 ? 'bg-[#f5c518] text-[#102018]'
                                 : 'bg-black/70 text-white backdrop-blur-sm'
-                            }`}
+                              }`}
                           >
                             {index === 0 ? 'Cover' : `#${index + 1}`}
                           </span>
@@ -2813,8 +2863,8 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
                     type="button"
                     onClick={() => setCategory(cat)}
                     className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors ${category.toLowerCase() === cat.toLowerCase()
-                        ? 'bg-[#f5c518] text-[#102018]'
-                        : 'border border-white/10 bg-white/5 text-white/70 hover:border-white/25 hover:text-white'
+                      ? 'bg-[#f5c518] text-[#102018]'
+                      : 'border border-white/10 bg-white/5 text-white/70 hover:border-white/25 hover:text-white'
                       }`}
                   >
                     {cat}
@@ -2908,8 +2958,8 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
               <li
                 key={article.id}
                 className={`overflow-hidden rounded-2xl border bg-[#10192b] transition-all ${isEditing
-                    ? 'border-[#f5c518] ring-1 ring-[#f5c518]/40 shadow-md'
-                    : 'border-white/10 hover:border-white/20'
+                  ? 'border-[#f5c518] ring-1 ring-[#f5c518]/40 shadow-md'
+                  : 'border-white/10 hover:border-white/20'
                   }`}
               >
                 {(() => {
@@ -2938,8 +2988,8 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
                       type="button"
                       onClick={() => handleEdit(article)}
                       className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${isEditing
-                          ? 'bg-[#f5c518] text-[#102018]'
-                          : 'bg-white/10 text-white hover:bg-[#f5c518] hover:text-[#102018]'
+                        ? 'bg-[#f5c518] text-[#102018]'
+                        : 'bg-white/10 text-white hover:bg-[#f5c518] hover:text-[#102018]'
                         }`}
                     >
                       <Edit3 className="h-3.5 w-3.5" />

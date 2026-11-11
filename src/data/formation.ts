@@ -15,11 +15,27 @@ export function seatPlayers(ids: string[], formation: string, roster: Player[]) 
   const byId = new Map(roster.map((player) => [player.id, player]));
   const roles = formationPlan(formation).flat();
   const slots: Array<string | null> = roles.map(() => null);
+  const unplaced: string[] = [];
+
+  // Pass 1: Try seating matching natural positions first
   ids.forEach((id) => {
     const player = byId.get(id);
     if (!player) return;
     const index = slots.findIndex((taken, slot) => !taken && roles[slot] === player.position);
-    if (index >= 0) slots[index] = player.id;
+    if (index >= 0) {
+      slots[index] = player.id;
+    } else {
+      unplaced.push(player.id);
+    }
   });
+
+  // Pass 2: Place any remaining players into any open slots regardless of position
+  unplaced.forEach((id) => {
+    const emptyIndex = slots.findIndex((taken) => !taken);
+    if (emptyIndex >= 0) {
+      slots[emptyIndex] = id;
+    }
+  });
+
   return slots;
 }
