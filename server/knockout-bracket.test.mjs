@@ -354,6 +354,32 @@ test('DDU Super Cup teams pop up on knockout after group stage finishes', async 
       const afterUnapprove = db.prepare('SELECT lineup_home_approved FROM matches WHERE id = ?').get(testMatchId);
       assert.equal(afterUnapprove.lineup_home_approved, 0, 'Unapproving lineup sets lineup_home_approved back to 0');
 
+      // 8b. Match Admin can approve lineup
+      const matchAdminActor = { id: 'test-match-admin', role: 'match_admin', name: 'Match Admin' };
+      saveLineup(db, matchAdminActor, testMatchId, {
+        teamId: 'information-technology',
+        action: 'approve',
+      });
+      const afterMatchAdminApprove = db.prepare('SELECT lineup_home_approved FROM matches WHERE id = ?').get(testMatchId);
+      assert.equal(afterMatchAdminApprove.lineup_home_approved, 1, 'Match admin can approve lineup');
+
+      // 8c. Match Admin can revoke approval
+      saveLineup(db, matchAdminActor, testMatchId, {
+        teamId: 'information-technology',
+        action: 'unapprove',
+      });
+      const afterMatchAdminRevoke = db.prepare('SELECT lineup_home_approved FROM matches WHERE id = ?').get(testMatchId);
+      assert.equal(afterMatchAdminRevoke.lineup_home_approved, 0, 'Match admin can revoke lineup approval');
+
+      // 8d. Unauthorized role (e.g. team_manager) cannot approve lineup
+      const teamManagerActor = { id: 'test-tm', role: 'team_manager', name: 'Team Mgr' };
+      assert.throws(() => {
+        saveLineup(db, teamManagerActor, testMatchId, {
+          teamId: 'information-technology',
+          action: 'approve',
+        });
+      });
+
       // 9. Saving formation while filling lineup (partial starters)
       saveLineup(db, adminActor, testMatchId, {
         teamId: 'information-technology',

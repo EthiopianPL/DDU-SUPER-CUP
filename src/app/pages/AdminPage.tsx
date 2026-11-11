@@ -1141,7 +1141,7 @@ function LineupEditor({ matchId, role, disabled, onSave }: { matchId: string; ro
         teamId={teamId}
         formation={side === 'home' ? fixture.formationHome : fixture.formationAway}
         isApproved={isApproved}
-        isSuperAdmin={role === 'super_admin'}
+        canApprove={role === 'super_admin' || role === 'match_admin' || role === 'competition_manager'}
         disabled={disabled}
         onSave={onSave}
       />
@@ -1154,7 +1154,7 @@ function LineupSide({
   teamId,
   formation,
   isApproved,
-  isSuperAdmin,
+  canApprove,
   disabled,
   onSave,
 }: {
@@ -1162,7 +1162,7 @@ function LineupSide({
   teamId: string;
   formation?: string;
   isApproved?: boolean;
-  isSuperAdmin?: boolean;
+  canApprove?: boolean;
   disabled: boolean;
   onSave: (body: Record<string, unknown>) => void;
 }) {
@@ -1452,7 +1452,7 @@ function LineupSide({
           Save Draft
         </button>
 
-        {isSuperAdmin && (!isApproved ? (
+        {canApprove && (!isApproved ? (
           <button
             type="button"
             disabled={disabled || !ready}
@@ -1478,9 +1478,9 @@ function LineupSide({
           </button>
         ))}
 
-        {!isSuperAdmin && (
+        {!canApprove && (
           <span className="text-xs text-white/40 italic">
-            {isApproved ? 'Approved by Super Admin' : 'Lineup approval requires Super Admin'}
+            {isApproved ? 'Approved by Admin' : 'Lineup approval requires Match Admin or Super Admin'}
           </span>
         )}
       </div>
@@ -3206,7 +3206,7 @@ function UserAdmin({ role, onMessage, onError }: { role: Role; onMessage: (text:
           />
           {nextRole === 'match_admin' && (
             <p className="mt-1.5 text-xs text-[#f5c518]">
-              ℹ Match Admins can only manage existing matches (clock, lineups, events, MOTM) and post news. They cannot create new matches.
+              ℹ Match Admins can manage existing matches (clock, lineups & approval, events, MOTM) and post news. They cannot create new matches.
             </p>
           )}
         </div>
