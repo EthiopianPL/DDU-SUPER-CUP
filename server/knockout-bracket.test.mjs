@@ -399,6 +399,15 @@ test('DDU Super Cup teams pop up on knockout after group stage finishes', async 
       });
       const afterDirect = db.prepare('SELECT formation_home FROM matches WHERE id = ?').get(testMatchId);
       assert.equal(afterDirect.formation_home, '3-5-2', 'Formation 3-5-2 must be saved via set_formation action');
+
+      // 11. International formation test: 5-3-2
+      saveLineup(db, adminActor, testMatchId, {
+        teamId: 'information-technology',
+        formation: '5-3-2',
+        action: 'set_formation',
+      });
+      const after532 = db.prepare('SELECT formation_home FROM matches WHERE id = ?').get(testMatchId);
+      assert.equal(after532.formation_home, '5-3-2', 'Formation 5-3-2 must be saved via set_formation action');
     } finally {
       process.env.DDU_DB = previousDbEnv;
       if (testMatchId) {

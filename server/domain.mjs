@@ -1417,7 +1417,8 @@ export function saveLineup(db, actor, matchId, input) {
 }
 
 function formationRoles(formation) {
-  const counts = String(formation).split('-').map((part) => Number(part)).filter((count) => Number.isInteger(count) && count > 0);
+  const clean = String(formation ?? '').split(' ')[0].trim();
+  const counts = clean.split('-').map((part) => Number(part)).filter((count) => Number.isInteger(count) && count > 0);
   const shape = counts.length >= 2 ? counts : [4, 3, 3];
   const roles = ['GK', ...Array.from({ length: shape[0] }, () => 'DEF')];
   shape.slice(1, -1).forEach((count) => roles.push(...Array.from({ length: count }, () => 'MID')));

@@ -27,7 +27,7 @@ import {
   type GroupId,
   type Player,
 } from '../../data/supercup';
-import { formationPlan, seatPlayers } from '../../data/formation';
+import { formationPlan, seatPlayers, FORMATIONS, FORMATION_GROUPS, isValidFormation } from '../../data/formation';
 import { STAGE_OPTIONS, scheduleTie, stageLabel, tieCount, type Stage } from '../../data/knockout';
 
 type Role = 'super_admin' | 'match_admin' | 'competition_manager' | 'team_manager' | 'reader';
@@ -51,7 +51,6 @@ const NAV: { id: Section; label: string }[] = [
 ];
 
 const inputClass = 'mt-1 w-full rounded-xl border border-white/10 bg-[#0c1424] px-3 py-2 text-sm text-white outline-none focus:border-[#f5c518]/70';
-const FORMATIONS = ['4-2-3-1', '4-3-3', '4-4-2', '4-1-4-1', '3-5-2', '3-4-3', '5-3-2', '5-4-1'];
 
 export function AdminPage() {
   const navigate = useNavigate();
@@ -1169,10 +1168,10 @@ function LineupSide({
   const current = squads.filter((row) => row.matchId === matchId && row.teamId === teamId);
   const currentIds = new Set(current.map((row) => row.playerId));
   const roster = players.filter((player) => player.departmentId === teamId && player.active !== false && (player.registered !== false || currentIds.has(player.id)));
-  const [shape, setShape] = useState(formation && FORMATIONS.includes(formation) ? formation : '4-2-3-1');
+  const [shape, setShape] = useState(formation && (FORMATIONS.includes(formation) || isValidFormation(formation)) ? formation : '4-2-3-1');
   const [slots, setSlots] = useState<Array<string | null>>(() => {
     const saved = current.filter((row) => row.role === 'starter').sort((a, b) => a.sort - b.sort).map((row) => row.playerId);
-    const initialShape = formation && FORMATIONS.includes(formation) ? formation : '4-2-3-1';
+    const initialShape = formation && (FORMATIONS.includes(formation) || isValidFormation(formation)) ? formation : '4-2-3-1';
     const planRoles = formationPlan(initialShape).flat();
     if (saved.length === planRoles.length) {
       return saved;
@@ -1183,7 +1182,7 @@ function LineupSide({
   const [picking, setPicking] = useState<number | null>(null);
 
   useEffect(() => {
-    if (formation && FORMATIONS.includes(formation)) {
+    if (formation && (FORMATIONS.includes(formation) || isValidFormation(formation))) {
       setShape(formation);
     }
   }, [formation]);
@@ -1283,7 +1282,18 @@ function LineupSide({
               approved: false,
             });
           }}>
-            {FORMATIONS.map((item) => <option key={item} value={item}>{item}</option>)}
+            {FORMATION_GROUPS.map((group) => (
+              <optgroup key={group.label} label={group.label} className="bg-[#10192b] text-white/90 font-bold">
+                {group.formations.map((item) => (
+                  <option key={item.id} value={item.id} className="bg-[#0c1424] text-white font-medium">
+                    {item.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+            {!FORMATIONS.includes(shape) && (
+              <option value={shape} className="bg-[#0c1424] text-white font-medium">{shape}</option>
+            )}
           </select>
         </label>
         <div className="flex items-center gap-2 pt-4">
