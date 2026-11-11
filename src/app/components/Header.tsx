@@ -12,7 +12,7 @@ export function Header() {
     { id: 'discover', label: 'Discover', icon: Compass, path: '/discover' },
     { id: 'matches', label: 'Matches', icon: Calendar, path: '/matches' },
     { id: 'news', label: 'News', icon: Newspaper, path: '/news' },
-    { id: 'contributors', label: 'Contributors', icon: Users, path: '/contributors' },
+    { id: 'contributors', label: 'Developers', icon: Users, path: '/contributors' },
   ];
 
   const isItemActive = (path: string) => {
