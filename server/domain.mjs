@@ -100,7 +100,6 @@ function assertVersion(match, version) {
 
 function assertWritable(actor, match) {
   deny(actor, 'match.write');
-  if (match.status === 'finished') throw new RuleError('A finished match cannot be edited.');
   if (match.confirmed && !can(actor, 'match.correct')) {
     throw new RuleError('This result is confirmed and locked.');
   }
@@ -190,6 +189,16 @@ function periodEndMinute(match) {
   return null;
 }
 
+function inferPeriod(match, minute) {
+  const half = Math.round(Number(match.half_ms) / 60000) || 45;
+  const regulation = Math.round(Number(match.regulation_ms) / 60000) || half * 2;
+  const extra = Math.round(Number(match.et_half_ms) / 60000) || 15;
+  if (minute <= half) return 'first_half';
+  if (minute <= regulation) return 'second_half';
+  if (minute <= regulation + extra) return 'extra_first';
+  return 'extra_second';
+}
+
 function splitPlayedMinute(match, minute, addedMinute, period = match.period) {
   const end = periodEndMinute({ ...match, period });
   const at = Number(minute) || 0;
@@ -202,7 +211,14 @@ function splitPlayedMinute(match, minute, addedMinute, period = match.period) {
 
 function ensureSquadPlayer(db, match, playerId, teamId) {
   const squad = db.prepare('SELECT role FROM match_squad WHERE match_id = ? AND player_id = ? AND team_id = ?').get(match.id, playerId, teamId);
-  if (!squad) throw new RuleError('That player is not in this team’s squad for the match.');
+  if (!squad) {
+    const totalSquad = db.prepare('SELECT COUNT(*) AS total FROM match_squad WHERE match_id = ?').get(match.id);
+    if (Number(totalSquad.total) === 0) {
+      const player = playerRow(db, playerId);
+      if (player && player.team_id === teamId) return player;
+    }
+    throw new RuleError('That player is not in this team’s squad for the match.');
+  }
   return playerRow(db, playerId);
 }
 
@@ -212,7 +228,7 @@ function onPitch(db, match, playerId, teamId, beforeId = null) {
   const player = state.get(playerId);
   if (!player || player.teamId !== teamId) throw new RuleError('That player is not in this team’s squad for the match.');
   if (player.dismissed) throw new RuleError('That player has been sent off.');
-  if (!player.on) throw new RuleError('That player is not on the pitch.');
+  if (match.status !== 'finished' && !player.on) throw new RuleError('That player is not on the pitch.');
   return player;
 }
 
@@ -1473,27 +1489,38 @@ export function recordEvent(db, actor, matchId, input) {
       const clock = clockSnapshot(match);
       const rawMinute = input.minute == null ? clock.minute : Number(input.minute);
       const rawAdded = input.addedMinute == null ? 0 : Number(input.addedMinute);
-      const stamped = splitPlayedMinute(match, rawMinute, rawAdded);
+      const targetPeriod = input.period || (match.status === 'finished' ? inferPeriod(match, rawMinute) : match.period);
+      const stamped = splitPlayedMinute(match, rawMinute, rawAdded, targetPeriod);
       const minute = stamped.minute;
       const addedMinute = stamped.addedMinute;
       if (!Number.isInteger(minute) || minute < 0 || minute > 150) throw new RuleError('Enter a valid match minute.');
       if (!Number.isInteger(addedMinute) || addedMinute < 0 || addedMinute > 30) throw new RuleError('Enter a valid added-time minute.');
-      const base = { ...input, minute, addedMinute, period: input.period || match.period, clientKey: input.clientKey || randomUUID() };
+      const base = { ...input, minute, addedMinute, period: targetPeriod, clientKey: input.clientKey || randomUUID() };
 
       if (type === 'goal') {
-        requireLivePeriod(match);
-        if (match.period === 'penalties') throw new RuleError('Shootout kicks are recorded separately from the match score.');
+        if (match.status !== 'finished') {
+          requireLivePeriod(match);
+          if (match.period === 'penalties') throw new RuleError('Shootout kicks are recorded separately from the match score.');
+        }
         const goalType = String(input.goalType || 'open_play');
         if (!GOAL_TYPES.has(goalType)) throw new RuleError('Choose a goal type.');
         const creditedTeamId = sideTeam(match, input.side || (input.creditedTeamId === match.away_id ? 'away' : 'home'));
         const scorerTeamId = goalType === 'own_goal' ? (creditedTeamId === match.home_id ? match.away_id : match.home_id) : creditedTeamId;
         if (!input.playerId) throw new RuleError('Choose the scorer.');
-        onPitch(db, match, input.playerId, scorerTeamId);
+        if (match.status !== 'finished') {
+          onPitch(db, match, input.playerId, scorerTeamId);
+        } else {
+          ensureSquadPlayer(db, match, input.playerId, scorerTeamId);
+        }
         let assistId = input.assistId || null;
         if (goalType === 'own_goal') assistId = null;
         if (assistId) {
           if (assistId === input.playerId) throw new RuleError('The scorer cannot also be the assister.');
-          onPitch(db, match, assistId, creditedTeamId);
+          if (match.status !== 'finished') {
+            onPitch(db, match, assistId, creditedTeamId);
+          } else {
+            ensureSquadPlayer(db, match, assistId, creditedTeamId);
+          }
         }
         const saved = insertEvent(db, match, actor, {
           ...base,
@@ -1512,12 +1539,16 @@ export function recordEvent(db, actor, matchId, input) {
       }
 
       if (type === 'card') {
-        requireLivePeriod(match);
+        if (match.status !== 'finished') requireLivePeriod(match);
         let cardType = String(input.cardType || '');
         if (!['yellow', 'second_yellow', 'red'].includes(cardType)) throw new RuleError('Choose a card.');
         const teamId = sideTeam(match, input.side);
         if (!input.playerId) throw new RuleError('Choose the player.');
-        onPitch(db, match, input.playerId, teamId);
+        if (match.status !== 'finished') {
+          onPitch(db, match, input.playerId, teamId);
+        } else {
+          ensureSquadPlayer(db, match, input.playerId, teamId);
+        }
         const yellows = yellowCount(activeEvents(db, match.id), input.playerId);
         if (cardType === 'yellow' && yellows >= 1) cardType = 'second_yellow';
         if (cardType === 'second_yellow' && yellows < 1) throw new RuleError('A second yellow needs one yellow card first.');
@@ -1527,21 +1558,28 @@ export function recordEvent(db, actor, matchId, input) {
       }
 
       if (type === 'substitution') {
-        requireLivePeriod(match);
-        if (match.period === 'penalties') throw new RuleError('Substitutions are closed in the shootout.');
+        if (match.status !== 'finished') {
+          requireLivePeriod(match);
+          if (match.period === 'penalties') throw new RuleError('Substitutions are closed in the shootout.');
+        }
         const teamId = sideTeam(match, input.side);
         if (!input.playerId || !input.relatedPlayerId) throw new RuleError('Choose the player leaving and the player coming on.');
         if (input.playerId === input.relatedPlayerId) throw new RuleError('Choose two different players.');
-        onPitch(db, match, input.playerId, teamId);
-        const incoming = participation(squadRows(db, match.id), activeEvents(db, match.id)).get(input.relatedPlayerId);
-        if (!incoming || incoming.teamId !== teamId) throw new RuleError('The substitute is not in this squad.');
-        if (incoming.dismissed) throw new RuleError('A dismissed player cannot return.');
-        if (incoming.used) throw new RuleError('That player has already taken part and cannot return.');
-        if (!incoming.on && incoming.used) throw new RuleError('That player has already taken part.');
-        const rules = rulesOf(db);
-        const extra = ['extra_first', 'extra_break', 'extra_second'].includes(match.period) ? rules.extraSubs : 0;
-        if (substitutionCount(activeEvents(db, match.id), teamId) >= rules.maxSubs + extra) {
-          throw new RuleError('This team has used its substitutions.');
+        if (match.status !== 'finished') {
+          onPitch(db, match, input.playerId, teamId);
+          const incoming = participation(squadRows(db, match.id), activeEvents(db, match.id)).get(input.relatedPlayerId);
+          if (!incoming || incoming.teamId !== teamId) throw new RuleError('The substitute is not in this squad.');
+          if (incoming.dismissed) throw new RuleError('A dismissed player cannot return.');
+          if (incoming.used) throw new RuleError('That player has already taken part and cannot return.');
+          if (!incoming.on && incoming.used) throw new RuleError('That player has already taken part.');
+          const rules = rulesOf(db);
+          const extra = ['extra_first', 'extra_break', 'extra_second'].includes(match.period) ? rules.extraSubs : 0;
+          if (substitutionCount(activeEvents(db, match.id), teamId) >= rules.maxSubs + extra) {
+            throw new RuleError('This team has used its substitutions.');
+          }
+        } else {
+          ensureSquadPlayer(db, match, input.playerId, teamId);
+          ensureSquadPlayer(db, match, input.relatedPlayerId, teamId);
         }
         const saved = insertEvent(db, match, actor, {
           ...base,
@@ -1626,12 +1664,20 @@ export function correctEvent(db, actor, matchId, eventId, input) {
       const creditedTeamId = input.side ? sideTeam(match, input.side) : event.credited_team_id;
       const scorerTeamId = goalType === 'own_goal' ? (creditedTeamId === match.home_id ? match.away_id : match.home_id) : creditedTeamId;
       const playerId = input.playerId || event.player_id;
-      onPitch(db, match, playerId, scorerTeamId, event.id);
+      if (match.status !== 'finished') {
+        onPitch(db, match, playerId, scorerTeamId, event.id);
+      } else {
+        ensureSquadPlayer(db, match, playerId, scorerTeamId);
+      }
       let assistId = input.assistId === '' ? null : input.assistId ?? event.assist_id;
       if (goalType === 'own_goal') assistId = null;
       if (assistId) {
         if (assistId === playerId) throw new RuleError('The scorer cannot also be the assister.');
-        onPitch(db, match, assistId, creditedTeamId, event.id);
+        if (match.status !== 'finished') {
+          onPitch(db, match, assistId, creditedTeamId, event.id);
+        } else {
+          ensureSquadPlayer(db, match, assistId, creditedTeamId);
+        }
       }
       db.prepare(`UPDATE match_events SET team_id=?, credited_team_id=?, player_id=?, assist_id=?, minute=?, added_minute=?, goal_type=?, detail=? WHERE id=?`).run(
         scorerTeamId, creditedTeamId, playerId, assistId, minute, stamped.addedMinute, goalType, String(input.detail ?? event.detail), event.id,
@@ -1644,7 +1690,11 @@ export function correctEvent(db, actor, matchId, eventId, input) {
       const teamId = input.side ? sideTeam(match, input.side) : (input.teamId || event.team_id);
       const playerId = input.playerId || event.player_id;
       if (!playerId) throw new RuleError('Choose the player.');
-      onPitch(db, match, playerId, teamId, event.id);
+      if (match.status !== 'finished') {
+        onPitch(db, match, playerId, teamId, event.id);
+      } else {
+        ensureSquadPlayer(db, match, playerId, teamId);
+      }
       const yellows = yellowCount(activeEvents(db, match.id, event.id), playerId);
       if (cardType === 'yellow' && yellows >= 1) cardType = 'second_yellow';
       if (cardType === 'second_yellow' && yellows < 1) throw new RuleError('A second yellow needs one yellow card first.');
@@ -1652,8 +1702,17 @@ export function correctEvent(db, actor, matchId, eventId, input) {
         teamId, playerId, cardType, minute, stamped.addedMinute, String(input.detail ?? event.detail), event.id,
       );
     } else if (event.type === 'substitution') {
-      db.prepare('UPDATE match_events SET minute=?, added_minute=?, detail=? WHERE id=?').run(
-        Number(input.minute ?? event.minute), Number(input.addedMinute ?? event.added_minute), String(input.detail ?? event.detail), event.id,
+      const stamped = splitPlayedMinute(match, Number(input.minute ?? event.minute), Number(input.addedMinute ?? event.added_minute) || 0, event.period);
+      const minute = stamped.minute;
+      const teamId = input.side ? sideTeam(match, input.side) : (input.teamId || event.team_id);
+      const playerId = input.playerId || event.player_id;
+      const relatedPlayerId = input.relatedPlayerId || event.related_player_id;
+      if (!playerId || !relatedPlayerId) throw new RuleError('Choose the player leaving and the player coming on.');
+      if (playerId === relatedPlayerId) throw new RuleError('Choose two different players.');
+      ensureSquadPlayer(db, match, playerId, teamId);
+      ensureSquadPlayer(db, match, relatedPlayerId, teamId);
+      db.prepare('UPDATE match_events SET team_id=?, player_id=?, related_player_id=?, minute=?, added_minute=?, detail=? WHERE id=?').run(
+        teamId, playerId, relatedPlayerId, minute, stamped.addedMinute, String(input.detail ?? event.detail), event.id,
       );
     } else {
       db.prepare('UPDATE match_events SET minute=?, detail=? WHERE id=?').run(Number(input.minute ?? event.minute), String(input.detail ?? event.detail), event.id);

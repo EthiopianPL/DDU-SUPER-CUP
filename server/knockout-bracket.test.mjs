@@ -456,5 +456,127 @@ test('DDU Super Cup teams pop up on knockout after group stage finishes', async 
       db.close();
     }
   });
+
+  await t.test('11. Finished matches permit recording and correcting goals, cards, and substitutions with custom minutes', async () => {
+    const { createMatch, recordEvent, correctEvent } = await import('./domain.mjs');
+    const { openDatabase } = await import('./db.mjs');
+
+    const previousDbEnv = process.env.DDU_DB;
+    process.env.DDU_DB = join(root, 'data', 'supercup.db');
+    const db = openDatabase();
+    const adminActor = { id: 'test-admin', role: 'competition_manager', name: 'Test Manager' };
+    const refereeActor = { id: 'ref-user', role: 'match_admin', name: 'Referee' };
+
+    let testMatchId = null;
+    try {
+      const created = createMatch(db, adminActor, {
+        stage: 'group',
+        groupId: 'A',
+        matchday: 2,
+        homeId: 'information-technology',
+        awayId: 'electrical-engineering',
+        date: '2026-11-21',
+        time: '15:00',
+        venue: 'DDU Main Pitch',
+      });
+      testMatchId = created.id;
+
+      // Set match to finished
+      db.prepare("UPDATE matches SET status = 'finished', period = 'full_time', confirmed = 0 WHERE id = ?").run(testMatchId);
+
+      // Pick 2 players from IT and 1 player from Electrical
+      const itPlayers = db.prepare('SELECT id FROM players WHERE team_id = ? AND active = 1 LIMIT 2').all('information-technology');
+      const eePlayers = db.prepare('SELECT id FROM players WHERE team_id = ? AND active = 1 LIMIT 1').all('electrical-engineering');
+
+      const p1 = itPlayers[0].id;
+      const p2 = itPlayers[1].id;
+      const p3 = eePlayers[0].id;
+
+      db.prepare("INSERT INTO match_squad (match_id, team_id, player_id, role, sort_index) VALUES (?, 'information-technology', ?, 'starter', 1)").run(testMatchId, p1);
+      db.prepare("INSERT INTO match_squad (match_id, team_id, player_id, role, sort_index) VALUES (?, 'information-technology', ?, 'sub', 2)").run(testMatchId, p2);
+      db.prepare("INSERT INTO match_squad (match_id, team_id, player_id, role, sort_index) VALUES (?, 'electrical-engineering', ?, 'starter', 1)").run(testMatchId, p3);
+
+      // 1. Record goal on finished match with custom minute
+      const goalRes = recordEvent(db, adminActor, testMatchId, {
+        type: 'goal',
+        side: 'home',
+        goalType: 'open_play',
+        playerId: p1,
+        minute: 73,
+        addedMinute: 0,
+      });
+      assert.ok(goalRes.id, 'Goal event should be recorded');
+
+      const matchAfterGoal = db.prepare('SELECT home_score, away_score FROM matches WHERE id = ?').get(testMatchId);
+      assert.equal(matchAfterGoal.home_score, 1, 'Home score must be recomputed to 1 on finished match');
+
+      // 2. Record card on finished match with added minute
+      const cardRes = recordEvent(db, adminActor, testMatchId, {
+        type: 'card',
+        side: 'away',
+        cardType: 'yellow',
+        playerId: p3,
+        minute: 88,
+        addedMinute: 2,
+        detail: 'Tactical foul',
+      });
+      assert.ok(cardRes.id, 'Card event should be recorded');
+      const savedCard = db.prepare('SELECT minute, added_minute, card_type FROM match_events WHERE id = ?').get(cardRes.id);
+      assert.equal(savedCard.minute, 88);
+      assert.equal(savedCard.added_minute, 2);
+
+      // 3. Record substitution on finished match
+      const subRes = recordEvent(db, adminActor, testMatchId, {
+        type: 'substitution',
+        side: 'home',
+        playerId: p1,
+        relatedPlayerId: p2,
+        minute: 80,
+        addedMinute: 0,
+      });
+      assert.ok(subRes.id, 'Substitution event should be recorded');
+
+      // 4. Correct goal event on finished match (change minute to 75)
+      await correctEvent(db, adminActor, testMatchId, goalRes.id, {
+        minute: 75,
+        addedMinute: 1,
+        side: 'home',
+        goalType: 'open_play',
+        playerId: p1,
+      });
+      const updatedGoal = db.prepare('SELECT minute, added_minute FROM match_events WHERE id = ?').get(goalRes.id);
+      assert.equal(updatedGoal.minute, 75);
+      assert.equal(updatedGoal.added_minute, 1);
+
+      // 5. Correct substitution on finished match
+      await correctEvent(db, adminActor, testMatchId, subRes.id, {
+        minute: 68,
+        addedMinute: 0,
+        side: 'home',
+        playerId: p1,
+        relatedPlayerId: p2,
+        detail: 'injury',
+      });
+      const updatedSub = db.prepare('SELECT minute, added_minute, detail FROM match_events WHERE id = ?').get(subRes.id);
+      assert.equal(updatedSub.minute, 68);
+      assert.equal(updatedSub.added_minute, 0);
+      assert.equal(updatedSub.detail, 'injury');
+
+      // 6. Confirmed match prevents editing for unauthorized actors
+      db.prepare('UPDATE matches SET confirmed = 1 WHERE id = ?').run(testMatchId);
+      assert.throws(
+        () => recordEvent(db, { id: 'reader-user', role: 'reader' }, testMatchId, { type: 'goal', side: 'home', playerId: p1, minute: 80 }),
+        /permission for that action/i,
+      );
+    } finally {
+      process.env.DDU_DB = previousDbEnv;
+      if (testMatchId) {
+        db.prepare('DELETE FROM match_events WHERE match_id = ?').run(testMatchId);
+        db.prepare('DELETE FROM match_squad WHERE match_id = ?').run(testMatchId);
+        db.prepare('DELETE FROM matches WHERE id = ?').run(testMatchId);
+      }
+      db.close();
+    }
+  });
 });
 
