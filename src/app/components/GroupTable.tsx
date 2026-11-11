@@ -64,7 +64,7 @@ export function GroupTable({
           </div>
         </div>
         <span className="rounded-full border border-[#2f9e44]/30 bg-[#2f9e44]/15 px-2.5 py-1 text-[10px] font-bold text-[#7ddea0] shrink-0">
-          {group === 'E' ? 'All 4 advance' : 'Top 3 advance'}
+          {group === 'E' ? 'Top 4 advance' : 'Top 3 advance'}
         </span>
       </header>
 
