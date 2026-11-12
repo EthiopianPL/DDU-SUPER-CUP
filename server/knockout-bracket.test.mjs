@@ -287,6 +287,7 @@ test('DDU Super Cup teams pop up on knockout after group stage finishes', async 
         assistant1: 'Chala Tafa',
         assistant2: 'Dawit Bekele',
         fourthReferee: 'Ephrem Zewdu',
+        streamer: 'DDU Media Team',
       });
       testMatchId = created.id;
 
@@ -294,14 +295,15 @@ test('DDU Super Cup teams pop up on knockout after group stage finishes', async 
       const squadRows = db.prepare('SELECT COUNT(*) AS total FROM match_squad WHERE match_id = ?').get(testMatchId);
       assert.equal(squadRows.total, 0, 'Newly created matches must not have default squads directly auto-filled');
 
-      // 3. Verify approval flags are 0 (false) and match officials (including 4th referee) are saved
-      const matchRow = db.prepare('SELECT lineup_home_approved, lineup_away_approved, referee, assistant1, assistant2, fourth_referee FROM matches WHERE id = ?').get(testMatchId);
+      // 3. Verify approval flags are 0 (false) and match officials (including 4th referee and streamer) are saved
+      const matchRow = db.prepare('SELECT lineup_home_approved, lineup_away_approved, referee, assistant1, assistant2, fourth_referee, streamer FROM matches WHERE id = ?').get(testMatchId);
       assert.equal(matchRow.lineup_home_approved, 0, 'Home lineup must start unapproved');
       assert.equal(matchRow.lineup_away_approved, 0, 'Away lineup must start unapproved');
       assert.equal(matchRow.referee, 'Abebe Bikila', 'Main referee must match');
       assert.equal(matchRow.assistant1, 'Chala Tafa', 'Assistant 1 must match');
       assert.equal(matchRow.assistant2, 'Dawit Bekele', 'Assistant 2 must match');
       assert.equal(matchRow.fourth_referee, 'Ephrem Zewdu', '4th referee must match');
+      assert.equal(matchRow.streamer, 'DDU Media Team', 'Live streamer name must match');
 
       // 4. Kickoff without lineups throws error
       assert.throws(() => {

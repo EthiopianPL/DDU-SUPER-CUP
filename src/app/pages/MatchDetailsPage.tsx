@@ -13,6 +13,7 @@ import {
   Shield,
   Trophy,
   Users,
+  Video,
 } from 'lucide-react';
 import { DepartmentMark } from '../components/DepartmentMark';
 import { RedCards } from '../components/RedCards';
@@ -171,6 +172,25 @@ export function MatchDetailsPage() {
               {fixture.assistant2 && <span>AR2: <strong className="font-semibold text-white/70">{fixture.assistant2}</strong></span>}
               {fixture.fourthReferee && <span>4th Ref: <strong className="font-semibold text-white/70">{fixture.fourthReferee}</strong></span>}
             </div>
+          )}
+          {fixture.streamer && (
+            isLive ? (
+              <div className="mt-2.5 flex items-center justify-center">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-red-500/40 bg-red-500/15 px-3 py-1 text-xs font-black text-red-400 shadow-sm shadow-red-500/10">
+                  <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                  <Video className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                  <span className="uppercase tracking-wider">LIVE STREAMER:</span>
+                  <span className="font-bold text-white">{fixture.streamer}</span>
+                </span>
+              </div>
+            ) : (
+              <div className="mt-2 flex items-center justify-center text-xs text-white/50">
+                <span className="flex items-center gap-1.5">
+                  <Video className="h-3.5 w-3.5 text-white/40" />
+                  <span>Streamer: <strong className="font-semibold text-white/70">{fixture.streamer}</strong></span>
+                </span>
+              </div>
+            )
           )}
         </div>
 

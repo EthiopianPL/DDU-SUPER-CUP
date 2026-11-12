@@ -64,6 +64,7 @@ export interface Fixture {
   assistant1?: string;
   assistant2?: string;
   fourthReferee?: string;
+  streamer?: string;
   formationHome?: string;
   formationAway?: string;
   lineupHomeApproved?: boolean;

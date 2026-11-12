@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
-import { MapPin } from 'lucide-react';
+import { MapPin, Video } from 'lucide-react';
 import { formatKickoff, formatLiveTime, getFixture, leagueRules, teamRedCards } from '../../data/supercup';
 import { useLeagueVersion } from '../../data/live';
 import { RedCards } from './RedCards';
@@ -194,6 +194,25 @@ export function MatchCard({
         <MapPin className="mr-1 h-3 w-3 shrink-0 text-white/30" />
         <span className="truncate">{venue}</span>
       </div>
+
+      {/* Live Streamer Badge in new line */}
+      {fixture?.streamer && (
+        <div className="mt-1.5 flex items-center justify-center">
+          {isLive ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-red-500/40 bg-red-500/15 px-2 py-0.5 text-[10px] font-black text-red-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+              <Video className="h-3 w-3 text-red-400 shrink-0" />
+              <span className="uppercase tracking-wider">Streamer:</span>
+              <span className="font-bold text-white truncate max-w-[120px] sm:max-w-[160px]">{fixture.streamer}</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-[10px] text-white/40">
+              <Video className="h-3 w-3 text-white/30 shrink-0" />
+              <span>Streamer: <strong className="font-semibold text-white/60 truncate max-w-[120px] sm:max-w-[160px]">{fixture.streamer}</strong></span>
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

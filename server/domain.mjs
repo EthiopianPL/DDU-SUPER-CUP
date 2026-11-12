@@ -596,6 +596,7 @@ export function buildSnapshot(db, now = Date.now()) {
       assistant1: match.assistant1,
       assistant2: match.assistant2,
       fourthReferee: match.fourth_referee,
+      streamer: match.streamer || '',
       formationHome: match.formation_home,
       formationAway: match.formation_away,
       lineupHomeApproved: Boolean(match.lineup_home_approved),
@@ -1184,6 +1185,7 @@ function plannedMatch(db, input) {
     assistant1: String(input.assistant1 ?? ''),
     assistant2: String(input.assistant2 ?? ''),
     fourthReferee: String(input.fourthReferee ?? input.fourth_referee ?? ''),
+    streamer: String(input.streamer ?? '').trim(),
   };
 }
 
@@ -1193,9 +1195,9 @@ function insertScheduledMatch(db, plan) {
   const now = Date.now();
   db.prepare(`INSERT INTO matches (
     id, competition_id, group_id, matchday, home_id, away_id, venue, kickoff_date, kickoff_time,
-    status, period, elapsed_ms, half_ms, regulation_ms, et_half_ms, allow_extra, referee, assistant1, assistant2, fourth_referee,
+    status, period, elapsed_ms, half_ms, regulation_ms, et_half_ms, allow_extra, referee, assistant1, assistant2, fourth_referee, streamer,
     stage, slot, version, updated_at, lineup_home_approved, lineup_away_approved
-  ) VALUES (?, 'super-cup', ?, ?, ?, ?, ?, ?, ?, 'scheduled', 'pre', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 0, 0)`).run(
+  ) VALUES (?, 'super-cup', ?, ?, ?, ?, ?, ?, ?, 'scheduled', 'pre', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 0, 0)`).run(
     plan.id,
     plan.groupId,
     plan.matchday,
@@ -1212,6 +1214,7 @@ function insertScheduledMatch(db, plan) {
     plan.assistant1,
     plan.assistant2,
     plan.fourthReferee,
+    plan.streamer,
     plan.stage,
     plan.slot,
     now,
@@ -1317,15 +1320,16 @@ export function updateMatch(db, actor, id, input) {
     const assistant1 = String(input.assistant1 ?? match.assistant1);
     const assistant2 = String(input.assistant2 ?? match.assistant2);
     const fourthReferee = String(input.fourthReferee ?? input.fourth_referee ?? match.fourth_referee ?? '');
+    const streamer = String(input.streamer ?? match.streamer ?? '').trim();
     const allowExtra = input.allowExtra == null ? match.allow_extra : input.allowExtra ? 1 : 0;
     const halfMinutes = Number(input.halfMinutes);
     const halfMs = Number.isFinite(halfMinutes) && halfMinutes > 0 ? halfMinutes * 60 * 1000 : match.half_ms;
-    db.prepare(`UPDATE matches SET matchday=?, kickoff_date=?, kickoff_time=?, venue=?, referee=?, assistant1=?, assistant2=?, fourth_referee=?, allow_extra=?, half_ms=?, regulation_ms=?, version=version+1, updated_at=? WHERE id=?`).run(
-      matchday, date, time, venue, referee, assistant1, assistant2, fourthReferee, allowExtra, halfMs, halfMs * 2, Date.now(), id,
+    db.prepare(`UPDATE matches SET matchday=?, kickoff_date=?, kickoff_time=?, venue=?, referee=?, assistant1=?, assistant2=?, fourth_referee=?, streamer=?, allow_extra=?, half_ms=?, regulation_ms=?, version=version+1, updated_at=? WHERE id=?`).run(
+      matchday, date, time, venue, referee, assistant1, assistant2, fourthReferee, streamer, allowExtra, halfMs, halfMs * 2, Date.now(), id,
     );
     audit(db, actor, 'match.update', 'match', id,
-      { matchday: match.matchday, date: match.kickoff_date, time: match.kickoff_time, venue: match.venue },
-      { matchday, date, time, venue }
+      { matchday: match.matchday, date: match.kickoff_date, time: match.kickoff_time, venue: match.venue, streamer: match.streamer },
+      { matchday, date, time, venue, streamer }
     );
     return { id };
   });

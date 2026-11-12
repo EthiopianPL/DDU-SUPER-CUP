@@ -442,6 +442,7 @@ function MatchForm({ onDone, onError }: { onDone: (text: string) => void; onErro
   const [assistant1, setAssistant1] = useState('');
   const [assistant2, setAssistant2] = useState('');
   const [fourthReferee, setFourthReferee] = useState('');
+  const [streamer, setStreamer] = useState('');
   const [allowExtra, setAllowExtra] = useState(false);
   void version;
   const home = pool.find((team) => team.id === homeId) ?? pool[0];
@@ -474,6 +475,7 @@ function MatchForm({ onDone, onError }: { onDone: (text: string) => void; onErro
               assistant1,
               assistant2,
               fourthReferee,
+              streamer,
               allowExtra: stage === 'group' ? allowExtra : true,
             },
           });
@@ -523,6 +525,7 @@ function MatchForm({ onDone, onError }: { onDone: (text: string) => void; onErro
           <Field label="Assistant 1" value={assistant1} onChange={setAssistant1} placeholder="Optional" />
           <Field label="Assistant 2" value={assistant2} onChange={setAssistant2} placeholder="Optional" />
           <Field label="4th Referee" value={fourthReferee} onChange={setFourthReferee} placeholder="Optional" />
+          <Field label="Live Streamer" value={streamer} onChange={setStreamer} placeholder="Optional" />
         </div>
         {stage === 'group' && (
           <label className="flex items-center gap-2 text-sm text-white/70">
@@ -745,7 +748,7 @@ function MatchDesk({
           </div>
           <TeamBlock team={away} align="end" />
         </div>
-        <p className="mt-3 text-center text-xs text-white/35">{fixture.stage && fixture.stage !== 'group' ? `${stageLabel(fixture.stage)} · Tie ${fixture.slot}` : `Group ${fixture.group} · MD${fixture.matchday}`} · {fixture.stadium} · {fixture.date} {fixture.time}{fixture.referee ? ` · Ref ${fixture.referee}` : ''}{fixture.assistant1 ? ` · AR1 ${fixture.assistant1}` : ''}{fixture.assistant2 ? ` · AR2 ${fixture.assistant2}` : ''}{fixture.fourthReferee ? ` · 4th Ref ${fixture.fourthReferee}` : ''}{fixture.confirmed ? ' · Confirmed' : ''}</p>
+        <p className="mt-3 text-center text-xs text-white/35">{fixture.stage && fixture.stage !== 'group' ? `${stageLabel(fixture.stage)} · Tie ${fixture.slot}` : `Group ${fixture.group} · MD${fixture.matchday}`} · {fixture.stadium} · {fixture.date} {fixture.time}{fixture.referee ? ` · Ref ${fixture.referee}` : ''}{fixture.assistant1 ? ` · AR1 ${fixture.assistant1}` : ''}{fixture.assistant2 ? ` · AR2 ${fixture.assistant2}` : ''}{fixture.fourthReferee ? ` · 4th Ref ${fixture.fourthReferee}` : ''}{fixture.streamer ? ` · Streamer: ${fixture.streamer}` : ''}{fixture.confirmed ? ' · Confirmed' : ''}</p>
         {finished && <p className="mt-3 text-center text-sm text-white/50">This match is finished. The score, lineup, and events stay as recorded.</p>}
       </div>
 
@@ -1065,6 +1068,7 @@ function FixtureMeta({
   const [assistant1, setAssistant1] = useState(fixture.assistant1 ?? '');
   const [assistant2, setAssistant2] = useState(fixture.assistant2 ?? '');
   const [fourthReferee, setFourthReferee] = useState(fixture.fourthReferee ?? '');
+  const [streamer, setStreamer] = useState(fixture.streamer ?? '');
 
   useEffect(() => {
     setMatchday(String(fixture.matchday ?? 1));
@@ -1075,12 +1079,13 @@ function FixtureMeta({
     setAssistant1(fixture.assistant1 ?? '');
     setAssistant2(fixture.assistant2 ?? '');
     setFourthReferee(fixture.fourthReferee ?? '');
-  }, [fixture.matchday, fixture.date, fixture.time, fixture.stadium, fixture.referee, fixture.assistant1, fixture.assistant2, fixture.fourthReferee]);
+    setStreamer(fixture.streamer ?? '');
+  }, [fixture.matchday, fixture.date, fixture.time, fixture.stadium, fixture.referee, fixture.assistant1, fixture.assistant2, fixture.fourthReferee, fixture.streamer]);
 
   return (
     <form className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-[#10192b] p-4 sm:grid-cols-3 lg:grid-cols-4" onSubmit={(event) => {
       event.preventDefault();
-      onSave({ matchday: Number(matchday) || 1, date, time, venue, referee, assistant1, assistant2, fourthReferee });
+      onSave({ matchday: Number(matchday) || 1, date, time, venue, referee, assistant1, assistant2, fourthReferee, streamer });
     }}>
       <h2 className="font-black sm:col-span-3 lg:col-span-4">Fixture and officials</h2>
       <label className="text-xs font-bold text-white/45">Matchday<input className={inputClass} type="number" min="1" max="50" value={matchday} onChange={(event) => setMatchday(event.target.value)} /></label>
@@ -1091,6 +1096,7 @@ function FixtureMeta({
       <label className="text-xs font-bold text-white/45">Assistant 1<input className={inputClass} value={assistant1} onChange={(event) => setAssistant1(event.target.value)} /></label>
       <label className="text-xs font-bold text-white/45">Assistant 2<input className={inputClass} value={assistant2} onChange={(event) => setAssistant2(event.target.value)} /></label>
       <label className="text-xs font-bold text-white/45">4th Referee<input className={inputClass} value={fourthReferee} onChange={(event) => setFourthReferee(event.target.value)} /></label>
+      <label className="text-xs font-bold text-white/45">Live Streamer<input className={inputClass} value={streamer} onChange={(event) => setStreamer(event.target.value)} placeholder="e.g. John Doe / DDU Media" /></label>
       <button type="submit" disabled={disabled} className="rounded-xl bg-white/10 px-4 py-2 text-sm font-bold disabled:opacity-40 sm:col-span-3 lg:col-span-4">Save fixture</button>
     </form>
   );
