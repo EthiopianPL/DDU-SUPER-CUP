@@ -410,6 +410,57 @@ test('DDU Super Cup teams pop up on knockout after group stage finishes', async 
       });
       const after532 = db.prepare('SELECT formation_home FROM matches WHERE id = ?').get(testMatchId);
       assert.equal(after532.formation_home, '5-3-2', 'Formation 5-3-2 must be saved via set_formation action');
+
+      // 12. Add and edit substitute players after the match has started (live)
+      // Restore home starters and approve home lineup
+      saveLineup(db, adminActor, testMatchId, {
+        teamId: 'information-technology',
+        starters,
+        bench: [],
+        formation: '4-2-3-1',
+        approved: true,
+      });
+
+      // Provide away starters and approve away lineup
+      const awayPlayers = db.prepare('SELECT id, position FROM players WHERE team_id = ? AND active = 1').all('electrical-engineering');
+      const pickFrom = (list, pos, count, usedSet) => {
+        const found = list.filter((p) => p.position === pos && !usedSet.has(p.id)).slice(0, count);
+        found.forEach((p) => usedSet.add(p.id));
+        return found.map((p) => p.id);
+      };
+      const awayUsed = new Set();
+      const awayStarters = [
+        ...pickFrom(awayPlayers, 'GK', 1, awayUsed),
+        ...pickFrom(awayPlayers, 'DEF', 4, awayUsed),
+        ...pickFrom(awayPlayers, 'MID', 5, awayUsed),
+        ...pickFrom(awayPlayers, 'FWD', 1, awayUsed),
+      ];
+      saveLineup(db, adminActor, testMatchId, {
+        teamId: 'electrical-engineering',
+        starters: awayStarters,
+        bench: [],
+        formation: '4-2-3-1',
+        approved: true,
+      });
+
+      // Kick off the match
+      controlMatch(db, adminActor, testMatchId, { action: 'kickoff' });
+      const liveMatch = db.prepare('SELECT status FROM matches WHERE id = ?').get(testMatchId);
+      assert.equal(liveMatch.status, 'live', 'Match must be live after kickoff');
+
+      // Add a substitute player to the bench during the live match
+      const benchPlayer = homePlayers.find((p) => !used.has(p.id));
+      assert.ok(benchPlayer, 'Should have an available reserve player');
+
+      saveLineup(db, adminActor, testMatchId, {
+        teamId: 'information-technology',
+        bench: [benchPlayer.id],
+        action: 'update_bench',
+      });
+
+      const benchRows = db.prepare(`SELECT player_id FROM match_squad WHERE match_id = ? AND team_id = ? AND role = 'bench'`).all(testMatchId, 'information-technology');
+      assert.equal(benchRows.length, 1, 'Bench should contain the newly added substitute');
+      assert.equal(benchRows[0].player_id, benchPlayer.id, 'Substitute ID must match');
     } finally {
       process.env.DDU_DB = previousDbEnv;
       if (testMatchId) {

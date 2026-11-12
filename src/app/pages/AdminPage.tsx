@@ -657,7 +657,7 @@ function MatchDesk({
     { id: 'events', label: 'Events' },
   ];
   if (finished) deskTabs.push({ id: 'motm', label: 'Man of the Match' });
-  if (!finished && !live) deskTabs.push({ id: 'lineup', label: 'Lineup' });
+  deskTabs.push({ id: 'lineup', label: live ? 'Bench / Lineup' : 'Lineup' });
   deskTabs.push({ id: 'fixture', label: 'Fixture' });
   const activeTab = deskTabs.some((item) => item.id === tab) ? tab : deskTabs[0].id;
 
@@ -800,7 +800,7 @@ function MatchDesk({
         </section>
       )}
 
-      {activeTab === 'lineup' && !finished && !live && <LineupEditor matchId={id} role={role} disabled={busy || !canRun} onSave={(body) => act(`/api/matches/${id}/lineup`, body)} />}
+      {activeTab === 'lineup' && <LineupEditor matchId={id} role={role} isLive={live} disabled={busy || !canRun} onSave={(body) => act(`/api/matches/${id}/lineup`, body)} />}
       {activeTab === 'fixture' && (
         <FixtureMeta
           fixture={fixture}
@@ -1102,7 +1102,7 @@ function FixtureMeta({
   );
 }
 
-function LineupEditor({ matchId, role, disabled, onSave }: { matchId: string; role?: Role; disabled: boolean; onSave: (body: Record<string, unknown>) => void }) {
+function LineupEditor({ matchId, role, isLive, disabled, onSave }: { matchId: string; role?: Role; isLive?: boolean; disabled: boolean; onSave: (body: Record<string, unknown>) => void }) {
   const fixture = getFixture(matchId);
   const [side, setSide] = useState<'home' | 'away'>('home');
   if (!fixture) return null;
@@ -1115,8 +1115,8 @@ function LineupEditor({ matchId, role, disabled, onSave }: { matchId: string; ro
     <section className="mt-4 rounded-2xl border border-white/10 bg-[#10192b] p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="font-black text-lg">Lineup</h2>
-          <p className="text-xs text-white/50">Only approved lineups will appear on the public Lineups tab.</p>
+          <h2 className="font-black text-lg">{isLive ? 'Substitutes & Lineup' : 'Lineup'}</h2>
+          <p className="text-xs text-white/50">{isLive ? 'Add and edit substitute bench players during the match.' : 'Only approved lineups will appear on the public Lineups tab.'}</p>
         </div>
         <Select label="Team" value={side} onChange={(value) => setSide(value as 'home' | 'away')} options={sidesOf(fixture)} />
       </div>
@@ -1147,6 +1147,7 @@ function LineupEditor({ matchId, role, disabled, onSave }: { matchId: string; ro
         formation={side === 'home' ? fixture.formationHome : fixture.formationAway}
         isApproved={isApproved}
         canApprove={role === 'super_admin' || role === 'match_admin' || role === 'competition_manager'}
+        isLive={isLive}
         disabled={disabled}
         onSave={onSave}
       />
@@ -1160,6 +1161,7 @@ function LineupSide({
   formation,
   isApproved,
   canApprove,
+  isLive = false,
   disabled,
   onSave,
 }: {
@@ -1168,12 +1170,15 @@ function LineupSide({
   formation?: string;
   isApproved?: boolean;
   canApprove?: boolean;
+  isLive?: boolean;
   disabled: boolean;
   onSave: (body: Record<string, unknown>) => void;
 }) {
   const current = squads.filter((row) => row.matchId === matchId && row.teamId === teamId);
   const currentIds = new Set(current.map((row) => row.playerId));
   const roster = players.filter((player) => player.departmentId === teamId && player.active !== false && (player.registered !== false || currentIds.has(player.id)));
+  const pitch = usePitch(matchId);
+  const playedInMatch = (playerId: string) => Boolean(isLive && pitch.get(playerId)?.used);
   const [shape, setShape] = useState(formation && (FORMATIONS.includes(formation) || isValidFormation(formation)) ? formation : '4-2-3-1');
   const [slots, setSlots] = useState<Array<string | null>>(() => {
     const saved = current.filter((row) => row.role === 'starter').sort((a, b) => a.sort - b.sort).map((row) => row.playerId);
@@ -1196,6 +1201,7 @@ function LineupSide({
   const roles = plan.flat();
   const chosen = new Set(slots.filter((id): id is string => Boolean(id)));
   const place = (index: number, playerId: string | null) => {
+    if (isLive) return;
     if (playerId) {
       const sus = getPlayerSuspension(playerId, teamId, matchId);
       if (sus.suspended) return;
@@ -1208,6 +1214,9 @@ function LineupSide({
     if (chosen.has(playerId)) return;
     const sus = getPlayerSuspension(playerId, teamId, matchId);
     if (sus.suspended) return;
+    if (playedInMatch(playerId)) return;
+    setBench((list) => list.includes(playerId) ? list.filter((id) => id !== playerId) : [...list, playerId]);
+  };
     setBench((list) => list.includes(playerId) ? list.filter((id) => id !== playerId) : [...list, playerId]);
   };
   const autoFill = () => {
@@ -1264,17 +1273,27 @@ function LineupSide({
   return (
     <form onSubmit={(event) => {
       event.preventDefault();
-      onSave({
-        teamId,
-        starters: slots.filter((id): id is string => Boolean(id)),
-        bench,
-        formation: shape,
-        approved: false,
-      });
+      if (isLive) {
+        onSave({ teamId, bench, action: 'update_bench' });
+      } else {
+        onSave({
+          teamId,
+          starters: slots.filter((id): id is string => Boolean(id)),
+          bench,
+          formation: shape,
+          approved: false,
+        });
+      }
     }}>
+      {isLive && (
+        <div className="mt-3 rounded-2xl border border-[#f5c518]/30 bg-[#f5c518]/10 p-3 text-xs text-[#f5c518]">
+          <p className="font-bold">Match is in progress · Starting XI is locked.</p>
+          <p className="mt-0.5 text-white/70">You can add, edit, or adjust substitute bench players below at any time during the match.</p>
+        </div>
+      )}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <label className="block text-xs font-bold text-white/45">Formation
-          <select className={`${inputClass} mt-1`} value={shape} onChange={(event) => {
+          <select disabled={isLive} className={`${inputClass} mt-1 ${isLive ? 'opacity-60 cursor-not-allowed' : ''}`} value={shape} onChange={(event) => {
             const next = event.target.value;
             setShape(next);
             const seated = seatPlayers(slots.filter((id): id is string => Boolean(id)), next, roster);
@@ -1302,24 +1321,31 @@ function LineupSide({
             )}
           </select>
         </label>
-        <div className="flex items-center gap-2 pt-4">
-          <button
-            type="button"
-            onClick={autoFill}
-            className="rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 px-3 py-1.5 text-xs font-bold text-white transition-colors"
-          >
-            Auto-fill from roster
-          </button>
-          <button
-            type="button"
-            onClick={clearLineup}
-            className="rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 px-3 py-1.5 text-xs font-bold text-white/60 hover:text-white transition-colors"
-          >
-            Clear
-          </button>
-        </div>
+        {!isLive && (
+          <div className="flex items-center gap-2 pt-4">
+            <button
+              type="button"
+              onClick={autoFill}
+              className="rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 px-3 py-1.5 text-xs font-bold text-white transition-colors"
+            >
+              Auto-fill from roster
+            </button>
+            <button
+              type="button"
+              onClick={clearLineup}
+              className="rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 px-3 py-1.5 text-xs font-bold text-white/60 hover:text-white transition-colors"
+            >
+              Clear
+            </button>
+          </div>
+        )}
       </div>
       <div className="relative mt-3 h-[460px] overflow-hidden rounded-3xl bg-[#3f7a4c]">
+        {isLive && (
+          <span className="absolute top-3 right-3 z-20 rounded-full bg-black/60 backdrop-blur border border-white/10 px-3 py-1 text-[11px] font-bold text-white/80 shadow">
+            Starting XI in play
+          </span>
+        )}
         <div className="pointer-events-none absolute inset-0" aria-hidden="true">
           <div className="absolute left-[20%] right-[20%] top-0 h-[16%] border-x border-b border-white/40" />
           <div className="absolute left-0 right-0 top-1/2 h-px bg-white/40" />
@@ -1332,8 +1358,9 @@ function LineupSide({
             <button
               key={`${role}-${slot}`}
               type="button"
-              onClick={() => setPicking(slot)}
-              className={`absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center ${picking === slot ? 'z-10' : ''}`}
+              disabled={isLive}
+              onClick={() => !isLive && setPicking(slot)}
+              className={`absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center ${picking === slot ? 'z-10' : ''} ${isLive ? 'cursor-default' : ''}`}
               style={{ top: tops[lineIndex], left: `${spread(line.length)[index]}%` }}
             >
               {player ? (
@@ -1428,22 +1455,25 @@ function LineupSide({
         <ul className="mt-2 flex flex-wrap gap-2">
           {roster.filter((player) => !chosen.has(player.id)).map((player) => {
             const sus = getPlayerSuspension(player.id, teamId, matchId);
+            const lockedActive = playedInMatch(player.id);
             return (
               <li key={player.id}>
                 <button
                   type="button"
-                  disabled={sus.suspended}
+                  disabled={sus.suspended || lockedActive}
                   onClick={() => toggleBench(player.id)}
-                  title={sus.suspended ? sus.detail : undefined}
+                  title={lockedActive ? 'Player has already participated in this match' : sus.suspended ? sus.detail : undefined}
                   className={`rounded-full px-3 py-1 text-xs font-bold transition-all ${sus.suspended
                       ? 'border border-red-500/40 bg-red-500/20 text-red-300 cursor-not-allowed opacity-60'
-                      : bench.includes(player.id)
-                        ? 'bg-[#f5c518] text-[#102018]'
-                        : 'bg-white/10 text-white/70 hover:bg-white/20'
+                      : lockedActive
+                        ? 'border border-emerald-500/40 bg-emerald-500/20 text-emerald-300 cursor-default'
+                        : bench.includes(player.id)
+                          ? 'bg-[#f5c518] text-[#102018]'
+                          : 'bg-white/10 text-white/70 hover:bg-white/20'
                     }`}
                 >
                   {player.number} {player.name}
-                  {sus.suspended ? ' (Suspended)' : ''}
+                  {lockedActive ? ' (In Play / Subbed)' : sus.suspended ? ' (Suspended)' : ''}
                 </button>
               </li>
             );
@@ -1453,51 +1483,68 @@ function LineupSide({
       </div>
       <p className="mt-2 text-xs text-white/40">{slots.filter(Boolean).length} of {roles.length} places filled · {bench.length} substitutes</p>
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => onSave({
-            teamId,
-            starters: slots.filter((id): id is string => Boolean(id)),
-            bench,
-            formation: shape,
-            approved: false,
-          })}
-          className="rounded-xl border border-white/15 bg-white/10 hover:bg-white/15 px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
-        >
-          Save Draft
-        </button>
-
-        {canApprove && (!isApproved ? (
-          <button
-            type="button"
-            disabled={disabled || !ready}
-            onClick={() => onSave({
-              teamId,
-              starters: slots.filter((id): id is string => Boolean(id)),
-              bench,
-              formation: shape,
-              approved: true,
-            })}
-            className="rounded-xl bg-[#2f9e44] hover:bg-[#288339] px-5 py-2 text-sm font-black text-white shadow-lg disabled:opacity-40"
-          >
-            Approve Lineup
-          </button>
-        ) : (
+        {isLive ? (
           <button
             type="button"
             disabled={disabled}
-            onClick={() => onSave({ teamId, action: 'unapprove' })}
-            className="rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 px-4 py-2 text-sm font-bold text-amber-300 disabled:opacity-40"
+            onClick={() => onSave({
+              teamId,
+              bench,
+              action: 'update_bench',
+            })}
+            className="rounded-xl bg-[#2f9e44] hover:bg-[#288339] px-6 py-2.5 text-sm font-black text-white shadow-lg disabled:opacity-40"
           >
-            Revoke Approval (Set to Draft)
+            Save Bench Substitutes ({bench.length})
           </button>
-        ))}
+        ) : (
+          <>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onSave({
+                teamId,
+                starters: slots.filter((id): id is string => Boolean(id)),
+                bench,
+                formation: shape,
+                approved: false,
+              })}
+              className="rounded-xl border border-white/15 bg-white/10 hover:bg-white/15 px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
+            >
+              Save Draft
+            </button>
 
-        {!canApprove && (
-          <span className="text-xs text-white/40 italic">
-            {isApproved ? 'Approved by Admin' : 'Lineup approval requires Match Admin or Super Admin'}
-          </span>
+            {canApprove && (!isApproved ? (
+              <button
+                type="button"
+                disabled={disabled || !ready}
+                onClick={() => onSave({
+                  teamId,
+                  starters: slots.filter((id): id is string => Boolean(id)),
+                  bench,
+                  formation: shape,
+                  approved: true,
+                })}
+                className="rounded-xl bg-[#2f9e44] hover:bg-[#288339] px-5 py-2 text-sm font-black text-white shadow-lg disabled:opacity-40"
+              >
+                Approve Lineup
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => onSave({ teamId, action: 'unapprove' })}
+                className="rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 px-4 py-2 text-sm font-bold text-amber-300 disabled:opacity-40"
+              >
+                Revoke Approval (Set to Draft)
+              </button>
+            ))}
+
+            {!canApprove && (
+              <span className="text-xs text-white/40 italic">
+                {isApproved ? 'Approved by Admin' : 'Lineup approval requires Match Admin or Super Admin'}
+              </span>
+            )}
+          </>
         )}
       </div>
     </form>
@@ -1914,6 +1961,11 @@ function SubForm({ matchId, disabled, onSubmit, bare = false }: { matchId: strin
         </div>
         <Select label="Player off" value={playerId} onChange={setPlayerId} options={[{ id: '', label: 'Choose' }, ...outgoing]} />
         <Select label="Player on" value={relatedPlayerId} onChange={setRelatedPlayerId} options={[{ id: '', label: 'Choose' }, ...incoming]} />
+        {incoming.length === 0 && (
+          <p className="col-span-2 text-xs text-amber-300/80">
+            ℹ No substitutes currently on the bench. Switch to the <strong>Bench / Lineup</strong> tab to add substitutes to the bench.
+          </p>
+        )}
         <label className="text-xs font-bold text-white/45">Minute<input className={inputClass} value={minute} onChange={(event) => { minuteTouched.current = true; setMinute(event.target.value); }} /></label>
         <label className="text-xs font-bold text-white/45">Added minute<input className={inputClass} value={addedMinute} onChange={(event) => { addedTouched.current = true; setAddedMinute(event.target.value); }} /></label>
         <div className="col-span-2">

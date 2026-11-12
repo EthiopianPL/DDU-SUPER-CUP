@@ -1389,6 +1389,38 @@ export function saveLineup(db, actor, matchId, input) {
       return { id: matchId, formation };
     }
 
+    if (input.action === 'update_bench') {
+      const rawBench = Array.isArray(input.bench) ? input.bench : [];
+      const currentStarters = db.prepare(`SELECT player_id FROM match_squad WHERE match_id = ? AND team_id = ? AND role = 'starter' ORDER BY sort_index`).all(matchId, teamId).map((r) => r.player_id);
+      const bench = [...new Set(rawBench.filter((id) => id != null && String(id).trim() !== '' && !currentStarters.includes(id)).map(String))];
+
+      for (const playerId of bench) ensureSquadPlayerSafe(db, playerId, teamId, matchId);
+
+      if (match.status !== 'scheduled') {
+        const existingEvents = activeEvents(db, matchId).filter((e) => e.team_id === teamId);
+        const requiredPlayerIds = new Set();
+        for (const ev of existingEvents) {
+          if (ev.player_id) requiredPlayerIds.add(ev.player_id);
+          if (ev.related_player_id) requiredPlayerIds.add(ev.related_player_id);
+        }
+        const allSquadIds = new Set([...currentStarters, ...bench]);
+        for (const pid of requiredPlayerIds) {
+          if (!allSquadIds.has(pid)) {
+            const p = db.prepare('SELECT name FROM players WHERE id = ?').get(pid);
+            throw new RuleError(`Cannot remove ${p?.name || 'player'} because they have already participated in this match.`);
+          }
+        }
+      }
+
+      db.prepare(`DELETE FROM match_squad WHERE match_id = ? AND team_id = ? AND role = 'bench'`).run(matchId, teamId);
+      const insert = db.prepare('INSERT INTO match_squad (match_id, team_id, player_id, role, sort_index) VALUES (?, ?, ?, ?, ?)');
+      bench.forEach((playerId, index) => insert.run(matchId, teamId, playerId, 'bench', index));
+
+      db.prepare(`UPDATE matches SET version = version + 1, updated_at = ? WHERE id = ?`).run(Date.now(), matchId);
+      audit(db, actor, 'lineup.bench', 'match', matchId, null, { teamId, bench });
+      return { id: matchId, bench };
+    }
+
     const rawStarters = Array.isArray(input.starters) ? input.starters : [];
     const starters = [...new Set(rawStarters.filter((id) => id != null && String(id).trim() !== '').map(String))];
     const rawBench = Array.isArray(input.bench) ? input.bench : [];
@@ -1408,12 +1440,28 @@ export function saveLineup(db, actor, matchId, input) {
     }
     for (const playerId of bench) ensureSquadPlayerSafe(db, playerId, teamId, matchId);
 
+    if (match.status !== 'scheduled') {
+      const existingEvents = activeEvents(db, matchId).filter((e) => e.team_id === teamId);
+      const requiredPlayerIds = new Set();
+      for (const ev of existingEvents) {
+        if (ev.player_id) requiredPlayerIds.add(ev.player_id);
+        if (ev.related_player_id) requiredPlayerIds.add(ev.related_player_id);
+      }
+      const allSquadIds = new Set([...starters, ...bench]);
+      for (const pid of requiredPlayerIds) {
+        if (!allSquadIds.has(pid)) {
+          const p = db.prepare('SELECT name FROM players WHERE id = ?').get(pid);
+          throw new RuleError(`Cannot remove ${p?.name || 'player'} because they have already participated in this match.`);
+        }
+      }
+    }
+
     db.prepare('DELETE FROM match_squad WHERE match_id = ? AND team_id = ?').run(matchId, teamId);
     const insert = db.prepare('INSERT INTO match_squad (match_id, team_id, player_id, role, sort_index) VALUES (?, ?, ?, ?, ?)');
     starters.forEach((playerId, index) => insert.run(matchId, teamId, playerId, 'starter', index));
     bench.forEach((playerId, index) => insert.run(matchId, teamId, playerId, 'bench', index));
 
-    const approvedVal = isApproving ? 1 : (input.approved === false ? 0 : (match[approvedCol] || 0));
+    const approvedVal = isApproving ? 1 : (input.approved === false ? (match.status !== 'scheduled' ? 1 : 0) : (match[approvedCol] || 0));
     db.prepare(`UPDATE matches SET ${formationCol} = ?, ${approvedCol} = ?, version = version + 1, updated_at = ? WHERE id = ?`).run(formation, approvedVal, Date.now(), matchId);
     audit(db, actor, 'lineup.update', 'match', matchId, null, { teamId, starters, bench, formation, approved: Boolean(approvedVal) });
     return { id: matchId, formation, approved: Boolean(approvedVal) };
