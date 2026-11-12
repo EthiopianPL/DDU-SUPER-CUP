@@ -15,10 +15,6 @@
       "destination": "/api/:segment?__ddu=:rest*"
     },
     {
-      "source": "/uploads/:rest*",
-      "destination": "/api/uploads?__ddu=:rest*"
-    },
-    {
       "source": "/((?!api|uploads).*)",
       "destination": "/"
     }

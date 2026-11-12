@@ -357,6 +357,7 @@ function serveMedia(response, db, pathname) {
   const kind = match[1];
   const rawId = decodeURIComponent(match[2]);
   const cleanId = rawId.replace(/\.(jpg|jpeg|png|webp|svg)$/i, '');
+  const id = cleanId;
 
   // 1. Query Supabase database media table first (with or without extension)
   const row = db.prepare('SELECT content_type, bytes FROM media WHERE id = ? OR id = ?').get(`${kind}/${cleanId}`, `${kind}/${rawId}`);
