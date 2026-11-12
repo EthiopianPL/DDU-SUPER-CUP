@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ddu-supercup-v1';
+const CACHE_NAME = 'ddu-supercup-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -13,6 +13,12 @@ const STATIC_ASSETS = [
   '/icons/favicon-16x16.png',
   '/favicon.ico'
 ];
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
 
 // Install: Cache app shell
 self.addEventListener('install', (event) => {
@@ -47,6 +53,11 @@ self.addEventListener('fetch', (event) => {
 
   // Ignore non-GET requests and browser extensions
   if (req.method !== 'GET' || !url.protocol.startsWith('http')) {
+    return;
+  }
+
+  // Bypass cache completely on localhost / dev server
+  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.port === '5173' || url.port === '8787') {
     return;
   }
 
