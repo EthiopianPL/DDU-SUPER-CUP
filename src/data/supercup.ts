@@ -79,6 +79,24 @@ export interface Fixture {
   updatedAt?: number;
 }
 
+export const OFFICIAL_REFEREES = [
+  'Buchi',
+  'Amba',
+  'Mukerem',
+  'Ephrem',
+  'Eske',
+  'Yishak (Silva)',
+  'Biniyam',
+  'Nacha (Nahom)',
+  'Anmo',
+  'Abuki',
+  'Beze',
+  'Hasset',
+  'Robel',
+] as const;
+
+export type OfficialReferee = (typeof OFFICIAL_REFEREES)[number];
+
 export interface MatchEventRecord {
   id: number;
   matchId: string;

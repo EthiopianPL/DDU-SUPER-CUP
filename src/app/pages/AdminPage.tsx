@@ -24,6 +24,7 @@ import {
   players,
   squads,
   getPlayerSuspension,
+  OFFICIAL_REFEREES,
   type GroupId,
   type Player,
 } from '../../data/supercup';
@@ -521,10 +522,10 @@ function MatchForm({ onDone, onError }: { onDone: (text: string) => void; onErro
             <input className={inputClass} type="time" value={time} required onChange={(event) => setTime(event.target.value)} />
           </label>
           <Field label="Venue" value={venue} onChange={setVenue} placeholder="Campus pitch" />
-          <Field label="Referee" value={referee} onChange={setReferee} placeholder="Optional" />
-          <Field label="Assistant 1" value={assistant1} onChange={setAssistant1} placeholder="Optional" />
-          <Field label="Assistant 2" value={assistant2} onChange={setAssistant2} placeholder="Optional" />
-          <Field label="4th Referee" value={fourthReferee} onChange={setFourthReferee} placeholder="Optional" />
+          <RefereePicker label="Referee" value={referee} onChange={setReferee} />
+          <RefereePicker label="Assistant 1" value={assistant1} onChange={setAssistant1} />
+          <RefereePicker label="Assistant 2" value={assistant2} onChange={setAssistant2} />
+          <RefereePicker label="4th Referee" value={fourthReferee} onChange={setFourthReferee} />
           <Field label="Live Streamer" value={streamer} onChange={setStreamer} placeholder="Optional" />
         </div>
         {stage === 'group' && (
@@ -1092,10 +1093,10 @@ function FixtureMeta({
       <label className="text-xs font-bold text-white/45">Date<input className={inputClass} type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
       <label className="text-xs font-bold text-white/45">Kickoff<input className={inputClass} type="time" value={time} onChange={(event) => setTime(event.target.value)} /></label>
       <label className="text-xs font-bold text-white/45">Venue<input className={inputClass} value={venue} onChange={(event) => setVenue(event.target.value)} /></label>
-      <label className="text-xs font-bold text-white/45">Referee<input className={inputClass} value={referee} onChange={(event) => setReferee(event.target.value)} /></label>
-      <label className="text-xs font-bold text-white/45">Assistant 1<input className={inputClass} value={assistant1} onChange={(event) => setAssistant1(event.target.value)} /></label>
-      <label className="text-xs font-bold text-white/45">Assistant 2<input className={inputClass} value={assistant2} onChange={(event) => setAssistant2(event.target.value)} /></label>
-      <label className="text-xs font-bold text-white/45">4th Referee<input className={inputClass} value={fourthReferee} onChange={(event) => setFourthReferee(event.target.value)} /></label>
+      <RefereePicker label="Referee" value={referee} onChange={setReferee} labelStyle="text-xs font-bold text-white/45" />
+      <RefereePicker label="Assistant 1" value={assistant1} onChange={setAssistant1} labelStyle="text-xs font-bold text-white/45" />
+      <RefereePicker label="Assistant 2" value={assistant2} onChange={setAssistant2} labelStyle="text-xs font-bold text-white/45" />
+      <RefereePicker label="4th Referee" value={fourthReferee} onChange={setFourthReferee} labelStyle="text-xs font-bold text-white/45" />
       <label className="text-xs font-bold text-white/45">Live Streamer<input className={inputClass} value={streamer} onChange={(event) => setStreamer(event.target.value)} placeholder="" /></label>
       <button type="submit" disabled={disabled} className="rounded-xl bg-white/10 px-4 py-2 text-sm font-bold disabled:opacity-40 sm:col-span-3 lg:col-span-4">Save fixture</button>
     </form>
@@ -2029,6 +2030,104 @@ function historyLine(event: (typeof matchEvents)[number]) {
   if (event.type === 'added_time') return `${stamp} Added time +${event.addedMinute}`;
   if (event.type === 'penalty_kick') return `${stamp} Penalty · ${who}${event.playerName} ${event.scored ? 'scored' : 'missed'}`;
   return stamp;
+}
+
+function resolveRefereeAlias(name?: string | null): string {
+  if (!name) return '';
+  const trimmed = name.trim();
+  if (!trimmed) return '';
+  const lower = trimmed.toLowerCase();
+  if (lower === 'yishak' || lower === 'silva' || lower === 'yishak(silva)' || lower === 'yishak (silva)') return 'Yishak (Silva)';
+  if (lower === 'nacha' || lower === 'nahom' || lower === 'nacha(nahom)' || lower === 'nacha (nahom)') return 'Nacha (Nahom)';
+  if (lower === 'bezabih' || lower === 'beze') return 'Beze';
+  if (lower === 'amno' || lower === 'anmo') return 'Anmo';
+  if (lower === 'eskinder' || lower === 'eske') return 'Eske';
+  const found = OFFICIAL_REFEREES.find((ref) => ref.toLowerCase() === lower);
+  return found || trimmed;
+}
+
+function RefereePicker({
+  label,
+  value,
+  onChange,
+  labelStyle = 'text-[11px] font-bold uppercase tracking-wide text-white/40',
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  labelStyle?: string;
+}) {
+  const [isCustom, setIsCustom] = useState(false);
+
+  const canonical = resolveRefereeAlias(value);
+  const isKnown = OFFICIAL_REFEREES.some((ref) => ref.toLowerCase() === canonical.toLowerCase());
+
+  if (isCustom) {
+    return (
+      <label className={labelStyle}>
+        <span className="flex items-center justify-between">
+          <span>{label}</span>
+          <button
+            type="button"
+            onClick={() => setIsCustom(false)}
+            className="text-[10px] font-semibold lowercase text-[#f5c518] hover:underline"
+          >
+            ← pick from list
+          </button>
+        </span>
+        <input
+          className={inputClass}
+          value={value}
+          placeholder={`Type custom ${label.toLowerCase()} name`}
+          autoFocus
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </label>
+    );
+  }
+
+  const selectValue = isKnown ? canonical : value ? '__existing_custom__' : '';
+
+  return (
+    <label className={labelStyle}>
+      <span className="flex items-center justify-between">
+        <span>{label}</span>
+        <button
+          type="button"
+          onClick={() => setIsCustom(true)}
+          className="text-[10px] font-semibold lowercase text-white/40 hover:text-[#f5c518]"
+          title="Type a custom name not in the list"
+        >
+          type custom
+        </button>
+      </span>
+      <select
+        className={inputClass}
+        value={selectValue}
+        onChange={(event) => {
+          const val = event.target.value;
+          if (val === '__custom__') {
+            setIsCustom(true);
+          } else if (val === '__existing_custom__') {
+            // Keep current value
+          } else {
+            onChange(val);
+          }
+        }}
+      >
+        <option value="">-- Select {label} (Optional) --</option>
+        {OFFICIAL_REFEREES.map((ref, idx) => (
+          <option key={ref} value={ref}>
+            {idx + 1}. {ref}
+          </option>
+        ))}
+        {value && !isKnown && (
+          <option value="__existing_custom__">{value} (Current)</option>
+        )}
+        <option value="__custom__">✏️ Other (type custom name)...</option>
+      </select>
+    </label>
+  );
 }
 
 function Field({ label, value, onChange, placeholder, required, maxLength, inputMode }: {
