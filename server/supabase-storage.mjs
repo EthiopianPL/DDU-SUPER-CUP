@@ -7,20 +7,22 @@ import { createClient } from '@supabase/supabase-js';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 function loadEnv() {
-  const file = join(root, '.env');
-  if (!existsSync(file)) return;
-  for (const line of readFileSync(file, 'utf8').split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const split = trimmed.indexOf('=');
-    if (split < 1) continue;
-    const key = trimmed.slice(0, split).trim();
-    if (process.env[key] != null) continue;
-    let value = trimmed.slice(split + 1).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1);
+  for (const name of ['.env.local', '.env.production', '.env']) {
+    const file = join(root, name);
+    if (!existsSync(file)) continue;
+    for (const line of readFileSync(file, 'utf8').split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const split = trimmed.indexOf('=');
+      if (split < 1) continue;
+      const key = trimmed.slice(0, split).trim();
+      if (process.env[key] != null) continue;
+      let value = trimmed.slice(split + 1).trim();
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      process.env[key] = value;
     }
-    process.env[key] = value;
   }
 }
 loadEnv();
@@ -89,15 +91,10 @@ export function getStorageProvider() {
   }
 
   // Default behavior
-  if (isProduction) {
-    if (!hasSupabase) {
-      throw new Error('Production environment requires Supabase Storage credentials (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY). Local binary storage is disabled.');
-    }
+  if (hasSupabase) {
     return 'supabase';
   }
-
-  // In non-production development or tests: use Supabase if credentials exist, else local adapter
-  return hasSupabase ? 'supabase' : 'local';
+  return 'local';
 }
 
 let cachedClient = null;

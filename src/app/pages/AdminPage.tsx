@@ -1217,8 +1217,6 @@ function LineupSide({
     if (playedInMatch(playerId)) return;
     setBench((list) => list.includes(playerId) ? list.filter((id) => id !== playerId) : [...list, playerId]);
   };
-    setBench((list) => list.includes(playerId) ? list.filter((id) => id !== playerId) : [...list, playerId]);
-  };
   const autoFill = () => {
     const used = new Set<string>();
     const newSlots: Array<string | null> = Array.from({ length: roles.length }, () => null);

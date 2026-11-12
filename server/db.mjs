@@ -9,20 +9,22 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const idle = new Int32Array(new SharedArrayBuffer(4));
 
 function loadEnv() {
-  const file = join(root, '.env');
-  if (!existsSync(file)) return;
-  for (const line of readFileSync(file, 'utf8').split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const split = trimmed.indexOf('=');
-    if (split < 1) continue;
-    const key = trimmed.slice(0, split).trim();
-    if (process.env[key] != null) continue;
-    let value = trimmed.slice(split + 1).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1);
+  for (const name of ['.env.local', '.env.production', '.env']) {
+    const file = join(root, name);
+    if (!existsSync(file)) continue;
+    for (const line of readFileSync(file, 'utf8').split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const split = trimmed.indexOf('=');
+      if (split < 1) continue;
+      const key = trimmed.slice(0, split).trim();
+      if (process.env[key] != null) continue;
+      let value = trimmed.slice(split + 1).trim();
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      process.env[key] = value;
     }
-    process.env[key] = value;
   }
 }
 
@@ -31,7 +33,12 @@ export function databasePath() {
 }
 
 function connectionString() {
-  return (process.env.DATABASE_URL || process.env.SUPABASE_DB_URL || '').trim();
+  return (
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.SUPABASE_DB_URL ||
+    ''
+  ).trim();
 }
 
 function openSqlite(path) {
