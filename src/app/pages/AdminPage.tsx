@@ -659,7 +659,7 @@ function MatchDesk({
   ];
   if (finished) deskTabs.push({ id: 'motm', label: 'Man of the Match' });
   deskTabs.push({ id: 'lineup', label: live ? 'Bench / Lineup' : 'Lineup' });
-  deskTabs.push({ id: 'fixture', label: 'Fixture' });
+  deskTabs.push({ id: 'fixture', label: 'Officials & Fixture' });
   const activeTab = deskTabs.some((item) => item.id === tab) ? tab : deskTabs[0].id;
 
   const handleTabClick = (nextTab: DeskTab) => {
@@ -749,7 +749,22 @@ function MatchDesk({
           </div>
           <TeamBlock team={away} align="end" />
         </div>
-        <p className="mt-3 text-center text-xs text-white/35">{fixture.stage && fixture.stage !== 'group' ? `${stageLabel(fixture.stage)} · Tie ${fixture.slot}` : `Group ${fixture.group} · MD${fixture.matchday}`} · {fixture.stadium} · {fixture.date} {fixture.time}{fixture.referee ? ` · Ref ${fixture.referee}` : ''}{fixture.assistant1 ? ` · AR1 ${fixture.assistant1}` : ''}{fixture.assistant2 ? ` · AR2 ${fixture.assistant2}` : ''}{fixture.fourthReferee ? ` · 4th Ref ${fixture.fourthReferee}` : ''}{fixture.streamer ? ` · Streamer: ${fixture.streamer}` : ''}{fixture.confirmed ? ' · Confirmed' : ''}</p>
+        <p className="mt-3 text-center text-xs text-white/35">{fixture.stage && fixture.stage !== 'group' ? `${stageLabel(fixture.stage)} · Tie ${fixture.slot}` : `Group ${fixture.group} · MD${fixture.matchday}`} · {fixture.stadium} · {fixture.date} {fixture.time}{fixture.streamer ? ` · Streamer: ${fixture.streamer}` : ''}{fixture.confirmed ? ' · Confirmed' : ''}</p>
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-2 border-t border-white/5 pt-3 text-xs">
+          <span className="font-bold text-[#f5c518]">Officials:</span>
+          <span className="rounded-lg bg-white/5 px-2 py-0.5 text-white/80">Ref: <strong className="text-white">{fixture.referee || 'Unassigned'}</strong></span>
+          <span className="rounded-lg bg-white/5 px-2 py-0.5 text-white/80">AR1: <strong className="text-white">{fixture.assistant1 || 'Unassigned'}</strong></span>
+          <span className="rounded-lg bg-white/5 px-2 py-0.5 text-white/80">AR2: <strong className="text-white">{fixture.assistant2 || 'Unassigned'}</strong></span>
+          <span className="rounded-lg bg-white/5 px-2 py-0.5 text-white/80">4th: <strong className="text-white">{fixture.fourthReferee || 'Unassigned'}</strong></span>
+          <button
+            type="button"
+            onClick={() => handleTabClick('fixture')}
+            className="ml-1 inline-flex items-center gap-1 rounded-lg border border-[#f5c518]/30 bg-[#f5c518]/10 px-2.5 py-1 text-xs font-black text-[#f5c518] hover:bg-[#f5c518]/20 transition-all cursor-pointer"
+          >
+            <Edit3 className="h-3 w-3" />
+            <span>Pick Referees</span>
+          </button>
+        </div>
         {finished && <p className="mt-3 text-center text-sm text-white/50">This match is finished. The score, lineup, and events stay as recorded.</p>}
       </div>
 
@@ -1084,21 +1099,28 @@ function FixtureMeta({
   }, [fixture.matchday, fixture.date, fixture.time, fixture.stadium, fixture.referee, fixture.assistant1, fixture.assistant2, fixture.fourthReferee, fixture.streamer]);
 
   return (
-    <form className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-[#10192b] p-4 sm:grid-cols-3 lg:grid-cols-4" onSubmit={(event) => {
+    <form className="mt-4 grid gap-2.5 rounded-2xl border border-white/10 bg-[#10192b] p-4 sm:grid-cols-3 lg:grid-cols-4" onSubmit={(event) => {
       event.preventDefault();
       onSave({ matchday: Number(matchday) || 1, date, time, venue, referee, assistant1, assistant2, fourthReferee, streamer });
     }}>
-      <h2 className="font-black sm:col-span-3 lg:col-span-4">Fixture and officials</h2>
+      <div className="sm:col-span-3 lg:col-span-4 flex items-center justify-between border-b border-white/10 pb-2">
+        <h2 className="font-black text-sm text-[#f5c518] uppercase tracking-wider">Fixture & Schedule</h2>
+      </div>
       <label className="text-xs font-bold text-white/45">Matchday<input className={inputClass} type="number" min="1" max="50" value={matchday} onChange={(event) => setMatchday(event.target.value)} /></label>
       <label className="text-xs font-bold text-white/45">Date<input className={inputClass} type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
       <label className="text-xs font-bold text-white/45">Kickoff<input className={inputClass} type="time" value={time} onChange={(event) => setTime(event.target.value)} /></label>
       <label className="text-xs font-bold text-white/45">Venue<input className={inputClass} value={venue} onChange={(event) => setVenue(event.target.value)} /></label>
-      <RefereePicker label="Referee" value={referee} onChange={setReferee} labelStyle="text-xs font-bold text-white/45" />
-      <RefereePicker label="Assistant 1" value={assistant1} onChange={setAssistant1} labelStyle="text-xs font-bold text-white/45" />
-      <RefereePicker label="Assistant 2" value={assistant2} onChange={setAssistant2} labelStyle="text-xs font-bold text-white/45" />
-      <RefereePicker label="4th Referee" value={fourthReferee} onChange={setFourthReferee} labelStyle="text-xs font-bold text-white/45" />
       <label className="text-xs font-bold text-white/45">Live Streamer<input className={inputClass} value={streamer} onChange={(event) => setStreamer(event.target.value)} placeholder="" /></label>
-      <button type="submit" disabled={disabled} className="rounded-xl bg-white/10 px-4 py-2 text-sm font-bold disabled:opacity-40 sm:col-span-3 lg:col-span-4">Save fixture</button>
+
+      <div className="sm:col-span-3 lg:col-span-4 mt-3 border-t border-white/10 pt-3">
+        <h3 className="font-black text-sm text-[#f5c518] uppercase tracking-wider">Match Officials (Pick from 13 Referees)</h3>
+        <p className="mt-0.5 text-[11px] text-white/40">Select the assigned referee team for this match or type a custom name.</p>
+      </div>
+      <RefereePicker label="Referee" value={referee} onChange={setReferee} labelStyle="text-xs font-bold text-white/60" />
+      <RefereePicker label="Assistant 1" value={assistant1} onChange={setAssistant1} labelStyle="text-xs font-bold text-white/60" />
+      <RefereePicker label="Assistant 2" value={assistant2} onChange={setAssistant2} labelStyle="text-xs font-bold text-white/60" />
+      <RefereePicker label="4th Referee" value={fourthReferee} onChange={setFourthReferee} labelStyle="text-xs font-bold text-white/60" />
+      <button type="submit" disabled={disabled} className="mt-2 rounded-xl bg-[#f5c518] px-4 py-2.5 text-sm font-black text-[#102018] hover:bg-[#e6b810] disabled:opacity-40 sm:col-span-3 lg:col-span-4 transition-all">Save fixture & officials</button>
     </form>
   );
 }
@@ -2115,37 +2137,48 @@ function RefereePicker({
         <button
           type="button"
           onClick={() => setIsCustom(true)}
-          className="text-[10px] font-semibold lowercase text-white/40 hover:text-[#f5c518]"
+          className="text-[10px] font-semibold lowercase text-white/40 hover:text-[#f5c518] cursor-pointer"
           title="Type a custom name not in the list"
         >
           type custom
         </button>
       </span>
-      <select
-        className={inputClass}
-        value={selectValue}
-        onChange={(event) => {
-          const val = event.target.value;
-          if (val === '__custom__') {
-            setIsCustom(true);
-          } else if (val === '__existing_custom__') {
-            // Keep current value
-          } else {
-            onChange(val);
-          }
-        }}
-      >
-        <option value="">-- Select {label} (Optional) --</option>
-        {OFFICIAL_REFEREES.map((ref, idx) => (
-          <option key={ref} value={ref}>
-            {idx + 1}. {ref}
+      <div className="relative mt-1">
+        <select
+          className={`${inputClass} mt-0 pr-8 cursor-pointer appearance-none border-white/15 focus:border-[#f5c518] hover:border-white/30 transition-colors`}
+          value={selectValue}
+          onChange={(event) => {
+            const val = event.target.value;
+            if (val === '__custom__') {
+              setIsCustom(true);
+            } else if (val === '__existing_custom__') {
+              // Keep current value
+            } else {
+              onChange(val);
+            }
+          }}
+        >
+          <option value="" className="bg-[#0c1424] text-white/50">-- Select {label} (Optional) --</option>
+          {OFFICIAL_REFEREES.map((ref, idx) => (
+            <option key={ref} value={ref} className="bg-[#0c1424] text-white py-1">
+              {idx + 1}. {ref}
+            </option>
+          ))}
+          {value && !isKnown && (
+            <option value="__existing_custom__" className="bg-[#0c1424] text-[#f5c518] font-bold">
+              ★ {value} (Current)
+            </option>
+          )}
+          <option value="__custom__" className="bg-[#0c1424] text-[#f5c518]">
+            ✏️ Other (type custom name)...
           </option>
-        ))}
-        {value && !isKnown && (
-          <option value="__existing_custom__">{value} (Current)</option>
-        )}
-        <option value="__custom__">✏️ Other (type custom name)...</option>
-      </select>
+        </select>
+        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-white/50">
+          <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20">
+            <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" fillRule="evenodd" />
+          </svg>
+        </div>
+      </div>
     </label>
   );
 }
