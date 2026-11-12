@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { resolveTeamLogoUrl } from '../../config/assets';
 
 interface DepartmentMarkProps {
@@ -114,6 +114,12 @@ export function getPlayerInitials(name: string): string {
 export function Portrait({ name, src, size = 36, id }: { name: string; src?: string; size?: number; id?: string }) {
   const [failed, setFailed] = useState(false);
   const [triedFallback, setTriedFallback] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+    setTriedFallback(false);
+  }, [src, id]);
+
   const initials = getPlayerInitials(name);
   const resolvedSrc = src && src.trim().length > 0 ? src.trim() : undefined;
   const fallbackSrc = id ? `/api/media/players/${encodeURIComponent(id)}` : undefined;

@@ -30,7 +30,7 @@ export function TeamDetailsPage() {
 
   const squad = useMemo(() => {
     return department ? playersForDepartment(department.id) : [];
-  }, [department]);
+  }, [department, version]);
 
   const captain = useMemo(() => {
     return squad.find((p) => p.isCaptain) ?? squad.find((p) => p.position === 'FWD') ?? squad[0];
@@ -38,11 +38,11 @@ export function TeamDetailsPage() {
 
   const matches = useMemo(() => {
     return department ? fixturesForDepartment(department.id) : [];
-  }, [department]);
+  }, [department, version]);
 
   const row = useMemo(() => {
     return department ? standingsFor(department.group).find((entry) => entry.department.id === department.id) : undefined;
-  }, [department]);
+  }, [department, version]);
 
   const filteredSquad = useMemo(() => {
     return squad.filter((p) => {
