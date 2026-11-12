@@ -1096,7 +1096,7 @@ function FixtureMeta({
       <label className="text-xs font-bold text-white/45">Assistant 1<input className={inputClass} value={assistant1} onChange={(event) => setAssistant1(event.target.value)} /></label>
       <label className="text-xs font-bold text-white/45">Assistant 2<input className={inputClass} value={assistant2} onChange={(event) => setAssistant2(event.target.value)} /></label>
       <label className="text-xs font-bold text-white/45">4th Referee<input className={inputClass} value={fourthReferee} onChange={(event) => setFourthReferee(event.target.value)} /></label>
-      <label className="text-xs font-bold text-white/45">Live Streamer<input className={inputClass} value={streamer} onChange={(event) => setStreamer(event.target.value)} placeholder="e.g. John Doe / DDU Media" /></label>
+      <label className="text-xs font-bold text-white/45">Live Streamer<input className={inputClass} value={streamer} onChange={(event) => setStreamer(event.target.value)} placeholder="" /></label>
       <button type="submit" disabled={disabled} className="rounded-xl bg-white/10 px-4 py-2 text-sm font-bold disabled:opacity-40 sm:col-span-3 lg:col-span-4">Save fixture</button>
     </form>
   );
