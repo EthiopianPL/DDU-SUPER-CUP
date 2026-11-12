@@ -1365,7 +1365,17 @@ function LineupSide({
               {player ? (
                 <span className="relative">
                   {player.photoUrl ? (
-                    <img src={player.photoUrl} alt="" className="h-11 w-11 rounded-full border-2 border-white object-cover" />
+                    <img
+                      src={player.photoUrl}
+                      alt=""
+                      onError={(e) => {
+                        if (!e.currentTarget.dataset.fallback) {
+                          e.currentTarget.dataset.fallback = '1';
+                          e.currentTarget.src = `/api/media/players/${encodeURIComponent(player.id)}`;
+                        }
+                      }}
+                      className="h-11 w-11 rounded-full border-2 border-white object-cover"
+                    />
                   ) : (
                     <span className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-white bg-[#102018] text-xs font-black text-white">{player.number}</span>
                   )}
@@ -1409,7 +1419,17 @@ function LineupSide({
                     title={sus.suspended ? sus.detail : undefined}
                   >
                     {player.photoUrl ? (
-                      <img src={player.photoUrl} alt="" className="h-7 w-7 rounded-full object-cover" />
+                      <img
+                        src={player.photoUrl}
+                        alt=""
+                        onError={(e) => {
+                          if (!e.currentTarget.dataset.fallback) {
+                            e.currentTarget.dataset.fallback = '1';
+                            e.currentTarget.src = `/api/media/players/${encodeURIComponent(player.id)}`;
+                          }
+                        }}
+                        className="h-7 w-7 rounded-full object-cover"
+                      />
                     ) : (
                       <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-[10px] font-black">
                         {player.number}

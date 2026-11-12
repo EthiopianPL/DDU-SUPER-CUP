@@ -839,7 +839,17 @@ function PitchPlayer({
           </div>
         )}
         {player.photoUrl ? (
-          <img src={player.photoUrl} alt="" className="h-11 w-11 rounded-full border-2 border-white object-cover shadow-md" />
+          <img
+            src={player.photoUrl}
+            alt=""
+            onError={(e) => {
+              if (!e.currentTarget.dataset.fallback) {
+                e.currentTarget.dataset.fallback = '1';
+                e.currentTarget.src = `/api/media/players/${encodeURIComponent(player.id)}`;
+              }
+            }}
+            className="h-11 w-11 rounded-full border-2 border-white object-cover shadow-md"
+          />
         ) : (
           <span className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-white text-[12px] font-black text-white shadow-md" style={{ background: color }}>
             {player.number}
@@ -1246,7 +1256,17 @@ function BenchList({ title, color, players }: { title: string; color: string; pl
         {players.map((player) => (
           <li key={player.id} className="flex items-center gap-2 text-sm text-white/85">
             {player.photoUrl ? (
-              <img src={player.photoUrl} alt="" className="h-7 w-7 rounded-full object-cover" />
+              <img
+                src={player.photoUrl}
+                alt=""
+                onError={(e) => {
+                  if (!e.currentTarget.dataset.fallback) {
+                    e.currentTarget.dataset.fallback = '1';
+                    e.currentTarget.src = `/api/media/players/${encodeURIComponent(player.id)}`;
+                  }
+                }}
+                className="h-7 w-7 rounded-full object-cover"
+              />
             ) : (
               <span className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-black text-white" style={{ background: color }}>
                 {player.number}

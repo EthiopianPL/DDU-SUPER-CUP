@@ -132,8 +132,10 @@ export async function handleRequest(db, request, response) {
       return;
     }
     if (request.method === 'GET' && url.pathname.startsWith('/api/media/')) return serveMedia(response, db, url.pathname);
+    if (url.pathname.startsWith('/uploads/') || url.pathname.startsWith('/api/uploads/')) {
+      return serveUpload(response, url.pathname.replace(/^\/api/, ''), db);
+    }
     if (url.pathname.startsWith('/api/')) return await serveApi(request, response, db, url);
-    if (url.pathname.startsWith('/uploads/')) return serveUpload(response, url.pathname);
     if (process.env.NODE_ENV === 'production' && !process.env.VERCEL) return serveStatic(response, url.pathname);
     response.writeHead(404, { 'Content-Type': 'application/json' });
     response.end(JSON.stringify({ error: 'Not found.' }));
@@ -353,10 +355,11 @@ function serveMedia(response, db, pathname) {
   const match = pathname.match(/^\/api\/media\/(teams|players|news|motm|coaches)\/([^/]+)$/);
   if (!match) return send(response, 404, { error: 'Not found.' });
   const kind = match[1];
-  const id = decodeURIComponent(match[2]);
+  const rawId = decodeURIComponent(match[2]);
+  const cleanId = rawId.replace(/\.(jpg|jpeg|png|webp|svg)$/i, '');
 
-  // 1. Query Supabase database media table first
-  const row = db.prepare('SELECT content_type, bytes FROM media WHERE id = ?').get(`${kind}/${id}`);
+  // 1. Query Supabase database media table first (with or without extension)
+  const row = db.prepare('SELECT content_type, bytes FROM media WHERE id = ? OR id = ?').get(`${kind}/${cleanId}`, `${kind}/${rawId}`);
   const bytes = mediaBytes(row?.bytes);
   if (bytes?.length) {
     applySecurity(response);
@@ -448,7 +451,7 @@ function readRaw(request, limit) {
   });
 }
 
-function serveUpload(response, pathname) {
+function serveUpload(response, pathname, db) {
   const relative = normalize(pathname.replace(/^\/uploads\//, ''));
   if (relative.startsWith('..') || relative.includes('\0') || relative.includes(':')) return send(response, 404, { error: 'Not found.' });
   let file = join(root, 'public', 'uploads', relative);
@@ -458,10 +461,33 @@ function serveUpload(response, pathname) {
   if (!existsSync(file)) {
     file = join(root, 'data', 'uploads', relative);
   }
-  if (!existsSync(file)) return send(response, 404, { error: 'Not found.' });
-  applySecurity(response);
-  response.writeHead(200, { 'Content-Type': TYPES[extname(file)] || 'application/octet-stream', 'Cache-Control': 'public, max-age=86400' });
-  createReadStream(file).pipe(response);
+  if (existsSync(file)) {
+    applySecurity(response);
+    response.writeHead(200, { 'Content-Type': TYPES[extname(file)] || 'application/octet-stream', 'Cache-Control': 'public, max-age=86400' });
+    createReadStream(file).pipe(response);
+    return;
+  }
+
+  // Fallback to database media table (crucial for serverless environments like Vercel where public/uploads isn't bundled into Lambda)
+  if (db) {
+    const fileName = relative.split('/').pop() || relative;
+    const cleanId = fileName.replace(/\.(jpg|jpeg|png|webp|svg)$/i, '');
+    const kind = relative.startsWith('players/') ? 'players' : relative.startsWith('teams/') ? 'teams' : relative.startsWith('news/') ? 'news' : 'players';
+    const row = db.prepare('SELECT content_type, bytes FROM media WHERE id = ? OR id = ? OR id = ?').get(`${kind}/${cleanId}`, `${kind}/${fileName}`, `players/${cleanId}`);
+    const bytes = mediaBytes(row?.bytes);
+    if (bytes?.length) {
+      applySecurity(response);
+      response.writeHead(200, {
+        'Content-Type': row.content_type || 'image/jpeg',
+        'Cache-Control': 'public, max-age=86400',
+        'Content-Length': bytes.length,
+      });
+      response.end(bytes);
+      return;
+    }
+  }
+
+  return send(response, 404, { error: 'Not found.' });
 }
 
 function serveStatic(response, pathname) {

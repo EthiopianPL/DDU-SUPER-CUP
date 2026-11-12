@@ -113,15 +113,25 @@ export function getPlayerInitials(name: string): string {
 
 export function Portrait({ name, src, size = 36, id }: { name: string; src?: string; size?: number; id?: string }) {
   const [failed, setFailed] = useState(false);
+  const [triedFallback, setTriedFallback] = useState(false);
   const initials = getPlayerInitials(name);
   const resolvedSrc = src && src.trim().length > 0 ? src.trim() : undefined;
+  const fallbackSrc = id ? `/api/media/players/${encodeURIComponent(id)}` : undefined;
 
-  if (resolvedSrc && !failed) {
+  const currentSrc = !triedFallback && resolvedSrc ? resolvedSrc : fallbackSrc;
+
+  if (currentSrc && !failed) {
     return (
       <img
-        src={resolvedSrc}
+        src={currentSrc}
         alt={name}
-        onError={() => setFailed(true)}
+        onError={() => {
+          if (resolvedSrc && !triedFallback && id) {
+            setTriedFallback(true);
+          } else {
+            setFailed(true);
+          }
+        }}
         className="shrink-0 rounded-full object-cover"
         style={{ width: size, height: size }}
       />
