@@ -21,7 +21,6 @@ export function MotmPoster({ highlight, showDownload = false }: MotmPosterProps)
   if (stats.goals > 0) statCards.push({ value: stats.goals, label: stats.goals === 1 ? 'Goal' : 'Goals' });
   if (stats.assists > 0) statCards.push({ value: stats.assists, label: stats.assists === 1 ? 'Assist' : 'Assists' });
   if (stats.cleanSheet) statCards.push({ value: '1', label: 'Clean Sheet' });
-  if (stats.yellowCard) statCards.push({ value: '1', label: 'Yellow Card' });
   if (statCards.length === 0) statCards.push({ value: '★', label: 'Match MVP' });
 
   const posLabel =
