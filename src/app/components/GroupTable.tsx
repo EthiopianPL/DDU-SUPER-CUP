@@ -144,7 +144,10 @@ export function GroupTable({
                 {compact ? (
                   <>
                     <span className="text-center text-sm font-semibold text-white/80">{row.played}</span>
-                    <span className="text-center text-sm font-black text-[#f5c518]">{row.points}</span>
+                    <span className="text-center text-sm font-black text-[#f5c518]">
+                      {row.points}
+                      {row.adjustment && <sup className="text-amber-400 font-bold ml-0.5">*</sup>}
+                    </span>
                   </>
                 ) : (
                   <>
@@ -155,7 +158,10 @@ export function GroupTable({
                     <span className="text-center text-sm font-semibold text-white/80">
                       {row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}
                     </span>
-                    <span className="text-center text-sm font-black text-[#f5c518]">{row.points}</span>
+                    <span className="text-center text-sm font-black text-[#f5c518]">
+                      {row.points}
+                      {row.adjustment && <sup className="text-amber-400 font-bold ml-0.5">*</sup>}
+                    </span>
                     <span className="flex items-center justify-center gap-1">
                       {row.form.map((result, index) => (
                         <span
@@ -179,6 +185,18 @@ export function GroupTable({
           {rows.length === 0 && (
             <div className="py-8 text-center text-xs text-white/40">
               No teams registered in Group {group} yet.
+            </div>
+          )}
+          {rows.some((r) => r.adjustment) && (
+            <div className="border-t border-white/10 bg-[#0c1424] px-4 py-2.5 text-[11px] text-white/60 space-y-1">
+              {rows
+                .filter((r) => r.adjustment)
+                .map((r) => (
+                  <p key={r.department.id} className="flex items-start gap-1.5 leading-snug">
+                    <span className="font-bold text-amber-400">*</span>
+                    <span>{r.adjustment?.note}</span>
+                  </p>
+                ))}
             </div>
           )}
         </div>

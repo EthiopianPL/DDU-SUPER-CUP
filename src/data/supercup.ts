@@ -173,7 +173,30 @@ export interface Standing {
   goalDifference: number;
   points: number;
   form: Array<'W' | 'D' | 'L'>;
+  adjustment?: { points: number; goalsFor: number; goalsAgainst: number; note: string };
 }
+
+export interface TableAdjustment {
+  points: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  note: string;
+}
+
+export const TABLE_ADJUSTMENTS: Record<string, TableAdjustment> = {
+  padm: {
+    points: -3,
+    goalsFor: -3,
+    goalsAgainst: 0,
+    note: 'PADM & Banking: Penalized with deduction of 3 points and 3 goals by Disciplinary Committee (Nov 10 rule violation).',
+  },
+  health: {
+    points: 3,
+    goalsFor: 3,
+    goalsAgainst: 0,
+    note: 'Health: Awarded 3 points and 3 goals on the table by Disciplinary Committee.',
+  },
+};
 
 export const GROUPS: GroupId[] = ['A', 'B', 'C', 'D', 'E'];
 
@@ -373,11 +396,21 @@ export function standingsFor(group: GroupId): Standing[] {
     }
   });
 
-  const table = Array.from(rows.values()).map((row) => ({
-    ...row,
-    goalDifference: row.goalsFor - row.goalsAgainst,
-    form: row.form.slice(-5),
-  }));
+  const table = Array.from(rows.values()).map((row) => {
+    const adj = TABLE_ADJUSTMENTS[row.department.id];
+    const points = Math.max(0, row.points + (adj?.points ?? 0));
+    const goalsFor = Math.max(0, row.goalsFor + (adj?.goalsFor ?? 0));
+    const goalsAgainst = Math.max(0, row.goalsAgainst + (adj?.goalsAgainst ?? 0));
+    return {
+      ...row,
+      points,
+      goalsFor,
+      goalsAgainst,
+      goalDifference: goalsFor - goalsAgainst,
+      form: row.form.slice(-5),
+      adjustment: adj,
+    };
+  });
 
   table.sort((a, b) => {
     for (const key of leagueRules.tieBreak) {
