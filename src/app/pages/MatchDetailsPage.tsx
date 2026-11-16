@@ -1111,11 +1111,17 @@ function EventTimeline({
   const regulationAway = sideGoals(events, awayId, (event) => !isExtra(event.period));
   const shootout = pensHome != null && pensAway != null;
 
-  if (!rows.length && !reachedHalf && !finished) {
+  if (!rows.length) {
     return (
-      <p className="mx-auto max-w-md py-6 text-center text-sm text-white/50">
-        No goals, cards, or substitutions yet.
-      </p>
+      <div className="mx-auto max-w-md py-8 text-center">
+        <div className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-[#10192b] px-4 py-3 text-xs text-white/70 shadow-sm">
+          {finished ? (
+            <span>Official Result: <strong className="font-bold text-[#f5c518]">{homeScore} - {awayScore}</strong></span>
+          ) : (
+            <span>No goals, cards, or substitutions yet.</span>
+          )}
+        </div>
+      </div>
     );
   }
 

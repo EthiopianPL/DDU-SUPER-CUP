@@ -131,6 +131,9 @@ function recomputeScore(db, matchId) {
     FROM match_events
     WHERE match_id = ? AND type = 'goal' AND counts_for_score = 1 AND voided = 0 AND shootout = 0
     GROUP BY credited_team_id`).all(matchId);
+  if (goals.length === 0 && match.status === 'finished' && (match.home_score > 0 || match.away_score > 0)) {
+    return;
+  }
   let home = 0;
   let away = 0;
   for (const row of goals) {
