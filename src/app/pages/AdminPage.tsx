@@ -3054,11 +3054,12 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
             </div>
             <h1 className="text-2xl font-black text-white">{title || 'Story headline will appear here'}</h1>
             {photos.length > 0 && (
-              <div className="overflow-hidden rounded-2xl">
+              <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#070d18]">
                 <NewsImageSlider
                   images={photos.map((p) => p.preview)}
                   alt={title}
-                  className="h-60 sm:h-72 w-full"
+                  className="h-64 sm:h-80 w-full"
+                  enableLightbox
                 />
               </div>
             )}

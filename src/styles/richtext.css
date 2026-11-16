@@ -121,9 +121,19 @@
 .richtext-content img {
   max-width: 100%;
   height: auto;
+  display: block;
+  margin: 1.5rem auto;
   border-radius: 1rem;
-  margin: 1.25rem 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  object-fit: contain;
+  background-color: #070d18;
+  cursor: zoom-in;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.richtext-content img:hover {
+  transform: scale(1.01);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
 }
 
 .richtext-content code {

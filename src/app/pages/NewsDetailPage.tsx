@@ -32,11 +32,12 @@ export function NewsDetailPage() {
       <p className="text-[11px] font-semibold tracking-[0.16em] text-[#f5c518]">{article.category} · {article.time}</p>
       <h1 className="mt-2 text-3xl font-black text-white">{article.title}</h1>
       {images.length > 0 && (
-        <div className="mt-5 overflow-hidden rounded-3xl">
+        <div className="mt-5 overflow-hidden rounded-3xl border border-white/10 bg-[#070d18] shadow-2xl">
           <NewsImageSlider
             images={images}
             alt={article.title}
-            className="h-72 sm:h-96 w-full"
+            className="h-80 sm:h-[480px] md:h-[560px] w-full"
+            enableLightbox
           />
         </div>
       )}

@@ -23,7 +23,7 @@ export function NewsPage() {
                 <NewsImageSlider
                   images={images}
                   alt={stripHtml(article.title)}
-                  className="h-56 sm:h-64 w-full"
+                  className="h-60 sm:h-72 w-full"
                   onImageClick={() => navigate(`/news/${article.id}`)}
                 />
               )}
