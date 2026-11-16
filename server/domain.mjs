@@ -619,7 +619,7 @@ export function buildSnapshot(db, now = Date.now()) {
       playerId: event.player_id,
       assistId: event.assist_id,
       relatedPlayerId: event.related_player_id,
-      playerName: names.get(event.player_id) ?? '',
+      playerName: names.get(event.player_id) ?? (event.type === 'goal' && !event.player_id ? 'Awarded Goal' : ''),
       assistName: names.get(event.assist_id) ?? '',
       relatedName: names.get(event.related_player_id) ?? '',
       minute: event.minute,

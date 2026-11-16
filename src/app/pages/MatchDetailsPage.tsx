@@ -115,6 +115,17 @@ export function MatchDetailsPage() {
   const awaySheet = useMemo(() => matchSheet(fixture.awayId, fixture.id), [fixture.awayId, fixture.id, version]);
   const recorded = manualStats.filter((stat) => stat.matchId === fixture.id);
 
+  const forfeitNote = useMemo(() => {
+    return matchEvents.find(
+      (ev) =>
+        ev.matchId === fixture.id &&
+        !ev.voided &&
+        ev.type === 'note' &&
+        (ev.detail?.toLowerCase().includes('forfeit') || ev.detail?.toLowerCase().includes('disciplinary'))
+    );
+  }, [fixture.id, version]);
+  const isForfeited = Boolean(forfeitNote);
+
   return (
     <div className="mx-auto max-w-3xl overflow-x-clip px-4 pb-24 pt-5 sm:pb-12">
       {/* Back button */}
@@ -252,6 +263,11 @@ export function MatchDetailsPage() {
                 <p className="mt-1 text-[11px] font-semibold text-white/40">
                   {fixture.confirmed ? 'Confirmed result' : 'Awaiting confirmation'}
                 </p>
+                {isForfeited && (
+                  <span className="mt-1.5 inline-block rounded-full border border-amber-500/30 bg-amber-500/15 px-2.5 py-0.5 text-[10px] font-bold text-amber-400">
+                    Match Forfeited (Awarded 3–0)
+                  </span>
+                )}
                 {fixture.pensHome != null && fixture.pensAway != null && (
                   <p className="text-[11px] font-bold text-[#f5c518]">Pens {fixture.pensHome}-{fixture.pensAway}</p>
                 )}
@@ -304,6 +320,19 @@ export function MatchDetailsPage() {
 
       {activeTab === 'overview' && (
         <section id="match-panel-overview" role="tabpanel" aria-labelledby="match-tab-overview" className="mt-8">
+          {isForfeited && (
+            <div className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-200">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
+                <div>
+                  <span className="font-bold uppercase tracking-wider text-amber-400">Disciplinary Committee Ruling:</span>{' '}
+                  <p className="mt-0.5 text-white/90 leading-relaxed">
+                    {forfeitNote?.detail || 'PADM & Banking penalized with match forfeiture for rule violation. Health awarded a 3–0 victory and the full 3 points.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
           {fixture.status === 'upcoming' ? (
             <KickoffClock date={fixture.date} time={fixture.time} detail={fixture.detail} />
           ) : (
@@ -1080,8 +1109,8 @@ function EventTimeline({
         title: event.kind === 'goal'
           ? goalType === 'penalty' ? 'Penalty' : goalType === 'own_goal' ? 'Own goal' : goalType === 'free_kick' ? 'Free kick' : 'Goal'
           : event.cardType === 'second_yellow' ? 'Second yellow, red card' : event.kind === 'yellow' ? 'Yellow card' : 'Red card',
-        name: event.kind === 'goal' && goalType === 'penalty' ? `${event.playerName.replace(/ \(OG\)$/, '')} (P)` : event.playerName.replace(/ \(OG\)$/, ''),
-        detail: bits.join(' · '),
+        name: event.kind === 'goal' && goalType === 'penalty' ? `${event.playerName.replace(/ \(OG\)$/, '')} (P)` : (event.playerName || 'Awarded Goal').replace(/ \(OG\)$/, ''),
+        detail: bits.join(' · ') || (event.detail ?? ''),
       };
     }),
     ...substitutions.map((change) => {

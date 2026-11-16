@@ -737,12 +737,12 @@ export function matchTimeline(fixture: Fixture): TimelineEvent[] {
           period: event.period,
           teamId: event.creditedTeamId || event.teamId || '',
           playerId: event.playerId || '',
-          playerName: event.playerName,
+          playerName: event.playerName || (event.type === 'goal' ? 'Awarded Goal' : ''),
           kind: 'goal' as const,
           assistId: event.goalType === 'own_goal' ? undefined : event.assistId || undefined,
           assistName: event.goalType === 'own_goal' ? undefined : event.assistName || undefined,
           goalType: event.goalType,
-          detail: event.goalType || '',
+          detail: event.detail || event.goalType || '',
         };
       }
       if (event.type === 'card') {
