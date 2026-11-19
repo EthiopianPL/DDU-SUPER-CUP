@@ -122,7 +122,11 @@ export function Portrait({ name, src, size = 36, id }: { name: string; src?: str
 
   const initials = getPlayerInitials(name);
   const resolvedSrc = src && src.trim().length > 0 ? src.trim() : undefined;
-  const fallbackSrc = id ? `/api/media/players/${encodeURIComponent(id)}` : undefined;
+  const fallbackSrc = id
+    ? id.startsWith('coaches/') || id.startsWith('teams/')
+      ? `/api/media/${id}`
+      : `/api/media/players/${encodeURIComponent(id)}`
+    : undefined;
 
   const currentSrc = !triedFallback && resolvedSrc ? resolvedSrc : fallbackSrc;
 

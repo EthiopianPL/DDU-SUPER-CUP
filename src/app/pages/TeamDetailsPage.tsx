@@ -156,14 +156,14 @@ export function TeamDetailsPage() {
             <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3.5 py-3 backdrop-blur-sm transition hover:border-[#f5c518]/30 hover:bg-white/[0.08]">
               {coachPhoto ? (
                 <div className="relative shrink-0">
-                  <Portrait name={coachName || 'Coach'} src={coachPhoto} size={42} />
+                  <Portrait name={coachName || 'Coach'} src={coachPhoto || `/api/media/coaches/${department.id}`} size={42} id={`coaches/${department.id}`} />
                   <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#f5c518] text-[9px] font-black text-[#102018] shadow">
                     👔
                   </span>
                 </div>
               ) : coachName ? (
                 <div className="relative shrink-0">
-                  <Portrait name={coachName} size={42} />
+                  <Portrait name={coachName} src={`/api/media/coaches/${department.id}`} size={42} id={`coaches/${department.id}`} />
                   <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#f5c518] text-[9px] font-black text-[#102018] shadow">
                     👔
                   </span>
@@ -454,6 +454,42 @@ export function TeamDetailsPage() {
               <p className="text-xs text-white/40 mt-1">
                 {search ? `No players matching "${search}"` : 'No players registered in this squad.'}
               </p>
+            </div>
+          )}
+
+          {/* Coaching & Technical Staff */}
+          {coachName && (
+            <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0c1424]">
+              <div className="flex items-center justify-between border-b border-white/10 bg-[#10192b] px-4 py-2.5">
+                <span className="text-xs font-black uppercase tracking-wider text-white/70">
+                  Coaching Staff
+                </span>
+                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] font-bold text-[#f5c518]">
+                  1
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-white/[0.02] transition">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Portrait
+                    name={coachName}
+                    src={coachPhoto || `/api/media/coaches/${department.id}`}
+                    size={36}
+                    id={`coaches/${department.id}`}
+                  />
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#f5c518]/20 text-xs font-black text-[#f5c518]">
+                    👔
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-white">{coachName}</p>
+                    <p className="text-[11px] font-semibold text-white/40">Head Coach</p>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold text-white/70">
+                    Staff
+                  </span>
+                </div>
+              </div>
             </div>
           )}
         </div>

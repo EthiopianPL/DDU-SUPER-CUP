@@ -2277,7 +2277,7 @@ function TeamAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
             <span className="flex min-w-0 items-center gap-3 text-sm font-bold">
               <DepartmentMark id={item.id} name={item.name} shortName={item.shortName} color={item.color} size={36} src={item.crestUrl || undefined} />
               {item.coachPhotoUrl ? (
-                <Portrait name={item.coach || 'Coach'} src={item.coachPhotoUrl} size={30} />
+                <Portrait name={item.coach || 'Coach'} src={item.coachPhotoUrl} size={30} id={`coaches/${item.id}`} />
               ) : null}
               <span className="min-w-0">
                 <span className="block truncate">{item.name}</span>
