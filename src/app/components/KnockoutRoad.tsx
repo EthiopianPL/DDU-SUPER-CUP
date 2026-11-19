@@ -177,12 +177,13 @@ function SideRow({ tie, home = false }: { tie?: RoadTie; home?: boolean }) {
 
   return (
     <div
-      className={`flex h-[25px] items-center gap-1 px-1.5 transition-all duration-300 ${isWinner
+      className={`flex h-[25px] items-center gap-1 px-1.5 transition-all duration-300 ${
+        isWinner
           ? 'bg-[#f5c518]/[0.09]'
           : isPopulated
-            ? 'bg-white/[0.03]'
-            : ''
-        }`}
+          ? 'bg-white/[0.03]'
+          : ''
+      }`}
       style={isLoser ? { filter: 'blur(0.85px)', opacity: 0.38 } : undefined}
     >
       {side?.team ? (
@@ -194,12 +195,13 @@ function SideRow({ tie, home = false }: { tie?: RoadTie; home?: boolean }) {
           color={side.team.color}
           size={16}
           src={side.team.crestUrl || undefined}
-          className={`!rounded-full object-cover shrink-0 overflow-hidden shadow-sm transition-all duration-300 ${isWinner
+          className={`!rounded-full object-cover shrink-0 overflow-hidden shadow-sm transition-all duration-300 ${
+            isWinner
               ? 'ring-1 ring-[#f5c518]/80 shadow-[0_0_8px_rgba(245,197,24,0.3)]'
               : isLoser
-                ? 'ring-1 ring-white/10'
-                : 'ring-1 ring-white/15 bg-[#0b1329]'
-            }`}
+              ? 'ring-1 ring-white/10'
+              : 'ring-1 ring-white/15 bg-[#0b1329]'
+          }`}
         />
       ) : (
         <span
@@ -211,21 +213,23 @@ function SideRow({ tie, home = false }: { tie?: RoadTie; home?: boolean }) {
       )}
       <span
         title={side?.team?.name || side?.label}
-        className={`min-w-0 flex-1 truncate text-[9.5px] tracking-tight transition-all duration-300 ${isWinner
+        className={`min-w-0 flex-1 truncate text-[9.5px] tracking-tight transition-all duration-300 ${
+          isWinner
             ? 'font-black text-[#f5c518]'
             : isLoser
-              ? 'font-normal text-white/50'
-              : isPopulated
-                ? 'font-bold text-white'
-                : 'font-medium text-white/45'
-          }`}
+            ? 'font-normal text-white/50'
+            : isPopulated
+            ? 'font-bold text-white'
+            : 'font-medium text-white/45'
+        }`}
       >
         {side?.team?.name || side?.label || 'TBD'}
       </span>
       {score != null && (
         <span
-          className={`font-mono text-[11px] transition-colors duration-300 ${isWinner ? 'font-black text-[#f5c518]' : 'font-bold text-white/80'
-            }`}
+          className={`font-mono text-[11px] transition-colors duration-300 ${
+            isWinner ? 'font-black text-[#f5c518]' : 'font-bold text-white/80'
+          }`}
         >
           {score}
         </span>
