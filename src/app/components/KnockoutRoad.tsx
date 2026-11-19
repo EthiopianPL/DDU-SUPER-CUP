@@ -196,8 +196,9 @@ function SideRow({ tie, home = false }: { tie?: RoadTie; home?: boolean }) {
       )}
       <span
         title={side?.team?.name || side?.label}
-        className={`min-w-0 flex-1 truncate text-[10px] font-bold uppercase tracking-wide transition-all duration-300 ${leading ? 'text-[#f5c518]' : isPopulated ? 'text-white font-extrabold' : 'text-white/45'
-          }`}
+        className={`min-w-0 flex-1 truncate text-[10px] font-bold uppercase tracking-wide transition-all duration-300 ${
+          leading ? 'text-[#f5c518]' : isPopulated ? 'text-white font-extrabold' : 'text-white/45'
+        }`}
       >
         {side?.team?.shortName || side?.label || 'TBD'}
       </span>
