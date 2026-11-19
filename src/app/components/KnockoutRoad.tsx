@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router';
 import { knockoutRoad, thirdPlaceTie, type RoadTie } from '../../data/knockout';
 import { useLeagueVersion } from '../../data/live';
+import { DepartmentMark } from './DepartmentMark';
 
 const CARD_W = 112;
 const CARD_H = 52;
@@ -174,15 +175,29 @@ function SideRow({ tie, home = false }: { tie?: RoadTie; home?: boolean }) {
 
   return (
     <div className={`flex h-[25px] items-center gap-1.5 px-1.5 transition-colors duration-300 ${isPopulated ? 'bg-white/[0.03]' : ''}`}>
-      <span
-        className="h-3.5 w-1 shrink-0 rounded-full transition-all duration-300"
-        style={{ background: side?.team?.color || 'rgba(255,255,255,0.22)' }}
-      />
+      {side?.team ? (
+        <DepartmentMark
+          key={side.team.id}
+          id={side.team.id}
+          name={side.team.name}
+          shortName={side.team.shortName}
+          color={side.team.color}
+          size={16}
+          src={side.team.crestUrl || undefined}
+          className="!rounded-full object-cover shrink-0 overflow-hidden ring-1 ring-white/15 bg-[#0b1329] shadow-sm"
+        />
+      ) : (
+        <span
+          aria-hidden="true"
+          className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-dashed border-white/20 bg-white/[0.04]"
+        >
+          <span className="h-1 w-1 rounded-full bg-white/25" />
+        </span>
+      )}
       <span
         title={side?.team?.name || side?.label}
-        className={`min-w-0 flex-1 truncate text-[10px] font-bold uppercase tracking-wide transition-all duration-300 ${
-          leading ? 'text-[#f5c518]' : isPopulated ? 'text-white font-extrabold' : 'text-white/45'
-        }`}
+        className={`min-w-0 flex-1 truncate text-[10px] font-bold uppercase tracking-wide transition-all duration-300 ${leading ? 'text-[#f5c518]' : isPopulated ? 'text-white font-extrabold' : 'text-white/45'
+          }`}
       >
         {side?.team?.shortName || side?.label || 'TBD'}
       </span>
