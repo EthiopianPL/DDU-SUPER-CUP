@@ -1827,8 +1827,74 @@ export function saveManualStat(db, actor, matchId, input) {
   });
 }
 
+export function forfeitMatch(db, actor, matchId, input = {}) {
+  if (!actor) throw new RuleError('Sign in required.', 401);
+  if (!can(actor, 'match.correct') && !can(actor, 'match.write') && !can(actor, 'match.schedule') && !can(actor, 'match.clock')) {
+    throw new RuleError('You do not have permission to award a forfeit.', 403);
+  }
+
+  return transaction(db, () => {
+    const match = matchRow(db, matchId);
+    assertVersion(match, input.version);
+
+    let winnerSide = input.winnerSide;
+    if (!winnerSide && input.winnerId) {
+      if (input.winnerId === match.home_id) winnerSide = 'home';
+      else if (input.winnerId === match.away_id) winnerSide = 'away';
+    }
+    if (winnerSide !== 'home' && winnerSide !== 'away') {
+      throw new RuleError('Choose which team wins the forfeit (home or away).');
+    }
+
+    const homeScore = winnerSide === 'home' ? 3 : 0;
+    const awayScore = winnerSide === 'away' ? 3 : 0;
+    const now = Date.now();
+    const rules = rulesOf(db);
+    const halfMs = match.half_ms || (rules.halfMinutes * 60 * 1000);
+    const regulationMs = match.regulation_ms || (halfMs * 2);
+
+    // Void any previous goal events on this match so player stats do not count unplayed goals
+    db.prepare("UPDATE match_events SET voided = 1, void_reason = 'forfeit' WHERE match_id = ? AND type = 'goal' AND voided = 0").run(matchId);
+
+    db.prepare(`UPDATE matches SET 
+      home_score = ?, 
+      away_score = ?, 
+      pens_home = NULL, 
+      pens_away = NULL, 
+      status = 'finished', 
+      period = 'full_time', 
+      elapsed_ms = ?, 
+      running_since = NULL, 
+      added_ms = 0, 
+      confirmed = 1, 
+      finished_at = COALESCE(finished_at, ?), 
+      version = version + 1, 
+      updated_at = ? 
+    WHERE id = ?`).run(homeScore, awayScore, regulationMs, now, now, matchId);
+
+    const winnerId = winnerSide === 'home' ? match.home_id : match.away_id;
+    audit(db, actor, 'match.forfeit', 'match', matchId, 
+      { home_score: match.home_score, away_score: match.away_score, status: match.status }, 
+      { home_score: homeScore, away_score: awayScore, winnerSide, winnerId }
+    );
+
+    return { 
+      id: matchId, 
+      status: 'finished', 
+      homeScore, 
+      awayScore, 
+      winnerSide, 
+      winnerId,
+      confirmed: true 
+    };
+  });
+}
+
 export function controlMatch(db, actor, matchId, input) {
   const action = String(input.action ?? '');
+  if (action === 'forfeit') {
+    return forfeitMatch(db, actor, matchId, input);
+  }
   if (action === 'confirm') deny(actor, 'match.confirm');
   else if (['postpone', 'cancel', 'reschedule'].includes(action)) deny(actor, 'match.schedule');
   else deny(actor, 'match.clock');

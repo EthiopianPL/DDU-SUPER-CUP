@@ -20,6 +20,7 @@ import {
   ensureNewsStamps,
   deleteTeam,
   deletePlayer,
+  forfeitMatch,
   listAudit,
   listUsers,
   recordEvent,
@@ -182,7 +183,7 @@ async function serveApi(request, response, db, url) {
 
   const body = request.method === 'GET' ? {} : await readJson(request);
   const matchEvent = path.match(/^\/api\/matches\/([^/]+)\/events\/(\d+)(?:\/(void))?$/);
-  const matchAction = path.match(/^\/api\/matches\/([^/]+)\/(clock|events|lineup|stats|confirm|motm)$/);
+  const matchAction = path.match(/^\/api\/matches\/([^/]+)\/(clock|events|lineup|stats|confirm|motm|forfeit)$/);
   const one = path.match(/^\/api\/(teams|players|news|matches)\/([^/]+)$/);
 
   if (request.method === 'GET' && path === '/api/audit') return send(response, 200, { audit: listAudit(db, actor) });
@@ -206,6 +207,9 @@ async function serveApi(request, response, db, url) {
 
     if (matchAction && request.method === 'POST' && matchAction[2] === 'motm') {
     return mutate(response, db, () => saveManOfTheMatch(db, must(actor), decodeURIComponent(matchAction[1]), body));
+  }
+  if (matchAction && request.method === 'POST' && matchAction[2] === 'forfeit') {
+    return mutate(response, db, () => forfeitMatch(db, must(actor), decodeURIComponent(matchAction[1]), body));
   }
   if (matchAction && request.method === 'POST' && matchAction[2] === 'clock') {
     return mutate(response, db, () => controlMatch(db, must(actor), decodeURIComponent(matchAction[1]), body));
