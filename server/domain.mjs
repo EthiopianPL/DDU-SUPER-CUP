@@ -42,7 +42,7 @@ export class RuleError extends Error {
 }
 
 let revision = 1;
-let notify = () => {};
+let notify = () => { };
 
 export function setNotifier(fn) {
   notify = fn;
@@ -498,7 +498,7 @@ export function cleanupExpiredMotm(db, now = Date.now(), shouldTouch = true) {
     if (asset.path) {
       const playerReuse = db.prepare('SELECT COUNT(*) AS total FROM players WHERE photo_url LIKE ?').get(`%${asset.path}%`);
       if (!Number(playerReuse?.total)) {
-        deleteFromSupabaseStorage(asset.bucket || DEFAULT_BUCKET, asset.path).catch(() => {});
+        deleteFromSupabaseStorage(asset.bucket || DEFAULT_BUCKET, asset.path).catch(() => { });
       }
     }
   }
@@ -649,7 +649,7 @@ export function buildSnapshot(db, now = Date.now()) {
       let imageUrls = [];
       try {
         if (article.image_urls) imageUrls = JSON.parse(article.image_urls);
-      } catch {}
+      } catch { }
       if (!Array.isArray(imageUrls) || !imageUrls.length) {
         if (article.image_url) imageUrls = [article.image_url];
         else imageUrls = [];
@@ -714,10 +714,10 @@ export function saveLocalFile(kind, id, image, subfolder = '') {
   const ext = image.contentType?.includes('svg')
     ? 'svg'
     : image.contentType?.includes('png')
-    ? 'png'
-    : image.contentType?.includes('webp')
-    ? 'webp'
-    : 'jpg';
+      ? 'png'
+      : image.contentType?.includes('webp')
+        ? 'webp'
+        : 'jpg';
   const cleanId = String(id).replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
   const filename = `${cleanId}.${ext}`;
   const relativeDir = subfolder ? join(kind, subfolder) : kind;
@@ -774,7 +774,7 @@ export async function setImage(db, kind, id, image) {
     const url = saveLocalFile(kind, id, image);
     try {
       db.prepare('DELETE FROM media WHERE id = ?').run(`teams/${id}`);
-    } catch {}
+    } catch { }
     db.prepare(`UPDATE ${table} SET ${column} = ? WHERE id = ?`).run(url, id);
     return { id, url };
   });
@@ -803,7 +803,7 @@ export function saveTeam(db, actor, input, id) {
       crest = saveLocalFile('teams', nowId, image);
       try {
         db.prepare('DELETE FROM media WHERE id = ?').run(`teams/${nowId}`);
-      } catch {}
+      } catch { }
     }
     let coachPhoto = input.coachPhotoUrl !== undefined ? String(input.coachPhotoUrl ?? '') : (before?.coach_photo_url ?? '');
     const coachImage = input.coachImage ? storedImage({ image: input.coachImage }) : (input.coachPhoto ? storedImage({ image: input.coachPhoto }) : null);
@@ -840,7 +840,7 @@ export function deleteTeam(db, actor, id) {
       db.prepare('DELETE FROM media WHERE id = ?').run(`players/${player.id}`);
       const assets = db.prepare('SELECT public_id, path, bucket, provider FROM media_assets WHERE entity_type = ? AND entity_id = ?').all('players', player.id);
       for (const asset of assets) {
-        if (asset.provider === 'supabase') deleteFromSupabaseStorage(asset.bucket || DEFAULT_BUCKET, asset.path || asset.public_id).catch(() => {});
+        if (asset.provider === 'supabase') deleteFromSupabaseStorage(asset.bucket || DEFAULT_BUCKET, asset.path || asset.public_id).catch(() => { });
       }
       db.prepare('DELETE FROM media_assets WHERE entity_type = ? AND entity_id = ?').run('players', player.id);
     }
@@ -865,7 +865,7 @@ export async function deletePlayer(db, actor, id) {
     }
     const assets = db.prepare('SELECT public_id, path, bucket, provider FROM media_assets WHERE entity_type = ? AND entity_id = ?').all('players', id);
     for (const asset of assets) {
-      if (asset.provider === 'supabase') deleteFromSupabaseStorage(asset.bucket || DEFAULT_BUCKET, asset.path || asset.public_id).catch(() => {});
+      if (asset.provider === 'supabase') deleteFromSupabaseStorage(asset.bucket || DEFAULT_BUCKET, asset.path || asset.public_id).catch(() => { });
     }
     db.prepare('DELETE FROM media_assets WHERE entity_type = ? AND entity_id = ?').run('players', id);
     db.prepare('DELETE FROM media WHERE id = ?').run(`players/${id}`);
@@ -979,7 +979,7 @@ export async function savePlayer(db, actor, input, id) {
     });
   } catch (dbError) {
     if (uploadedSupabase) {
-      await deleteFromSupabaseStorage(uploadedSupabase.bucket, uploadedSupabase.path).catch(() => {});
+      await deleteFromSupabaseStorage(uploadedSupabase.bucket, uploadedSupabase.path).catch(() => { });
     }
     throw dbError;
   }
@@ -987,7 +987,7 @@ export async function savePlayer(db, actor, input, id) {
   if (oldStoragePath) {
     const motmReuse = db.prepare('SELECT COUNT(*) AS total FROM matches WHERE motm_photo_url LIKE ?').get(`%${oldStoragePath}%`);
     if (!Number(motmReuse?.total)) {
-      deleteFromSupabaseStorage(oldStorageBucket || DEFAULT_BUCKET, oldStoragePath).catch(() => {});
+      deleteFromSupabaseStorage(oldStorageBucket || DEFAULT_BUCKET, oldStoragePath).catch(() => { });
     }
   }
 
@@ -1032,7 +1032,7 @@ export async function saveNews(db, actor, input, id) {
   } else if (before) {
     try {
       if (before.image_urls) finalImageUrls = JSON.parse(before.image_urls);
-    } catch {}
+    } catch { }
     if (!finalImageUrls.length && before.image_url) {
       finalImageUrls = [before.image_url];
     }
@@ -1063,7 +1063,7 @@ export function deleteNews(db, actor, id) {
   if (before?.image_url && before.image_url.includes('/storage/v1/object/public/')) {
     const match = before.image_url.match(/\/storage\/v1\/object\/public\/[^/]+\/(.+)$/);
     if (match) {
-      deleteFromSupabaseStorage(DEFAULT_BUCKET, match[1]).catch(() => {});
+      deleteFromSupabaseStorage(DEFAULT_BUCKET, match[1]).catch(() => { });
     }
   }
   return transaction(db, () => {
@@ -1829,8 +1829,8 @@ export function saveManualStat(db, actor, matchId, input) {
 
 export function forfeitMatch(db, actor, matchId, input = {}) {
   if (!actor) throw new RuleError('Sign in required.', 401);
-  if (!can(actor, 'match.correct') && !can(actor, 'match.write') && !can(actor, 'match.schedule') && !can(actor, 'match.clock')) {
-    throw new RuleError('You do not have permission to award a forfeit.', 403);
+  if (actor.role !== 'super_admin') {
+    throw new RuleError('Only a super admin can award a forfeit.', 403);
   }
 
   return transaction(db, () => {
@@ -1873,19 +1873,19 @@ export function forfeitMatch(db, actor, matchId, input = {}) {
     WHERE id = ?`).run(homeScore, awayScore, regulationMs, now, now, matchId);
 
     const winnerId = winnerSide === 'home' ? match.home_id : match.away_id;
-    audit(db, actor, 'match.forfeit', 'match', matchId, 
-      { home_score: match.home_score, away_score: match.away_score, status: match.status }, 
+    audit(db, actor, 'match.forfeit', 'match', matchId,
+      { home_score: match.home_score, away_score: match.away_score, status: match.status },
       { home_score: homeScore, away_score: awayScore, winnerSide, winnerId }
     );
 
-    return { 
-      id: matchId, 
-      status: 'finished', 
-      homeScore, 
-      awayScore, 
-      winnerSide, 
+    return {
+      id: matchId,
+      status: 'finished',
+      homeScore,
+      awayScore,
+      winnerSide,
       winnerId,
-      confirmed: true 
+      confirmed: true
     };
   });
 }
@@ -2064,7 +2064,7 @@ export async function saveManOfTheMatch(db, actor, matchId, input) {
     if (oldMotmPath) {
       const playerReuse = db.prepare('SELECT COUNT(*) AS total FROM players WHERE photo_url LIKE ?').get(`%${oldMotmPath}%`);
       if (!Number(playerReuse?.total)) {
-        await deleteFromSupabaseStorage(oldMotmBucket || DEFAULT_BUCKET, oldMotmPath).catch(() => {});
+        await deleteFromSupabaseStorage(oldMotmBucket || DEFAULT_BUCKET, oldMotmPath).catch(() => { });
       }
     }
     return { ok: true, motmPlayerId: null, motmPhotoUrl: null };
@@ -2168,7 +2168,7 @@ export async function saveManOfTheMatch(db, actor, matchId, input) {
     });
   } catch (dbError) {
     if (uploadedSupabase) {
-      await deleteFromSupabaseStorage(uploadedSupabase.bucket, uploadedSupabase.path).catch(() => {});
+      await deleteFromSupabaseStorage(uploadedSupabase.bucket, uploadedSupabase.path).catch(() => { });
     }
     throw dbError;
   }
@@ -2176,7 +2176,7 @@ export async function saveManOfTheMatch(db, actor, matchId, input) {
   if (oldMotmPath) {
     const playerReuse = db.prepare('SELECT COUNT(*) AS total FROM players WHERE photo_url LIKE ?').get(`%${oldMotmPath}%`);
     if (!Number(playerReuse?.total)) {
-      deleteFromSupabaseStorage(oldMotmBucket || DEFAULT_BUCKET, oldMotmPath).catch(() => {});
+      deleteFromSupabaseStorage(oldMotmBucket || DEFAULT_BUCKET, oldMotmPath).catch(() => { });
     }
   }
 

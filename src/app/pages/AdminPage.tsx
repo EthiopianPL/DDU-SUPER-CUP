@@ -536,7 +536,7 @@ function MatchList({ role, version, onOpen, onMessage, onError }: { role?: Role;
                   <span className="text-[11px] font-bold text-white/40">{fixture.detail}{fixture.confirmed ? ' · confirmed' : ''}</span>
                 </span>
               </button>
-              {canRun && (
+              {role === 'super_admin' && (
                 <button
                   type="button"
                   title="Award 3-0 forfeit"
@@ -847,7 +847,7 @@ function MatchDesk({
       <div className="flex items-center justify-between">
         <button type="button" onClick={onClose} className="text-sm font-semibold text-white/50 hover:text-white transition-colors">← All matches</button>
         <div className="flex items-center gap-2">
-          {canRun && (
+          {role === 'super_admin' && (
             <button
               type="button"
               disabled={busy}
@@ -975,7 +975,7 @@ function MatchDesk({
             {!finished && fixture.status === 'live' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'Abandon this match? It will not count in the table.', action: 'abandon' })}>Abandon</Action>}
             {!finished && fixture.status !== 'upcoming' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'End the match? The result stays unconfirmed until you confirm it.', action: 'full_time' })}>Full time</Action>}
             {fixture.detail === 'finished' && !fixture.confirmed && canCorrect && <Action disabled={busy} onClick={() => setConfirm({ label: 'Confirm this result and add it to the table?', action: 'confirm' })}>Confirm result</Action>}
-            {canRun && <Action disabled={busy} onClick={() => setForfeitOpen(true)}>Award Forfeit (3-0)</Action>}
+            {role === 'super_admin' && <Action disabled={busy} onClick={() => setForfeitOpen(true)}>Award Forfeit (3-0)</Action>}
           </div>
           {confirm && (
             <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-white/5 px-3 py-2 text-sm">
@@ -1687,12 +1687,12 @@ function LineupSide({
                   onClick={() => toggleBench(player.id)}
                   title={lockedActive ? 'Player has already participated in this match' : sus.suspended ? sus.detail : undefined}
                   className={`rounded-full px-3 py-1 text-xs font-bold transition-all ${sus.suspended
-                      ? 'border border-red-500/40 bg-red-500/20 text-red-300 cursor-not-allowed opacity-60'
-                      : lockedActive
-                        ? 'border border-emerald-500/40 bg-emerald-500/20 text-emerald-300 cursor-default'
-                        : bench.includes(player.id)
-                          ? 'bg-[#f5c518] text-[#102018]'
-                          : 'bg-white/10 text-white/70 hover:bg-white/20'
+                    ? 'border border-red-500/40 bg-red-500/20 text-red-300 cursor-not-allowed opacity-60'
+                    : lockedActive
+                      ? 'border border-emerald-500/40 bg-emerald-500/20 text-emerald-300 cursor-default'
+                      : bench.includes(player.id)
+                        ? 'bg-[#f5c518] text-[#102018]'
+                        : 'bg-white/10 text-white/70 hover:bg-white/20'
                     }`}
                 >
                   {player.number} {player.name}
@@ -2723,8 +2723,8 @@ function PlayerAdmin({ onMessage, onError }: { onMessage: (text: string) => void
                     <li
                       key={player.id}
                       className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-[#10192b] px-3.5 py-2.5 transition-all ${isEditing
-                          ? 'border-[#f5c518] ring-1 ring-[#f5c518]/50 shadow-lg'
-                          : 'border-white/5 hover:border-white/15'
+                        ? 'border-[#f5c518] ring-1 ring-[#f5c518]/50 shadow-lg'
+                        : 'border-white/5 hover:border-white/15'
                         }`}
                     >
                       <div className="flex min-w-0 items-center gap-3">
@@ -2759,8 +2759,8 @@ function PlayerAdmin({ onMessage, onError }: { onMessage: (text: string) => void
                           type="button"
                           onClick={() => handleStartEdit(player)}
                           className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition ${isEditing
-                              ? 'bg-[#f5c518] text-[#102018]'
-                              : 'bg-white/10 text-white hover:bg-[#f5c518] hover:text-[#102018]'
+                            ? 'bg-[#f5c518] text-[#102018]'
+                            : 'bg-white/10 text-white hover:bg-[#f5c518] hover:text-[#102018]'
                             }`}
                         >
                           <Edit3 className="h-3.5 w-3.5" />
@@ -2942,8 +2942,8 @@ function PlayerEditor({
                 type="button"
                 onClick={() => setIsCaptain(false)}
                 className={`rounded-full px-3.5 py-1.5 text-xs font-black transition ${!isCaptain
-                    ? 'bg-[#f5c518] text-[#102018]'
-                    : 'bg-white/5 text-white/70 hover:bg-white/10'
+                  ? 'bg-[#f5c518] text-[#102018]'
+                  : 'bg-white/5 text-white/70 hover:bg-white/10'
                   }`}
               >
                 No (Squad Player)
@@ -2952,8 +2952,8 @@ function PlayerEditor({
                 type="button"
                 onClick={() => setIsCaptain(true)}
                 className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-black transition ${isCaptain
-                    ? 'bg-[#f5c518] text-[#102018] shadow-md shadow-[#f5c518]/20'
-                    : 'bg-white/5 text-white/70 hover:bg-white/10'
+                  ? 'bg-[#f5c518] text-[#102018] shadow-md shadow-[#f5c518]/20'
+                  : 'bg-white/5 text-white/70 hover:bg-white/10'
                   }`}
               >
                 <span>© Yes (Team Captain)</span>
@@ -3312,8 +3312,8 @@ function NewsAdmin({ onMessage, onError }: { onMessage: (text: string) => void; 
                         <div className="absolute left-1.5 top-1.5">
                           <span
                             className={`rounded-full px-2 py-0.5 text-[10px] font-black ${index === 0
-                                ? 'bg-[#f5c518] text-[#102018]'
-                                : 'bg-black/70 text-white backdrop-blur-sm'
+                              ? 'bg-[#f5c518] text-[#102018]'
+                              : 'bg-black/70 text-white backdrop-blur-sm'
                               }`}
                           >
                             {index === 0 ? 'Cover' : `#${index + 1}`}
