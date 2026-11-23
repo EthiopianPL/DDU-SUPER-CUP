@@ -73,6 +73,7 @@ const TYPES = {
   '.json': 'application/json',
   '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.ico': 'image/x-icon',
+  '.apk': 'application/vnd.android.package-archive',
 };
 
 function broadcast(payload) {
@@ -497,7 +498,11 @@ function serveUpload(response, pathname, db) {
 
 function serveStatic(response, pathname) {
   const dist = join(root, 'dist');
-  const requested = pathname === '/' ? '/index.html' : pathname;
+  let decoded = pathname;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {}
+  const requested = decoded === '/' ? '/index.html' : decoded;
   if (requested.endsWith('.map') || requested.includes('.env') || requested.startsWith('/.') || requested.includes('/.')) {
     return send(response, 404, { error: 'Not found.' });
   }
@@ -511,6 +516,9 @@ function serveStatic(response, pathname) {
     headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
   } else if (requested.endsWith('.webmanifest') || requested.endsWith('.json')) {
     headers['Cache-Control'] = 'public, max-age=3600';
+  } else if (requested.endsWith('.apk')) {
+    headers['Content-Disposition'] = 'attachment; filename="DDU Super Cup_V2.apk"';
+    headers['Cache-Control'] = 'public, max-age=86400';
   }
   response.writeHead(200, headers);
   createReadStream(target).pipe(response);
