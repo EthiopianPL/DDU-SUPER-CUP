@@ -536,7 +536,7 @@ function MatchList({ role, version, onOpen, onMessage, onError }: { role?: Role;
                   <span className="text-[11px] font-bold text-white/40">{fixture.detail}{fixture.confirmed ? ' · confirmed' : ''}</span>
                 </span>
               </button>
-              {role === 'super_admin' && (
+              {role === 'super_admin' && !((fixture.detail === 'finished' || fixture.status === 'finished') && fixture.confirmed) && (
                 <button
                   type="button"
                   title="Award 3-0 forfeit"
@@ -847,7 +847,7 @@ function MatchDesk({
       <div className="flex items-center justify-between">
         <button type="button" onClick={onClose} className="text-sm font-semibold text-white/50 hover:text-white transition-colors">← All matches</button>
         <div className="flex items-center gap-2">
-          {role === 'super_admin' && (
+          {role === 'super_admin' && !(finished && fixture.confirmed) && (
             <button
               type="button"
               disabled={busy}
@@ -975,7 +975,7 @@ function MatchDesk({
             {!finished && fixture.status === 'live' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'Abandon this match? It will not count in the table.', action: 'abandon' })}>Abandon</Action>}
             {!finished && fixture.status !== 'upcoming' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'End the match? The result stays unconfirmed until you confirm it.', action: 'full_time' })}>Full time</Action>}
             {fixture.detail === 'finished' && !fixture.confirmed && canCorrect && <Action disabled={busy} onClick={() => setConfirm({ label: 'Confirm this result and add it to the table?', action: 'confirm' })}>Confirm result</Action>}
-            {role === 'super_admin' && <Action disabled={busy} onClick={() => setForfeitOpen(true)}>Award Forfeit (3-0)</Action>}
+            {role === 'super_admin' && !(finished && fixture.confirmed) && <Action disabled={busy} onClick={() => setForfeitOpen(true)}>Award Forfeit (3-0)</Action>}
           </div>
           {confirm && (
             <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-white/5 px-3 py-2 text-sm">
