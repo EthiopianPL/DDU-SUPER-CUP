@@ -20,10 +20,10 @@ const PITCH = {
 };
 
 export const departments: Department[] = [
-  { id: 'software-engineering', name: 'Software Engineering', shortName: 'SWE', college: GROUP_COLLEGES.A, group: 'A', color: '#2450c8', pitch: PITCH.iot },
+  { id: 'software-engineering', name: 'Software Engineering', shortName: 'SWE', college: GROUP_COLLEGES.D, group: 'D', color: '#2450c8', pitch: PITCH.iot },
   { id: 'computer-science', name: 'Computer Science', shortName: 'CS', college: GROUP_COLLEGES.A, group: 'A', color: '#0ea5e9', pitch: PITCH.iot },
   { id: 'information-technology', name: 'Information Technology', shortName: 'IT', college: GROUP_COLLEGES.A, group: 'A', color: '#6366f1', pitch: PITCH.iot },
-  { id: 'electrical-engineering', name: 'Electrical & Computer Engineering', shortName: 'ECE', college: GROUP_COLLEGES.A, group: 'A', color: '#f5c518', pitch: PITCH.iot },
+  { id: 'electrical-engineering', name: 'Electrical & Computer Engineering', shortName: 'ECE', college: GROUP_COLLEGES.D, group: 'D', color: '#f5c518', pitch: PITCH.iot },
 
   { id: 'civil-engineering', name: 'Civil Engineering', shortName: 'CE', college: GROUP_COLLEGES.B, group: 'B', color: '#78716c', pitch: PITCH.main },
   { id: 'mechanical-engineering', name: 'Mechanical Engineering', shortName: 'ME', college: GROUP_COLLEGES.B, group: 'B', color: '#dc2626', pitch: PITCH.main },
@@ -74,7 +74,6 @@ export const players: Player[] = departments.flatMap((department, departmentInde
 );
 
 const rawFixtures = [
-  { group: 'A' as const, matchday: 1, homeId: 'software-engineering', awayId: 'electrical-engineering', score: [2, 0] as [number, number], status: 'finished' as const, date: '2026-10-10', time: '15:00', stadium: PITCH.iot },
   { group: 'A' as const, matchday: 1, homeId: 'computer-science', awayId: 'information-technology', score: [1, 1] as [number, number], status: 'finished' as const, date: '2026-10-10', time: '17:30', stadium: PITCH.iot },
   { group: 'A' as const, matchday: 2, homeId: 'software-engineering', awayId: 'information-technology', score: [1, 0] as [number, number], status: 'live' as const, minute: 62, date: '2026-10-24', time: '15:00', stadium: PITCH.iot },
   { group: 'A' as const, matchday: 2, homeId: 'electrical-engineering', awayId: 'computer-science', status: 'upcoming' as const, date: '2026-10-24', time: '18:00', stadium: PITCH.iot },
@@ -95,6 +94,7 @@ const rawFixtures = [
   { group: 'C' as const, matchday: 3, homeId: 'accounting-finance', awayId: 'economics', status: 'upcoming' as const, date: '2026-10-31', time: '10:00', stadium: PITCH.sabian },
   { group: 'C' as const, matchday: 3, homeId: 'management', awayId: 'marketing', status: 'upcoming' as const, date: '2026-10-31', time: '14:00', stadium: PITCH.sabian },
 
+  { group: 'D' as const, matchday: 1, homeId: 'electrical-engineering', awayId: 'software-engineering', score: [3, 0] as [number, number], status: 'finished' as const, date: '2026-10-24', time: '15:00', stadium: PITCH.iot },
   { group: 'D' as const, matchday: 1, homeId: 'medicine', awayId: 'medical-laboratory', score: [3, 0] as [number, number], status: 'finished' as const, date: '2026-10-11', time: '09:00', stadium: PITCH.health },
   { group: 'D' as const, matchday: 1, homeId: 'nursing', awayId: 'midwifery', score: [2, 2] as [number, number], status: 'finished' as const, date: '2026-10-11', time: '11:30', stadium: PITCH.health },
   { group: 'D' as const, matchday: 2, homeId: 'medicine', awayId: 'midwifery', score: [2, 0] as [number, number], status: 'finished' as const, date: '2026-10-24', time: '11:00', stadium: PITCH.health },
@@ -294,7 +294,7 @@ export const news: NewsArticle[] = [
     category: 'Match report',
     time: 'Today',
     summary: 'SWE lead Information Technology 1-0 in the Matchday 2 live game at the Institute of Technology Ground.',
-    body: 'Software Engineering are in front against Information Technology in the Super Cup group stage. The live lead, added to their Matchday 1 win over Electrical & Computer Engineering, puts SWE clear at the top of Group A. Computer Science and ECE meet later today.',
+    body: 'Software Engineering are in front against Information Technology in the Super Cup group stage. The live lead puts SWE in strong position.',
   },
   {
     id: 'medicine-perfect',

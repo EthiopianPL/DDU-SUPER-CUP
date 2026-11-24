@@ -20,6 +20,7 @@ import {
   ensureNewsStamps,
   deleteTeam,
   deletePlayer,
+  forfeitMatch,
   listAudit,
   listUsers,
   recordEvent,
@@ -72,6 +73,7 @@ const TYPES = {
   '.json': 'application/json',
   '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.ico': 'image/x-icon',
+  '.apk': 'application/vnd.android.package-archive',
 };
 
 function broadcast(payload) {
@@ -182,7 +184,7 @@ async function serveApi(request, response, db, url) {
 
   const body = request.method === 'GET' ? {} : await readJson(request);
   const matchEvent = path.match(/^\/api\/matches\/([^/]+)\/events\/(\d+)(?:\/(void))?$/);
-  const matchAction = path.match(/^\/api\/matches\/([^/]+)\/(clock|events|lineup|stats|confirm|motm)$/);
+  const matchAction = path.match(/^\/api\/matches\/([^/]+)\/(clock|events|lineup|stats|confirm|motm|forfeit)$/);
   const one = path.match(/^\/api\/(teams|players|news|matches)\/([^/]+)$/);
 
   if (request.method === 'GET' && path === '/api/audit') return send(response, 200, { audit: listAudit(db, actor) });
@@ -206,6 +208,9 @@ async function serveApi(request, response, db, url) {
 
     if (matchAction && request.method === 'POST' && matchAction[2] === 'motm') {
     return mutate(response, db, () => saveManOfTheMatch(db, must(actor), decodeURIComponent(matchAction[1]), body));
+  }
+  if (matchAction && request.method === 'POST' && matchAction[2] === 'forfeit') {
+    return mutate(response, db, () => forfeitMatch(db, must(actor), decodeURIComponent(matchAction[1]), body));
   }
   if (matchAction && request.method === 'POST' && matchAction[2] === 'clock') {
     return mutate(response, db, () => controlMatch(db, must(actor), decodeURIComponent(matchAction[1]), body));
@@ -493,7 +498,11 @@ function serveUpload(response, pathname, db) {
 
 function serveStatic(response, pathname) {
   const dist = join(root, 'dist');
-  const requested = pathname === '/' ? '/index.html' : pathname;
+  let decoded = pathname;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {}
+  const requested = decoded === '/' ? '/index.html' : decoded;
   if (requested.endsWith('.map') || requested.includes('.env') || requested.startsWith('/.') || requested.includes('/.')) {
     return send(response, 404, { error: 'Not found.' });
   }
@@ -507,6 +516,9 @@ function serveStatic(response, pathname) {
     headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
   } else if (requested.endsWith('.webmanifest') || requested.endsWith('.json')) {
     headers['Cache-Control'] = 'public, max-age=3600';
+  } else if (requested.endsWith('.apk')) {
+    headers['Content-Disposition'] = 'attachment; filename="DDU Super Cup_V2.apk"';
+    headers['Cache-Control'] = 'public, max-age=86400';
   }
   response.writeHead(200, headers);
   createReadStream(target).pipe(response);

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
-import { Eye, EyeOff, Edit3, Plus, X, Trash2, Search, ExternalLink, LogOut, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Eye, EyeOff, Edit3, Plus, X, Trash2, Search, ExternalLink, LogOut, ArrowLeft, ChevronLeft, ChevronRight, Flag } from 'lucide-react';
 import { desk, imagePayload } from '../../data/api';
 import { useLeagueVersion } from '../../data/live';
 import { newsArticles } from '../../data/news';
@@ -344,11 +344,148 @@ function Stat({ label, value, hint }: { label: string; value: string | number; h
   );
 }
 
+function ForfeitModal({
+  fixture,
+  onClose,
+  onDone,
+  onError,
+}: {
+  fixture: Fixture;
+  onClose: () => void;
+  onDone: (message: string) => void;
+  onError: (error: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const home = getDepartment(fixture.homeId);
+  const away = getDepartment(fixture.awayId);
+  const homeName = home?.name || fixture.homeId;
+  const awayName = away?.name || fixture.awayId;
+
+  const handleForfeit = async (winnerSide: 'home' | 'away') => {
+    const winnerName = winnerSide === 'home' ? homeName : awayName;
+    const loserName = winnerSide === 'home' ? awayName : homeName;
+    setBusy(true);
+    try {
+      await desk(`/api/matches/${fixture.id}/forfeit`, {
+        method: 'POST',
+        body: {
+          winnerSide,
+          winnerId: winnerSide === 'home' ? fixture.homeId : fixture.awayId,
+          version: fixture.version,
+        },
+      });
+      onDone(`Forfeit win awarded: ${winnerName} 3–0 ${loserName} (3 points & 3 goals).`);
+      onClose();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Could not award forfeit.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm animate-in fade-in duration-150">
+      <div className="w-full max-w-lg rounded-3xl border border-amber-500/30 bg-[#0e1726] p-6 shadow-2xl text-white">
+        <div className="flex items-center justify-between border-b border-white/10 pb-4">
+          <div className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400">
+              <Flag className="h-4 w-4" />
+            </span>
+            <div>
+              <h3 className="text-base font-black text-white">Award Forfeit Win</h3>
+              <p className="text-xs text-amber-300/80 font-bold">3 Points & 3 Goals Walkover</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="rounded-xl p-1.5 text-white/50 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <p className="mt-4 text-xs text-white/60 leading-relaxed">
+          Select which team is awarded the forfeit victory. The selected winner receives <strong className="text-amber-300">3 points and 3 goals</strong> (score <strong className="text-white">3–0</strong>), the opponent forfeits (0 points, 0 goals, -3 GD), and the match is marked as finished in the table.
+        </p>
+
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {/* Home team option */}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => handleForfeit('home')}
+            className="group flex flex-col items-center justify-between rounded-2xl border border-white/10 bg-[#162238] p-4 text-center hover:border-amber-500/60 hover:bg-amber-500/10 transition-all cursor-pointer disabled:opacity-50"
+          >
+            <div className="flex flex-col items-center">
+              <DepartmentMark
+                id={home?.id}
+                name={home?.name || fixture.homeId}
+                shortName={home?.shortName || ''}
+                color={home?.color || '#2450c8'}
+                size={44}
+                src={home?.crestUrl}
+              />
+              <span className="mt-2 block text-xs font-black text-white line-clamp-1">{homeName}</span>
+              <span className="mt-0.5 inline-block rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-300">
+                Wins 3–0
+              </span>
+            </div>
+            <span className="mt-4 w-full rounded-xl bg-amber-400 py-2 text-xs font-black text-[#0b1320] group-hover:bg-amber-300 transition-colors">
+              Award to {home?.shortName || 'Home'}
+            </span>
+          </button>
+
+          {/* Away team option */}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => handleForfeit('away')}
+            className="group flex flex-col items-center justify-between rounded-2xl border border-white/10 bg-[#162238] p-4 text-center hover:border-amber-500/60 hover:bg-amber-500/10 transition-all cursor-pointer disabled:opacity-50"
+          >
+            <div className="flex flex-col items-center">
+              <DepartmentMark
+                id={away?.id}
+                name={away?.name || fixture.awayId}
+                shortName={away?.shortName || ''}
+                color={away?.color || '#f5c518'}
+                size={44}
+                src={away?.crestUrl}
+              />
+              <span className="mt-2 block text-xs font-black text-white line-clamp-1">{awayName}</span>
+              <span className="mt-0.5 inline-block rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-300">
+                Wins 3–0
+              </span>
+            </div>
+            <span className="mt-4 w-full rounded-xl bg-amber-400 py-2 text-xs font-black text-[#0b1320] group-hover:bg-amber-300 transition-colors">
+              Award to {away?.shortName || 'Away'}
+            </span>
+          </button>
+        </div>
+
+        <div className="mt-5 flex justify-end">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onClose}
+            className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-white/60 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MatchList({ role, version, onOpen, onMessage, onError }: { role?: Role; version: number; onOpen: (id: string) => void; onMessage: (text: string) => void; onError: (text: string) => void }) {
   void version;
   const canSchedule = role !== 'match_admin';
+  const canRun = role === 'super_admin' || role === 'match_admin' || role === 'competition_manager';
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
+  const [forfeitFixture, setForfeitFixture] = useState<Fixture | null>(null);
   const rows = fixtures.filter((fixture) => {
     if (role === 'match_admin' && fixture.confirmed) return false;
     const home = getDepartment(fixture.homeId);
@@ -399,6 +536,20 @@ function MatchList({ role, version, onOpen, onMessage, onError }: { role?: Role;
                   <span className="text-[11px] font-bold text-white/40">{fixture.detail}{fixture.confirmed ? ' · confirmed' : ''}</span>
                 </span>
               </button>
+              {role === 'super_admin' && !((fixture.detail === 'finished' || fixture.status === 'finished') && fixture.confirmed) && (
+                <button
+                  type="button"
+                  title="Award 3-0 forfeit"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setForfeitFixture(fixture);
+                  }}
+                  className="flex items-center justify-center gap-1.5 h-10 px-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 hover:border-amber-500/50 transition-all shrink-0 text-xs font-bold cursor-pointer"
+                >
+                  <Flag className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Forfeit</span>
+                </button>
+              )}
               {role === 'super_admin' && (
                 <button
                   type="button"
@@ -423,6 +574,14 @@ function MatchList({ role, version, onOpen, onMessage, onError }: { role?: Role;
         })}
       </ul>
       {!rows.length && <p className="mt-4 rounded-2xl border border-white/10 px-3 py-8 text-center text-sm text-white/40">No matches yet. Schedule one above.</p>}
+      {forfeitFixture && (
+        <ForfeitModal
+          fixture={forfeitFixture}
+          onClose={() => setForfeitFixture(null)}
+          onDone={onMessage}
+          onError={onError}
+        />
+      )}
     </div>
   );
 }
@@ -613,6 +772,7 @@ function MatchDesk({
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<{ label: string; action: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [forfeitOpen, setForfeitOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState<number | null>(null);
   const [voidingEvent, setVoidingEvent] = useState<{ id: number; line: string; isGoal: boolean } | null>(null);
   const [voidReason, setVoidReason] = useState('Incorrect entry');
@@ -686,17 +846,30 @@ function MatchDesk({
     <div>
       <div className="flex items-center justify-between">
         <button type="button" onClick={onClose} className="text-sm font-semibold text-white/50 hover:text-white transition-colors">← All matches</button>
-        {role === 'super_admin' && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => setDeleteConfirm(true)}
-            className="flex items-center gap-1.5 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-400 hover:bg-red-500/20 transition-colors"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            <span>Delete Match</span>
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {role === 'super_admin' && !(finished && fixture.confirmed) && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setForfeitOpen(true)}
+              className="flex items-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-bold text-amber-300 hover:bg-amber-500/20 hover:border-amber-500/50 transition-colors cursor-pointer"
+            >
+              <Flag className="h-3.5 w-3.5" />
+              <span>Forfeit (3-0)</span>
+            </button>
+          )}
+          {role === 'super_admin' && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setDeleteConfirm(true)}
+              className="flex items-center gap-1.5 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-400 hover:bg-red-500/20 transition-colors"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Delete Match</span>
+            </button>
+          )}
+        </div>
       </div>
       {deleteConfirm && (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-4">
@@ -802,6 +975,7 @@ function MatchDesk({
             {!finished && fixture.status === 'live' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'Abandon this match? It will not count in the table.', action: 'abandon' })}>Abandon</Action>}
             {!finished && fixture.status !== 'upcoming' && <Action disabled={busy || !canRun} onClick={() => setConfirm({ label: 'End the match? The result stays unconfirmed until you confirm it.', action: 'full_time' })}>Full time</Action>}
             {fixture.detail === 'finished' && !fixture.confirmed && canCorrect && <Action disabled={busy} onClick={() => setConfirm({ label: 'Confirm this result and add it to the table?', action: 'confirm' })}>Confirm result</Action>}
+            {role === 'super_admin' && !(finished && fixture.confirmed) && <Action disabled={busy} onClick={() => setForfeitOpen(true)}>Award Forfeit (3-0)</Action>}
           </div>
           {confirm && (
             <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-white/5 px-3 py-2 text-sm">
@@ -1008,6 +1182,14 @@ function MatchDesk({
             </div>
           </div>
         </div>
+      )}
+      {forfeitOpen && (
+        <ForfeitModal
+          fixture={fixture}
+          onClose={() => setForfeitOpen(false)}
+          onDone={onMessage}
+          onError={onError}
+        />
       )}
     </div>
   );
