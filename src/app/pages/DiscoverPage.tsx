@@ -218,7 +218,9 @@ export function DiscoverPage() {
                   homeScore={fixture.homeScore}
                   awayScore={fixture.awayScore}
                   status={fixture.status}
+                  detail={fixture.detail}
                   time={`MD${fixture.matchday} · ${fixture.time}`}
+                  date={fixture.date}
                   stadium={fixture.stadium}
                   matchMinute={fixture.minute}
                 />

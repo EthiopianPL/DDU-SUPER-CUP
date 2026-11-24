@@ -68,6 +68,8 @@ export function HomePage() {
               homeScore={fixture.homeScore}
               awayScore={fixture.awayScore}
               status="live"
+              detail={fixture.detail}
+              date={fixture.date}
               stadium={fixture.stadium}
               matchMinute={fixture.minute}
             />
@@ -162,8 +164,10 @@ export function HomePage() {
               id={fixture.id}
               homeTeam={cardTeam(fixture.homeId)}
               awayTeam={cardTeam(fixture.awayId)}
-              status="upcoming"
-              time={`${fixture.date} · ${fixture.time}`}
+              status={fixture.status}
+              detail={fixture.detail}
+              time={fixture.time}
+              date={fixture.date}
               stadium={fixture.stadium}
             />
           ))}

@@ -260,7 +260,9 @@ export function MatchesPage() {
               homeScore={fixture.homeScore}
               awayScore={fixture.awayScore}
               status={fixture.status}
+              detail={fixture.detail}
               time={fixture.time}
+              date={fixture.date}
               stadium={fixture.stadium}
               matchMinute={fixture.minute}
             />

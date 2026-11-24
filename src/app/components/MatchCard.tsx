@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
-import { MapPin, Video } from 'lucide-react';
+import { Clock, MapPin, Video } from 'lucide-react';
 import { formatKickoff, formatLiveTime, getFixture, leagueRules, teamRedCards } from '../../data/supercup';
 import { useLeagueVersion } from '../../data/live';
 import { RedCards } from './RedCards';
@@ -20,7 +20,8 @@ export interface MatchCardProps {
   awayTeam: Team;
   homeScore?: number | null;
   awayScore?: number | null;
-  status: 'live' | 'upcoming' | 'finished';
+  status: 'live' | 'upcoming' | 'finished' | 'postponed' | 'cancelled' | string;
+  detail?: string;
   time?: string;
   date?: string;
   stadium?: string;
@@ -55,6 +56,7 @@ export function MatchCard({
   homeScore,
   awayScore,
   status,
+  detail,
   time,
   stadium,
   matchMinute = 0,
@@ -73,15 +75,30 @@ export function MatchCard({
   const fixture = getFixture(id);
   const venue = stadium ?? fixture?.stadium ?? 'DDU Campus Pitch';
   const kickoffTime = fixture?.time ?? time ?? '15:00';
-  const matchDate = fixture?.date ?? '';
+  const matchDate = fixture?.date ?? date ?? '';
+
+  const rawDetail = (detail ?? fixture?.detail ?? '').toLowerCase();
+  const rawStatus = (status ?? fixture?.status ?? '').toLowerCase();
+
+  const isPostponed = rawStatus === 'postponed' || rawDetail === 'postponed';
+  const isCancelled = rawStatus === 'cancelled' || rawDetail === 'cancelled';
+  const isLive = !isPostponed && !isCancelled && rawStatus === 'live';
+  const isFinished = !isPostponed && !isCancelled && rawStatus === 'finished';
+  const isUpcoming = !isLive && !isFinished;
+
+  const formattedDate = useMemo(() => {
+    if (!matchDate) return '';
+    try {
+      const cleanTime = fixture?.time || (time && /^\d{1,2}:\d{2}$/.test(time) ? time : '15:00');
+      return formatKickoff(matchDate, cleanTime);
+    } catch {
+      return matchDate;
+    }
+  }, [matchDate, fixture?.time, time]);
 
   const handleClick = () => {
     navigate(`/match/${id}`);
   };
-
-  const isLive = status === 'live';
-  const isFinished = status === 'finished';
-  const isUpcoming = status === 'upcoming';
 
   const halfMinute = Math.round((fixture?.halfSeconds ?? leagueRules.halfMinutes * 60) / 60);
   const formattedLiveTime = clock
@@ -99,11 +116,40 @@ export function MatchCard({
           handleClick();
         }
       }}
-      aria-label={`${isLive ? `Live match ${formattedLiveTime}` : isFinished ? 'Finished match' : 'Upcoming match'}: ${homeTeam.name} ${isUpcoming ? 'vs' : `${homeScore ?? 0} - ${awayScore ?? 0}`} ${awayTeam.name}. View match details.`}
+      aria-label={`${
+        isLive
+          ? `Live match ${formattedLiveTime}`
+          : isPostponed
+          ? 'Postponed match'
+          : isCancelled
+          ? 'Cancelled match'
+          : isFinished
+          ? 'Finished match'
+          : 'Upcoming match'
+      }: ${homeTeam.name} ${isUpcoming || isPostponed || isCancelled ? 'vs' : `${homeScore ?? 0} - ${awayScore ?? 0}`} ${awayTeam.name}. View match details.`}
       className={`group relative overflow-hidden rounded-2xl border bg-[#121824] p-3.5 transition-all hover:border-white/20 hover:bg-[#161f30] active:scale-[0.99] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f5c518] focus-visible:ring-offset-2 focus-visible:ring-offset-[#070d18] ${
-        isLive ? 'border-red-500/40 shadow-sm shadow-red-500/10' : 'border-white/[0.08] shadow-sm'
+        isLive
+          ? 'border-red-500/40 shadow-sm shadow-red-500/10'
+          : isPostponed
+          ? 'border-amber-500/35 bg-[#141824] shadow-sm shadow-amber-500/5'
+          : isCancelled
+          ? 'border-red-500/30 bg-[#141824] shadow-sm'
+          : 'border-white/[0.08] shadow-sm'
       }`}
     >
+      {/* Postponed / Cancelled Banner */}
+      {isPostponed && (
+        <div className="mb-2.5 flex items-center justify-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+          <Clock className="h-3 w-3 shrink-0 text-amber-400" />
+          <span>Match Postponed</span>
+        </div>
+      )}
+      {isCancelled && (
+        <div className="mb-2.5 flex items-center justify-center gap-1.5 rounded-lg border border-red-500/25 bg-red-500/10 px-2 py-0.5 text-[10px] font-bold text-red-300">
+          <span>Match Cancelled</span>
+        </div>
+      )}
+
       {/* Three Horizontally Arranged Zones: Left (Home) · Center (Score/Time) · Right (Away) */}
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4">
         {/* Left Zone — Home Team */}
@@ -152,6 +198,51 @@ export function MatchCard({
                 </>
               )}
             </>
+          ) : isPostponed ? (
+            <>
+              {/* Prominent Postponed Badge */}
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/15 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-400 shadow-sm sm:text-[11px]">
+                <Clock className="h-3 w-3 shrink-0 text-amber-400" />
+                Postponed
+              </span>
+
+              {/* VS indicator and Match date/time beneath */}
+              <div className="mt-1 flex items-center justify-center gap-1">
+                <span className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-white/50">
+                  VS
+                </span>
+                <span className="text-[10px] font-medium text-white/40 line-through">
+                  {kickoffTime}
+                </span>
+                {formattedDate && (
+                  <span className="text-[10px] font-medium text-white/40">
+                    · {formattedDate}
+                  </span>
+                )}
+              </div>
+            </>
+          ) : isCancelled ? (
+            <>
+              {/* Prominent Cancelled Badge */}
+              <span className="inline-flex items-center gap-1 rounded-full border border-red-500/40 bg-red-500/15 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-red-400 shadow-sm sm:text-[11px]">
+                Cancelled
+              </span>
+
+              {/* VS indicator and Match date/time beneath */}
+              <div className="mt-1 flex items-center justify-center gap-1">
+                <span className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-white/50">
+                  VS
+                </span>
+                <span className="text-[10px] font-medium text-white/40 line-through">
+                  {kickoffTime}
+                </span>
+                {formattedDate && (
+                  <span className="text-[10px] font-medium text-white/40">
+                    · {formattedDate}
+                  </span>
+                )}
+              </div>
+            </>
           ) : (
             <>
               {/* Prominent Kickoff Time */}
@@ -165,7 +256,7 @@ export function MatchCard({
                   VS
                 </span>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[#f5c518]">
-                  {matchDate ? formatKickoff(matchDate, kickoffTime) : 'Upcoming'}
+                  {formattedDate || 'Upcoming'}
                 </span>
               </div>
             </>
