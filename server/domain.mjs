@@ -1899,7 +1899,10 @@ export function controlMatch(db, actor, matchId, input) {
     return forfeitMatch(db, actor, matchId, input);
   }
   if (action === 'confirm') deny(actor, 'match.confirm');
-  else if (['postpone', 'cancel', 'reschedule'].includes(action)) deny(actor, 'match.schedule');
+  else if (action === 'postpone') {
+    if (actor?.role !== 'super_admin') throw new RuleError('Only a super admin can postpone a match.', 403);
+  }
+  else if (['cancel', 'reschedule'].includes(action)) deny(actor, 'match.schedule');
   else deny(actor, 'match.clock');
 
   return transaction(db, () => {
@@ -1982,6 +1985,7 @@ export function controlMatch(db, actor, matchId, input) {
       patch.status = 'suspended';
       patch.running_since = null;
     } else if (action === 'postpone') {
+      if (actor?.role !== 'super_admin') throw new RuleError('Only a super admin can postpone a match.', 403);
       if (!['scheduled', 'postponed', 'suspended'].includes(match.status)) throw new RuleError('A match that has a result cannot be postponed this way.');
       patch.status = 'postponed';
       patch.period = 'pre';
