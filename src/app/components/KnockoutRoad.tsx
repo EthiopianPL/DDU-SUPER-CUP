@@ -174,6 +174,8 @@ function SideRow({ tie, home = false }: { tie?: RoadTie; home?: boolean }) {
   const isWinner = Boolean(winId && teamId && teamId === winId);
   const isLoser = Boolean(winId && teamId && teamId !== winId);
   const isPopulated = Boolean(side?.team);
+  const placeholderLabel = side?.label && !/^(Winner|Loser)\b/i.test(side.label) ? side.label : '';
+  const displayName = side?.team?.name || placeholderLabel;
 
   return (
     <div
@@ -212,7 +214,7 @@ function SideRow({ tie, home = false }: { tie?: RoadTie; home?: boolean }) {
         </span>
       )}
       <span
-        title={side?.team?.name || side?.label}
+        title={displayName || undefined}
         className={`min-w-0 flex-1 truncate text-[9.5px] tracking-tight transition-all duration-300 ${
           isWinner
             ? 'font-black text-[#f5c518]'
@@ -223,7 +225,7 @@ function SideRow({ tie, home = false }: { tie?: RoadTie; home?: boolean }) {
             : 'font-medium text-white/45'
         }`}
       >
-        {side?.team?.name || side?.label || 'TBD'}
+        {displayName}
       </span>
       {score != null && (
         <span

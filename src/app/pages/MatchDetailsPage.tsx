@@ -18,6 +18,7 @@ import {
 import { DepartmentMark } from '../components/DepartmentMark';
 import { RedCards } from '../components/RedCards';
 import { formationPlan } from '../../data/formation';
+import { stageLabel } from '../../data/knockout';
 import { refreshLeague, useLeagueVersion } from '../../data/live';
 import { useMatchClock } from '../useMatchClock';
 import { GroupTable } from '../components/GroupTable';
@@ -49,7 +50,7 @@ export function MatchDetailsPage() {
 
   // URL Tab state synchronization
   const rawTab = (searchParams.get('tab') || '').toLowerCase();
-  const activeTab: MatchTab = rawTab === 'lineups' ? 'lineups' : rawTab === 'standings' || rawTab === 'table' ? 'standings' : 'overview';
+  const requestedTab: MatchTab = rawTab === 'lineups' ? 'lineups' : rawTab === 'standings' || rawTab === 'table' ? 'standings' : 'overview';
 
   const setTab = (tab: MatchTab) => {
     const next = new URLSearchParams(searchParams);
@@ -106,6 +107,8 @@ export function MatchDetailsPage() {
   const away = getDepartment(fixture.awayId);
   const played = fixture.status !== 'upcoming';
   const isLive = fixture.status === 'live';
+  const isKnockout = Boolean((fixture.stage && fixture.stage !== 'group') || (fixture.group as string) === 'KO');
+  const activeTab: MatchTab = isKnockout && requestedTab === 'standings' ? 'overview' : requestedTab;
 
   const timeline = useMemo(() => matchTimeline(fixture), [fixture, version, clock?.minute, fixture.homeScore, fixture.awayScore, fixture.status]);
   const homeReds = teamRedCards(fixture.id, fixture.homeId);
@@ -149,7 +152,9 @@ export function MatchDetailsPage() {
             DIRE DAWA UNIVERSITY SUPER CUP
           </p>
           <p className="mt-1 text-xs font-semibold text-white/70">
-            GROUP {fixture.group} · MATCHDAY {fixture.matchday} · {GROUP_COLLEGES[fixture.group]}
+            {isKnockout
+              ? `${stageLabel(fixture.stage).toUpperCase()}${fixture.slot && fixture.stage !== 'final' ? ` · TIE ${fixture.slot}` : ''}`
+              : `GROUP ${fixture.group} · MATCHDAY ${fixture.matchday} · ${GROUP_COLLEGES[fixture.group]}`}
           </p>
           <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-white/50">
             <span className="flex items-center gap-1">
@@ -295,11 +300,13 @@ export function MatchDetailsPage() {
       <nav
         role="tablist"
         aria-label="Match center sections"
-        className="mt-6 grid grid-cols-3 gap-1 rounded-2xl border border-white/10 bg-[#10192b] p-1.5 shadow-inner"
+        className={`mt-6 grid ${isKnockout ? 'grid-cols-2' : 'grid-cols-3'} gap-1 rounded-2xl border border-white/10 bg-[#10192b] p-1.5 shadow-inner`}
       >
         <MatchTabButton id="overview" active={activeTab === 'overview'} onSelect={() => setTab('overview')} icon={History} label="Overview" />
         <MatchTabButton id="lineups" active={activeTab === 'lineups'} onSelect={() => setTab('lineups')} icon={Users} label="Lineups" />
-        <MatchTabButton id="standings" active={activeTab === 'standings'} onSelect={() => setTab('standings')} icon={Trophy} label="Standings" />
+        {!isKnockout && (
+          <MatchTabButton id="standings" active={activeTab === 'standings'} onSelect={() => setTab('standings')} icon={Trophy} label="Standings" />
+        )}
       </nav>
 
       {activeTab === 'overview' && (
@@ -393,7 +400,7 @@ export function MatchDetailsPage() {
 
 
       {/* TAB PANEL 3: STANDINGS */}
-      {activeTab === 'standings' && (
+      {!isKnockout && activeTab === 'standings' && (
         <section
           id="match-panel-standings"
           role="tabpanel"
