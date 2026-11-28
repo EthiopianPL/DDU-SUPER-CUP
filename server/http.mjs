@@ -206,7 +206,7 @@ async function serveApi(request, response, db, url) {
   if (one && request.method === 'PATCH' && one[1] === 'matches') return mutate(response, db, () => updateMatch(db, must(actor), decodeURIComponent(one[2]), body));
   if (one && request.method === 'DELETE' && one[1] === 'matches') return mutate(response, db, () => deleteMatch(db, must(actor), decodeURIComponent(one[2])));
 
-    if (matchAction && request.method === 'POST' && matchAction[2] === 'motm') {
+  if (matchAction && request.method === 'POST' && matchAction[2] === 'motm') {
     return mutate(response, db, () => saveManOfTheMatch(db, must(actor), decodeURIComponent(matchAction[1]), body));
   }
   if (matchAction && request.method === 'POST' && matchAction[2] === 'forfeit') {
@@ -413,7 +413,7 @@ function serveMedia(response, db, pathname) {
             }
           }
         }
-      } catch {}
+      } catch { }
     }
   }
 
@@ -501,7 +501,7 @@ function serveStatic(response, pathname) {
   let decoded = pathname;
   try {
     decoded = decodeURIComponent(pathname);
-  } catch {}
+  } catch { }
   const requested = decoded === '/' ? '/index.html' : decoded;
   if (requested.endsWith('.map') || requested.includes('.env') || requested.startsWith('/.') || requested.includes('/.')) {
     return send(response, 404, { error: 'Not found.' });

@@ -20,6 +20,7 @@ import {
   getFixture,
   leagueRules,
   matchEvents,
+  matchShootout,
   periodText,
   players,
   squads,
@@ -27,9 +28,11 @@ import {
   OFFICIAL_REFEREES,
   type GroupId,
   type Player,
+  type ShootoutSummary,
 } from '../../data/supercup';
 import { formationPlan, seatPlayers, FORMATIONS, FORMATION_GROUPS, isValidFormation } from '../../data/formation';
 import { STAGE_OPTIONS, scheduleTie, stageLabel, tieCount, type Stage } from '../../data/knockout';
+import { PenaltyShootoutBoard } from '../components/PenaltyShootoutBoard';
 
 type Role = 'super_admin' | 'match_admin' | 'competition_manager' | 'team_manager' | 'reader';
 type Section = 'overview' | 'matches' | 'teams' | 'players' | 'news' | 'users' | 'audit';
@@ -964,10 +967,10 @@ function MatchDesk({
             {!finished && fixture.status === 'live' && !clock?.running && fixture.period !== 'halftime' && fixture.period !== 'penalties' ? <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'resume' })}>Resume</Action> : null}
             {!finished && fixture.period === 'first_half' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'halftime' })}>Half time</Action>}
             {!finished && fixture.period === 'halftime' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'second_half' })}>Second half</Action>}
-            {!finished && (fixture.allowExtra || leagueRules.allowExtraTime) && fixture.period === 'second_half' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_first' })}>Extra time</Action>}
+            {!finished && (fixture.allowExtra || leagueRules.allowExtraTime || (fixture.stage && fixture.stage !== 'group')) && fixture.period === 'second_half' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_first' })}>Extra time</Action>}
             {!finished && fixture.period === 'extra_first' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_break' })}>Extra break</Action>}
             {!finished && fixture.period === 'extra_break' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'extra_second' })}>Second extra</Action>}
-            {!finished && fixture.allowExtra && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'penalties' })}>Penalties</Action>}
+            {!finished && (fixture.allowExtra || (fixture.stage && fixture.stage !== 'group')) && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'penalties' })}>Penalties</Action>}
             {!finished && fixture.status === 'live' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'suspend' })}>Suspend</Action>}
             {!finished && fixture.detail === 'suspended' && <Action disabled={busy || !canRun} onClick={() => act(`/api/matches/${id}/clock`, { action: 'resume' })}>Resume match</Action>}
             {role === 'super_admin' && !finished && ['scheduled', 'postponed', 'suspended'].includes(fixture.detail || '') && <Action disabled={busy} onClick={() => act(`/api/matches/${id}/clock`, { action: 'postpone' })}>Postpone</Action>}
@@ -2203,28 +2206,119 @@ function SubForm({ matchId, disabled, onSubmit, bare = false }: { matchId: strin
   );
 }
 
-function PenaltyForm({ matchId, disabled, onSubmit }: { matchId: string; disabled: boolean; onSubmit: (body: Record<string, unknown>) => void }) {
-  const [side, setSide] = useState<'home' | 'away'>('home');
-  const [scored, setScored] = useState(true);
-  const [playerId, setPlayerId] = useState('');
+function ShootoutAdmin({ matchId, disabled, onSubmit }: { matchId: string; disabled: boolean; onSubmit: (body: Record<string, unknown>) => void }) {
+  const version = useLeagueVersion();
   const fixture = getFixture(matchId);
   const pitch = usePitch(matchId);
-  if (!fixture) return null;
-  const teamId = side === 'home' ? fixture.homeId : fixture.awayId;
-  const takers = [...pitch.entries()].filter(([, row]) => row.teamId === teamId && !row.dismissed).map(([id]) => ({ id, label: playerName(id) }));
-  return (
-    <form onSubmit={(event) => {
-      event.preventDefault();
-      onSubmit({ type: 'penalty_kick', side, playerId, scored, clientKey: crypto.randomUUID() });
-    }}>
-      <div className="grid gap-2">
-        <Select label="Team" value={side} onChange={(value) => { setSide(value as 'home' | 'away'); setPlayerId(''); }} options={sidesOf(fixture)} />
-        <Select label="Taker" value={playerId} onChange={setPlayerId} options={[{ id: '', label: 'Choose' }, ...takers]} />
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={scored} onChange={(event) => setScored(event.target.checked)} /> Scored</label>
-      </div>
-      <button type="submit" disabled={disabled || !playerId} className="mt-3 rounded-xl bg-white/10 px-4 py-2 text-sm font-bold disabled:opacity-40">Record kick</button>
-    </form>
+  const [selectedPlayerId, setSelectedPlayerId] = useState('');
+
+  const summary: ShootoutSummary = useMemo(
+    () => (fixture ? matchShootout(fixture) : { kicks: [], homeKicks: [], awayKicks: [], homeScore: 0, awayScore: 0, rounds: 5, nextSide: 'home', winnerSide: null, isDecided: false, isSuddenDeath: false, active: false }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fixture, version],
   );
+
+  if (!fixture) return null;
+
+  const home = getDepartment(fixture.homeId);
+  const away = getDepartment(fixture.awayId);
+
+  const nextSide = summary.nextSide;
+  const nextTeamId = nextSide === 'home' ? fixture.homeId : fixture.awayId;
+  const nextTeamName = nextSide === 'home' ? (home?.shortName ?? home?.name ?? 'Home') : (away?.shortName ?? away?.name ?? 'Away');
+
+  const takers = [...pitch.entries()]
+    .filter(([, row]) => row.teamId === nextTeamId && !row.dismissed)
+    .map(([id]) => ({ id, label: playerName(id) }));
+
+  const recordKick = (outcome: 'scored' | 'saved' | 'missed') => {
+    if (!selectedPlayerId) return;
+    onSubmit({
+      type: 'penalty_kick',
+      side: nextSide,
+      playerId: selectedPlayerId,
+      scored: outcome === 'scored',
+      detail: outcome,
+      clientKey: crypto.randomUUID(),
+    });
+    setSelectedPlayerId('');
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Live board */}
+      <PenaltyShootoutBoard
+        summary={summary}
+        homeName={home?.shortName ?? home?.name ?? 'Home'}
+        awayName={away?.shortName ?? away?.name ?? 'Away'}
+        homeColor={home?.color}
+        awayColor={away?.color}
+      />
+
+      {/* Quick-record section */}
+      {!summary.isDecided && (
+        <div className="rounded-2xl border border-white/10 bg-[#10192b] p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-black tracking-wide text-white/50 uppercase">Record Next Kick</p>
+            <span className="rounded-full bg-[#f5c518]/15 px-2.5 py-0.5 text-xs font-bold text-[#f5c518]">
+              {nextTeamName}
+            </span>
+          </div>
+
+          {/* Player picker */}
+          <Select
+            label="Taker"
+            value={selectedPlayerId}
+            onChange={setSelectedPlayerId}
+            options={[{ id: '', label: 'Choose player…' }, ...takers]}
+          />
+
+          {/* Outcome buttons */}
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              disabled={disabled || !selectedPlayerId}
+              onClick={() => recordKick('scored')}
+              className="flex flex-col items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/15 py-3 text-emerald-400 transition-colors hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              <span className="text-xl font-black">✓</span>
+              <span className="text-[11px] font-bold">Scored</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={disabled || !selectedPlayerId}
+              onClick={() => recordKick('saved')}
+              className="flex flex-col items-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/15 py-3 text-amber-400 transition-colors hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              <span className="text-xl font-black">S</span>
+              <span className="text-[11px] font-bold">Saved</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={disabled || !selectedPlayerId}
+              onClick={() => recordKick('missed')}
+              className="flex flex-col items-center gap-1.5 rounded-xl border border-red-500/30 bg-red-500/15 py-3 text-red-400 transition-colors hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              <span className="text-xl font-black">✕</span>
+              <span className="text-[11px] font-bold">Missed</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {summary.isDecided && (
+        <div className="rounded-2xl border border-[#f5c518]/20 bg-[#f5c518]/10 p-3 text-center text-xs font-bold text-[#f5c518]">
+          Shootout complete — advance to Full Time
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PenaltyForm({ matchId, disabled, onSubmit }: { matchId: string; disabled: boolean; onSubmit: (body: Record<string, unknown>) => void }) {
+  return <ShootoutAdmin matchId={matchId} disabled={disabled} onSubmit={onSubmit} />;
 }
 
 function sidesOf(fixture: { homeId: string; awayId: string }) {

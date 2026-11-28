@@ -131,14 +131,16 @@ function recomputeScore(db, matchId) {
     FROM match_events
     WHERE match_id = ? AND type = 'goal' AND counts_for_score = 1 AND voided = 0 AND shootout = 0
     GROUP BY credited_team_id`).all(matchId);
-  if (goals.length === 0 && match.status === 'finished' && (match.home_score > 0 || match.away_score > 0)) {
-    return;
-  }
   let home = 0;
   let away = 0;
-  for (const row of goals) {
-    if (row.team === match.home_id) home = row.total;
-    if (row.team === match.away_id) away = row.total;
+  if (goals.length === 0 && match.status === 'finished' && (match.home_score > 0 || match.away_score > 0)) {
+    home = match.home_score;
+    away = match.away_score;
+  } else {
+    for (const row of goals) {
+      if (row.team === match.home_id) home = row.total;
+      if (row.team === match.away_id) away = row.total;
+    }
   }
   const kicks = db.prepare(`SELECT team_id AS team, SUM(CASE WHEN scored = 1 THEN 1 ELSE 0 END) AS total
     FROM match_events
@@ -333,7 +335,19 @@ export function seedDatabase(db, source, password) {
         for (const event of source.matchTimeline(fixture)) {
           if (event.kind === 'goal') {
             insertEvent.run(fixture.id, `seed-${fixture.id}-g-${event.playerId}-${event.minute}`, 'goal', event.teamId, event.teamId, event.playerId, event.assistId ?? null, null, event.minute, 'second_half', 'open_play', null, '', 1, now);
-          } else {
+          } else if (event.type === 'penalty_kick') {
+      const teamId = input.side ? sideTeam(match, input.side) : (input.teamId || event.team_id);
+      const playerId = input.playerId || event.player_id;
+      if (!playerId) throw new RuleError('Choose the taker.');
+      ensureSquadPlayer(db, match, playerId, teamId);
+      const state = participation(squadRows(db, match.id), activeEvents(db, match.id)).get(playerId);
+      if (!state || state.dismissed) throw new RuleError('That player cannot take a kick.');
+      const isScored = input.scored == null ? Boolean(event.scored) : Boolean(input.scored);
+      const kickDetail = isScored ? 'scored' : ((input.detail ?? event.detail) === 'saved' ? 'saved' : 'missed');
+      db.prepare('UPDATE match_events SET team_id=?, player_id=?, scored=?, detail=? WHERE id=?').run(
+        teamId, playerId, isScored ? 1 : 0, kickDetail, event.id,
+      );
+    } else {
             insertEvent.run(fixture.id, `seed-${fixture.id}-${event.kind}-${event.playerId}-${event.minute}`, 'card', event.teamId, null, event.playerId, null, null, event.minute, 'second_half', null, event.kind === 'red' ? 'red' : 'yellow', '', 0, now);
           }
         }
@@ -814,6 +828,18 @@ export function saveTeam(db, actor, input, id) {
       db.prepare(`UPDATE teams SET name=?, short_name=?, college=?, group_id=?, color=?, pitch=?, coach=?, coach_photo_url=?, crest_url=?, status=? WHERE id=?`).run(
         name, shortName, college, group, color, pitch, coach, coachPhoto, crest, status, id,
       );
+    } else if (event.type === 'penalty_kick') {
+      const teamId = input.side ? sideTeam(match, input.side) : (input.teamId || event.team_id);
+      const playerId = input.playerId || event.player_id;
+      if (!playerId) throw new RuleError('Choose the taker.');
+      ensureSquadPlayer(db, match, playerId, teamId);
+      const state = participation(squadRows(db, match.id), activeEvents(db, match.id)).get(playerId);
+      if (!state || state.dismissed) throw new RuleError('That player cannot take a kick.');
+      const isScored = input.scored == null ? Boolean(event.scored) : Boolean(input.scored);
+      const kickDetail = isScored ? 'scored' : ((input.detail ?? event.detail) === 'saved' ? 'saved' : 'missed');
+      db.prepare('UPDATE match_events SET team_id=?, player_id=?, scored=?, detail=? WHERE id=?').run(
+        teamId, playerId, isScored ? 1 : 0, kickDetail, event.id,
+      );
     } else {
       db.prepare(`INSERT INTO teams (id, name, short_name, college, group_id, color, pitch, coach, coach_photo_url, crest_url, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
         nowId, name, shortName, college, group, color, pitch, coach, coachPhoto, crest, status,
@@ -917,7 +943,19 @@ export async function savePlayer(db, actor, input, id) {
         db.prepare(`UPDATE players SET team_id=?, name=?, position=?, number=?, nationality=?, photo_url=?, active=?, is_captain=? WHERE id=?`).run(
           teamId, name, position, number, String(input.nationality ?? before.nationality ?? ''), photo, input.active === false ? 0 : 1, isCaptain, id,
         );
-      } else {
+      } else if (event.type === 'penalty_kick') {
+      const teamId = input.side ? sideTeam(match, input.side) : (input.teamId || event.team_id);
+      const playerId = input.playerId || event.player_id;
+      if (!playerId) throw new RuleError('Choose the taker.');
+      ensureSquadPlayer(db, match, playerId, teamId);
+      const state = participation(squadRows(db, match.id), activeEvents(db, match.id)).get(playerId);
+      if (!state || state.dismissed) throw new RuleError('That player cannot take a kick.');
+      const isScored = input.scored == null ? Boolean(event.scored) : Boolean(input.scored);
+      const kickDetail = isScored ? 'scored' : ((input.detail ?? event.detail) === 'saved' ? 'saved' : 'missed');
+      db.prepare('UPDATE match_events SET team_id=?, player_id=?, scored=?, detail=? WHERE id=?').run(
+        teamId, playerId, isScored ? 1 : 0, kickDetail, event.id,
+      );
+    } else {
         db.prepare(`INSERT INTO players (id, team_id, name, position, number, nationality, photo_url, registered, active, is_captain) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?)`).run(
           playerId, teamId, name, position, number, String(input.nationality ?? ''), photo, isCaptain,
         );
@@ -1014,7 +1052,19 @@ export async function saveNews(db, actor, input, id) {
         finalImageUrls.push(item);
       } else if (item.url && typeof item.url === 'string' && !item.url.startsWith('data:')) {
         finalImageUrls.push(item.url);
-      } else {
+      } else if (event.type === 'penalty_kick') {
+      const teamId = input.side ? sideTeam(match, input.side) : (input.teamId || event.team_id);
+      const playerId = input.playerId || event.player_id;
+      if (!playerId) throw new RuleError('Choose the taker.');
+      ensureSquadPlayer(db, match, playerId, teamId);
+      const state = participation(squadRows(db, match.id), activeEvents(db, match.id)).get(playerId);
+      if (!state || state.dismissed) throw new RuleError('That player cannot take a kick.');
+      const isScored = input.scored == null ? Boolean(event.scored) : Boolean(input.scored);
+      const kickDetail = isScored ? 'scored' : ((input.detail ?? event.detail) === 'saved' ? 'saved' : 'missed');
+      db.prepare('UPDATE match_events SET team_id=?, player_id=?, scored=?, detail=? WHERE id=?').run(
+        teamId, playerId, isScored ? 1 : 0, kickDetail, event.id,
+      );
+    } else {
         const img = storedImage(item.image ? item : { image: item });
         if (img) {
           const mediaId = `${articleId}-${i}-${Date.now().toString(36)}`;
@@ -1437,6 +1487,18 @@ export function saveLineup(db, actor, matchId, input) {
       if (starters.length < 11) throw new RuleError('Fill all 11 starter positions before approving the lineup.');
       if (starters.length > 11) throw new RuleError('A team can start at most 11 players.');
       starters.forEach((playerId) => ensureSquadPlayerSafe(db, playerId, teamId, matchId));
+    } else if (event.type === 'penalty_kick') {
+      const teamId = input.side ? sideTeam(match, input.side) : (input.teamId || event.team_id);
+      const playerId = input.playerId || event.player_id;
+      if (!playerId) throw new RuleError('Choose the taker.');
+      ensureSquadPlayer(db, match, playerId, teamId);
+      const state = participation(squadRows(db, match.id), activeEvents(db, match.id)).get(playerId);
+      if (!state || state.dismissed) throw new RuleError('That player cannot take a kick.');
+      const isScored = input.scored == null ? Boolean(event.scored) : Boolean(input.scored);
+      const kickDetail = isScored ? 'scored' : ((input.detail ?? event.detail) === 'saved' ? 'saved' : 'missed');
+      db.prepare('UPDATE match_events SET team_id=?, player_id=?, scored=?, detail=? WHERE id=?').run(
+        teamId, playerId, isScored ? 1 : 0, kickDetail, event.id,
+      );
     } else {
       if (starters.length > 11) throw new RuleError('A team can start at most 11 players.');
       starters.forEach((playerId) => ensureSquadPlayerSafe(db, playerId, teamId, matchId));
@@ -1565,7 +1627,19 @@ export function recordEvent(db, actor, matchId, input) {
         if (!input.playerId) throw new RuleError('Choose the scorer.');
         if (match.status !== 'finished') {
           onPitch(db, match, input.playerId, scorerTeamId);
-        } else {
+        } else if (event.type === 'penalty_kick') {
+      const teamId = input.side ? sideTeam(match, input.side) : (input.teamId || event.team_id);
+      const playerId = input.playerId || event.player_id;
+      if (!playerId) throw new RuleError('Choose the taker.');
+      ensureSquadPlayer(db, match, playerId, teamId);
+      const state = participation(squadRows(db, match.id), activeEvents(db, match.id)).get(playerId);
+      if (!state || state.dismissed) throw new RuleError('That player cannot take a kick.');
+      const isScored = input.scored == null ? Boolean(event.scored) : Boolean(input.scored);
+      const kickDetail = isScored ? 'scored' : ((input.detail ?? event.detail) === 'saved' ? 'saved' : 'missed');
+      db.prepare('UPDATE match_events SET team_id=?, player_id=?, scored=?, detail=? WHERE id=?').run(
+        teamId, playerId, isScored ? 1 : 0, kickDetail, event.id,
+      );
+    } else {
           ensureSquadPlayer(db, match, input.playerId, scorerTeamId);
         }
         let assistId = input.assistId || null;
@@ -1574,7 +1648,19 @@ export function recordEvent(db, actor, matchId, input) {
           if (assistId === input.playerId) throw new RuleError('The scorer cannot also be the assister.');
           if (match.status !== 'finished') {
             onPitch(db, match, assistId, creditedTeamId);
-          } else {
+          } else if (event.type === 'penalty_kick') {
+      const teamId = input.side ? sideTeam(match, input.side) : (input.teamId || event.team_id);
+      const playerId = input.playerId || event.player_id;
+      if (!playerId) throw new RuleError('Choose the taker.');
+      ensureSquadPlayer(db, match, playerId, teamId);
+      const state = participation(squadRows(db, match.id), activeEvents(db, match.id)).get(playerId);
+      if (!state || state.dismissed) throw new RuleError('That player cannot take a kick.');
+      const isScored = input.scored == null ? Boolean(event.scored) : Boolean(input.scored);
+      const kickDetail = isScored ? 'scored' : ((input.detail ?? event.detail) === 'saved' ? 'saved' : 'missed');
+      db.prepare('UPDATE match_events SET team_id=?, player_id=?, scored=?, detail=? WHERE id=?').run(
+        teamId, playerId, isScored ? 1 : 0, kickDetail, event.id,
+      );
+    } else {
             ensureSquadPlayer(db, match, assistId, creditedTeamId);
           }
         }
@@ -1602,7 +1688,19 @@ export function recordEvent(db, actor, matchId, input) {
         if (!input.playerId) throw new RuleError('Choose the player.');
         if (match.status !== 'finished') {
           onPitch(db, match, input.playerId, teamId);
-        } else {
+        } else if (event.type === 'penalty_kick') {
+      const teamId = input.side ? sideTeam(match, input.side) : (input.teamId || event.team_id);
+      const playerId = input.playerId || event.player_id;
+      if (!playerId) throw new RuleError('Choose the taker.');
+      ensureSquadPlayer(db, match, playerId, teamId);
+      const state = participation(squadRows(db, match.id), activeEvents(db, match.id)).get(playerId);
+      if (!state || state.dismissed) throw new RuleError('That player cannot take a kick.');
+      const isScored = input.scored == null ? Boolean(event.scored) : Boolean(input.scored);
+      const kickDetail = isScored ? 'scored' : ((input.detail ?? event.detail) === 'saved' ? 'saved' : 'missed');
+      db.prepare('UPDATE match_events SET team_id=?, player_id=?, scored=?, detail=? WHERE id=?').run(
+        teamId, playerId, isScored ? 1 : 0, kickDetail, event.id,
+      );
+    } else {
           ensureSquadPlayer(db, match, input.playerId, teamId);
         }
         const yellows = yellowCount(activeEvents(db, match.id), input.playerId);
@@ -1633,7 +1731,19 @@ export function recordEvent(db, actor, matchId, input) {
           if (substitutionCount(activeEvents(db, match.id), teamId) >= rules.maxSubs + extra) {
             throw new RuleError('This team has used its substitutions.');
           }
-        } else {
+        } else if (event.type === 'penalty_kick') {
+      const teamId = input.side ? sideTeam(match, input.side) : (input.teamId || event.team_id);
+      const playerId = input.playerId || event.player_id;
+      if (!playerId) throw new RuleError('Choose the taker.');
+      ensureSquadPlayer(db, match, playerId, teamId);
+      const state = participation(squadRows(db, match.id), activeEvents(db, match.id)).get(playerId);
+      if (!state || state.dismissed) throw new RuleError('That player cannot take a kick.');
+      const isScored = input.scored == null ? Boolean(event.scored) : Boolean(input.scored);
+      const kickDetail = isScored ? 'scored' : ((input.detail ?? event.detail) === 'saved' ? 'saved' : 'missed');
+      db.prepare('UPDATE match_events SET team_id=?, player_id=?, scored=?, detail=? WHERE id=?').run(
+        teamId, playerId, isScored ? 1 : 0, kickDetail, event.id,
+      );
+    } else {
           ensureSquadPlayer(db, match, input.playerId, teamId);
           ensureSquadPlayer(db, match, input.relatedPlayerId, teamId);
         }
@@ -1650,24 +1760,29 @@ export function recordEvent(db, actor, matchId, input) {
       }
 
       if (type === 'penalty_kick') {
-        if (match.period !== 'penalties' && match.status !== 'penalties') throw new RuleError('Start the shootout before recording kicks.');
+        const allowFinishedShootout = match.status === 'finished' && !match.confirmed && (match.allow_extra || (match.stage && match.stage !== 'group'));
+        if (match.period !== 'penalties' && match.status !== 'penalties' && !allowFinishedShootout) {
+          throw new RuleError('Start the shootout before recording kicks.');
+        }
         const teamId = sideTeam(match, input.side);
         if (!input.playerId) throw new RuleError('Choose the taker.');
         ensureSquadPlayer(db, match, input.playerId, teamId);
         const state = participation(squadRows(db, match.id), activeEvents(db, match.id)).get(input.playerId);
         if (!state || state.dismissed) throw new RuleError('That player cannot take a kick.');
+        const isScored = Boolean(input.scored);
+        const kickDetail = isScored ? 'scored' : (input.detail === 'saved' ? 'saved' : 'missed');
         const saved = insertEvent(db, match, actor, {
           ...base,
           type: 'penalty_kick',
           teamId,
           playerId: input.playerId,
           shootout: true,
-          scored: Boolean(input.scored),
-          detail: input.scored ? 'scored' : 'missed',
+          scored: isScored,
+          detail: kickDetail,
         }, false);
         if (!saved.duplicate) {
           recomputeScore(db, match.id);
-          audit(db, actor, 'shootout.kick', 'match', match.id, null, { teamId, playerId: input.playerId, scored: Boolean(input.scored) });
+          audit(db, actor, 'shootout.kick', 'match', match.id, null, { teamId, playerId: input.playerId, scored: isScored, detail: kickDetail });
         }
         return saved;
       }
@@ -1722,7 +1837,19 @@ export function correctEvent(db, actor, matchId, eventId, input) {
       const playerId = input.playerId || event.player_id;
       if (match.status !== 'finished') {
         onPitch(db, match, playerId, scorerTeamId, event.id);
-      } else {
+      } else if (event.type === 'penalty_kick') {
+      const teamId = input.side ? sideTeam(match, input.side) : (input.teamId || event.team_id);
+      const playerId = input.playerId || event.player_id;
+      if (!playerId) throw new RuleError('Choose the taker.');
+      ensureSquadPlayer(db, match, playerId, teamId);
+      const state = participation(squadRows(db, match.id), activeEvents(db, match.id)).get(playerId);
+      if (!state || state.dismissed) throw new RuleError('That player cannot take a kick.');
+      const isScored = input.scored == null ? Boolean(event.scored) : Boolean(input.scored);
+      const kickDetail = isScored ? 'scored' : ((input.detail ?? event.detail) === 'saved' ? 'saved' : 'missed');
+      db.prepare('UPDATE match_events SET team_id=?, player_id=?, scored=?, detail=? WHERE id=?').run(
+        teamId, playerId, isScored ? 1 : 0, kickDetail, event.id,
+      );
+    } else {
         ensureSquadPlayer(db, match, playerId, scorerTeamId);
       }
       let assistId = input.assistId === '' ? null : input.assistId ?? event.assist_id;
@@ -1731,7 +1858,19 @@ export function correctEvent(db, actor, matchId, eventId, input) {
         if (assistId === playerId) throw new RuleError('The scorer cannot also be the assister.');
         if (match.status !== 'finished') {
           onPitch(db, match, assistId, creditedTeamId, event.id);
-        } else {
+        } else if (event.type === 'penalty_kick') {
+      const teamId = input.side ? sideTeam(match, input.side) : (input.teamId || event.team_id);
+      const playerId = input.playerId || event.player_id;
+      if (!playerId) throw new RuleError('Choose the taker.');
+      ensureSquadPlayer(db, match, playerId, teamId);
+      const state = participation(squadRows(db, match.id), activeEvents(db, match.id)).get(playerId);
+      if (!state || state.dismissed) throw new RuleError('That player cannot take a kick.');
+      const isScored = input.scored == null ? Boolean(event.scored) : Boolean(input.scored);
+      const kickDetail = isScored ? 'scored' : ((input.detail ?? event.detail) === 'saved' ? 'saved' : 'missed');
+      db.prepare('UPDATE match_events SET team_id=?, player_id=?, scored=?, detail=? WHERE id=?').run(
+        teamId, playerId, isScored ? 1 : 0, kickDetail, event.id,
+      );
+    } else {
           ensureSquadPlayer(db, match, assistId, creditedTeamId);
         }
       }
@@ -1748,7 +1887,19 @@ export function correctEvent(db, actor, matchId, eventId, input) {
       if (!playerId) throw new RuleError('Choose the player.');
       if (match.status !== 'finished') {
         onPitch(db, match, playerId, teamId, event.id);
-      } else {
+      } else if (event.type === 'penalty_kick') {
+      const teamId = input.side ? sideTeam(match, input.side) : (input.teamId || event.team_id);
+      const playerId = input.playerId || event.player_id;
+      if (!playerId) throw new RuleError('Choose the taker.');
+      ensureSquadPlayer(db, match, playerId, teamId);
+      const state = participation(squadRows(db, match.id), activeEvents(db, match.id)).get(playerId);
+      if (!state || state.dismissed) throw new RuleError('That player cannot take a kick.');
+      const isScored = input.scored == null ? Boolean(event.scored) : Boolean(input.scored);
+      const kickDetail = isScored ? 'scored' : ((input.detail ?? event.detail) === 'saved' ? 'saved' : 'missed');
+      db.prepare('UPDATE match_events SET team_id=?, player_id=?, scored=?, detail=? WHERE id=?').run(
+        teamId, playerId, isScored ? 1 : 0, kickDetail, event.id,
+      );
+    } else {
         ensureSquadPlayer(db, match, playerId, teamId);
       }
       const yellows = yellowCount(activeEvents(db, match.id, event.id), playerId);
@@ -1769,6 +1920,18 @@ export function correctEvent(db, actor, matchId, eventId, input) {
       ensureSquadPlayer(db, match, relatedPlayerId, teamId);
       db.prepare('UPDATE match_events SET team_id=?, player_id=?, related_player_id=?, minute=?, added_minute=?, detail=? WHERE id=?').run(
         teamId, playerId, relatedPlayerId, minute, stamped.addedMinute, String(input.detail ?? event.detail), event.id,
+      );
+    } else if (event.type === 'penalty_kick') {
+      const teamId = input.side ? sideTeam(match, input.side) : (input.teamId || event.team_id);
+      const playerId = input.playerId || event.player_id;
+      if (!playerId) throw new RuleError('Choose the taker.');
+      ensureSquadPlayer(db, match, playerId, teamId);
+      const state = participation(squadRows(db, match.id), activeEvents(db, match.id)).get(playerId);
+      if (!state || state.dismissed) throw new RuleError('That player cannot take a kick.');
+      const isScored = input.scored == null ? Boolean(event.scored) : Boolean(input.scored);
+      const kickDetail = isScored ? 'scored' : ((input.detail ?? event.detail) === 'saved' ? 'saved' : 'missed');
+      db.prepare('UPDATE match_events SET team_id=?, player_id=?, scored=?, detail=? WHERE id=?').run(
+        teamId, playerId, isScored ? 1 : 0, kickDetail, event.id,
       );
     } else {
       db.prepare('UPDATE match_events SET minute=?, detail=? WHERE id=?').run(Number(input.minute ?? event.minute), String(input.detail ?? event.detail), event.id);
@@ -1947,7 +2110,7 @@ export function controlMatch(db, actor, matchId, input) {
       if (match.period !== 'halftime') throw new RuleError('The second half starts from half time.');
       startRunning('live', 'second_half', match.half_ms);
     } else if (action === 'extra_first') {
-      if (!match.allow_extra && !rules.allowExtraTime && !can(actor, 'match.correct')) throw new RuleError('Extra time is not enabled for this match.');
+      if (!match.allow_extra && match.stage === 'group' && !rules.allowExtraTime && !can(actor, 'match.correct')) throw new RuleError('Extra time is not enabled for this match.');
       if (!['second_half', 'full_time'].includes(match.period) && match.status !== 'live') throw new RuleError('Finish regular time before extra time.');
       db.prepare('UPDATE matches SET allow_extra = 1 WHERE id = ?').run(matchId);
       startRunning('live', 'extra_first', match.regulation_ms);
@@ -1962,7 +2125,8 @@ export function controlMatch(db, actor, matchId, input) {
       if (match.period !== 'extra_break') throw new RuleError('Start the second extra period from the break.');
       startRunning('live', 'extra_second', match.regulation_ms + match.et_half_ms);
     } else if (action === 'penalties') {
-      if (!match.allow_extra && !can(actor, 'match.correct')) throw new RuleError('Enable extra time before a shootout.');
+      if (!match.allow_extra && match.stage === 'group' && !can(actor, 'match.correct')) throw new RuleError('Enable extra time before a shootout.');
+      db.prepare('UPDATE matches SET allow_extra = 1 WHERE id = ?').run(matchId);
       patch.status = 'penalties';
       patch.period = 'penalties';
       patch.running_since = null;
@@ -2008,6 +2172,18 @@ export function controlMatch(db, actor, matchId, input) {
       if (!Number.isFinite(seconds) || seconds < 0 || seconds > 200 * 60) throw new RuleError('Enter a valid clock time.');
       patch.elapsed_ms = Math.round(seconds * 1000);
       patch.running_since = match.running_since ? now : null;
+    } else if (event.type === 'penalty_kick') {
+      const teamId = input.side ? sideTeam(match, input.side) : (input.teamId || event.team_id);
+      const playerId = input.playerId || event.player_id;
+      if (!playerId) throw new RuleError('Choose the taker.');
+      ensureSquadPlayer(db, match, playerId, teamId);
+      const state = participation(squadRows(db, match.id), activeEvents(db, match.id)).get(playerId);
+      if (!state || state.dismissed) throw new RuleError('That player cannot take a kick.');
+      const isScored = input.scored == null ? Boolean(event.scored) : Boolean(input.scored);
+      const kickDetail = isScored ? 'scored' : ((input.detail ?? event.detail) === 'saved' ? 'saved' : 'missed');
+      db.prepare('UPDATE match_events SET team_id=?, player_id=?, scored=?, detail=? WHERE id=?').run(
+        teamId, playerId, isScored ? 1 : 0, kickDetail, event.id,
+      );
     } else {
       throw new RuleError('Unknown clock action.');
     }

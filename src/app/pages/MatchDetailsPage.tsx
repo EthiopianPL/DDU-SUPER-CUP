@@ -32,14 +32,17 @@ import {
   leagueRules,
   manualStats,
   matchSheet,
+  matchShootout,
   matchSubstitutions,
   matchTimeline,
   periodText,
   teamRedCards,
   players,
   type Player,
+  type ShootoutSummary,
   type TimelineEvent,
 } from '../../data/supercup';
+import { PenaltyShootoutBoard } from '../components/PenaltyShootoutBoard';
 
 type MatchTab = 'overview' | 'lineups' | 'standings';
 
@@ -114,6 +117,7 @@ export function MatchDetailsPage() {
   const homeReds = teamRedCards(fixture.id, fixture.homeId);
   const awayReds = teamRedCards(fixture.id, fixture.awayId);
   const substitutions = useMemo(() => matchSubstitutions(fixture), [fixture, version, clock?.minute, fixture.status]);
+  const shootout = useMemo(() => matchShootout(fixture), [fixture, version, fixture.pensHome, fixture.pensAway]);
   const homeSheet = useMemo(() => matchSheet(fixture.homeId, fixture.id), [fixture.homeId, fixture.id, version]);
   const awaySheet = useMemo(() => matchSheet(fixture.awayId, fixture.id), [fixture.awayId, fixture.id, version]);
   const recorded = manualStats.filter((stat) => stat.matchId === fixture.id);
@@ -326,6 +330,11 @@ export function MatchDetailsPage() {
               pensHome={fixture.pensHome ?? null}
               pensAway={fixture.pensAway ?? null}
               halfMinute={Math.round((fixture.halfSeconds ?? leagueRules.halfMinutes * 60) / 60)}
+              shootout={shootout}
+              homeName={home?.shortName ?? home?.name ?? 'Home'}
+              awayName={away?.shortName ?? away?.name ?? 'Away'}
+              homeColor={home?.color}
+              awayColor={away?.color}
             />
           )}
         </section>
@@ -1054,6 +1063,11 @@ function EventTimeline({
   pensHome,
   pensAway,
   halfMinute,
+  shootout,
+  homeName,
+  awayName,
+  homeColor,
+  awayColor,
 }: {
   events: TimelineEvent[];
   substitutions: ReturnType<typeof matchSubstitutions>;
@@ -1066,6 +1080,11 @@ function EventTimeline({
   pensHome: number | null;
   pensAway: number | null;
   halfMinute: number;
+  shootout?: ShootoutSummary;
+  homeName?: string;
+  awayName?: string;
+  homeColor?: string;
+  awayColor?: string;
 }) {
   const rows = [
     ...events.filter((event) => event.kind === 'goal' || event.kind === 'yellow' || event.kind === 'red').map((event) => {
@@ -1116,9 +1135,31 @@ function EventTimeline({
   const halfAway = sideGoals(events, awayId, (event) => isFirstHalf(event.period, event.minute, halfMinute));
   const regulationHome = sideGoals(events, homeId, (event) => !isExtra(event.period));
   const regulationAway = sideGoals(events, awayId, (event) => !isExtra(event.period));
-  const shootout = pensHome != null && pensAway != null;
+
 
   if (!rows.length) {
+    // Even with no goals/cards, show shootout board if available
+    if (shootout?.active) {
+      return (
+        <div className="mx-auto max-w-md space-y-4 py-4">
+          {shootout.kicks.length > 0 ? (
+            <PenaltyShootoutBoard
+              summary={shootout}
+              homeName={homeName ?? 'Home'}
+              awayName={awayName ?? 'Away'}
+              homeColor={homeColor}
+              awayColor={awayColor}
+            />
+          ) : finished ? (
+            <div className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-[#10192b] px-4 py-3 text-xs text-white/70 shadow-sm">
+              <span>Official Result: <strong className="font-bold text-[#f5c518]">{homeScore} - {awayScore}</strong></span>
+            </div>
+          ) : (
+            <div className="text-center text-xs text-white/40">Penalty shootout in progress…</div>
+          )}
+        </div>
+      );
+    }
     return (
       <div className="mx-auto max-w-md py-8 text-center">
         <div className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-[#10192b] px-4 py-3 text-xs text-white/70 shadow-sm">
@@ -1158,7 +1199,19 @@ function EventTimeline({
       {second.map(renderRow)}
       {extra.length > 0 && <PeriodMark label="ET" home={regulationHome} away={regulationAway} />}
       {extra.map(renderRow)}
-      {shootout && <PeriodMark label="Pens" home={pensHome} away={pensAway} />}
+      {shootout?.active && shootout.kicks.length > 0 ? (
+        <li className="my-4">
+          <PenaltyShootoutBoard
+            summary={shootout}
+            homeName={homeName ?? 'Home'}
+            awayName={awayName ?? 'Away'}
+            homeColor={homeColor}
+            awayColor={awayColor}
+          />
+        </li>
+      ) : (shootout?.active || (pensHome != null && pensAway != null)) ? (
+        <PeriodMark label="Pens" home={pensHome ?? shootout?.homeScore ?? 0} away={pensAway ?? shootout?.awayScore ?? 0} />
+      ) : null}
       {finished && <PeriodMark label="FT" home={homeScore} away={awayScore} />}
     </ol>
   );

@@ -782,6 +782,101 @@ export function matchTimeline(fixture: Fixture): TimelineEvent[] {
     .sort((a, b) => a.minute - b.minute || a.playerName.localeCompare(b.playerName));
 }
 
+export interface ShootoutKick {
+  id: number;
+  round: number;
+  side: 'home' | 'away';
+  teamId: string;
+  playerId: string;
+  playerName: string;
+  playerNumber?: number;
+  scored: boolean;
+  outcome: 'scored' | 'saved' | 'missed';
+}
+
+export interface ShootoutSummary {
+  kicks: ShootoutKick[];
+  homeKicks: ShootoutKick[];
+  awayKicks: ShootoutKick[];
+  homeScore: number;
+  awayScore: number;
+  rounds: number;
+  nextSide: 'home' | 'away';
+  winnerSide: 'home' | 'away' | null;
+  isDecided: boolean;
+  isSuddenDeath: boolean;
+  active: boolean;
+}
+
+export function matchShootout(fixture: Fixture): ShootoutSummary {
+  const playerMap = new Map(players.map((p) => [p.id, p]));
+  const raw = matchEvents
+    .filter((event) => event.matchId === fixture.id && event.type === 'penalty_kick' && !event.voided)
+    .sort((a, b) => a.id - b.id);
+
+  let homeRound = 0;
+  let awayRound = 0;
+  const kicks: ShootoutKick[] = raw.map((event) => {
+    const side: 'home' | 'away' = event.teamId === fixture.awayId ? 'away' : 'home';
+    const round = side === 'home' ? ++homeRound : ++awayRound;
+    const scored = Boolean(event.scored);
+    const outcome: ShootoutKick['outcome'] = scored ? 'scored' : event.detail === 'saved' ? 'saved' : 'missed';
+    const player = event.playerId ? playerMap.get(event.playerId) : undefined;
+    return {
+      id: event.id,
+      round,
+      side,
+      teamId: event.teamId || (side === 'home' ? fixture.homeId : fixture.awayId),
+      playerId: event.playerId || '',
+      playerName: event.playerName || player?.name || 'Penalty Taker',
+      playerNumber: player?.number,
+      scored,
+      outcome,
+    };
+  });
+
+  const homeKicks = kicks.filter((k) => k.side === 'home');
+  const awayKicks = kicks.filter((k) => k.side === 'away');
+  const homeScore = kicks.length ? homeKicks.filter((k) => k.scored).length : (fixture.pensHome ?? 0);
+  const awayScore = kicks.length ? awayKicks.filter((k) => k.scored).length : (fixture.pensAway ?? 0);
+  const rounds = Math.max(5, homeKicks.length, awayKicks.length);
+
+  const firstSide: 'home' | 'away' = kicks[0]?.side ?? 'home';
+  const secondSide: 'home' | 'away' = firstSide === 'home' ? 'away' : 'home';
+  const nextSide: 'home' | 'away' = kicks.length % 2 === 0 ? firstSide : secondSide;
+
+  let winnerSide: 'home' | 'away' | null = null;
+  if (homeKicks.length >= 5 && awayKicks.length >= 5) {
+    if (homeKicks.length === awayKicks.length && homeScore !== awayScore) {
+      winnerSide = homeScore > awayScore ? 'home' : 'away';
+    }
+  } else if (kicks.length > 0) {
+    const homeRemaining = 5 - homeKicks.length;
+    const awayRemaining = 5 - awayKicks.length;
+    if (homeScore - awayScore > awayRemaining) winnerSide = 'home';
+    else if (awayScore - homeScore > homeRemaining) winnerSide = 'away';
+  } else if (fixture.pensHome != null && fixture.pensAway != null && fixture.pensHome !== fixture.pensAway) {
+    winnerSide = fixture.pensHome > fixture.pensAway ? 'home' : 'away';
+  }
+
+  const isSuddenDeath = homeKicks.length > 5 || awayKicks.length > 5 || (homeKicks.length === 5 && awayKicks.length === 5 && homeScore === awayScore);
+  const active = fixture.period === 'penalties' || fixture.detail === 'penalties' || kicks.length > 0 || (fixture.pensHome != null && fixture.pensAway != null);
+
+  return {
+    kicks,
+    homeKicks,
+    awayKicks,
+    homeScore,
+    awayScore,
+    rounds,
+    nextSide,
+    winnerSide,
+    isDecided: winnerSide !== null,
+    isSuddenDeath,
+    active,
+  };
+}
+
 export function matchSubstitutions(fixture: Fixture): Substitution[] {
   return matchEvents
     .filter((event) => event.matchId === fixture.id && event.type === 'substitution' && !event.voided)
